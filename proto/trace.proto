@@ -1,0 +1,103 @@
+syntax = "proto3";
+
+package rs.tokio.console.trace;
+
+import "google/protobuf/timestamp/timestamp.proto";
+
+service Trace {
+    rpc Watch(WatchRequest) returns (stream TraceEvent) {}
+}
+
+// Start watching trace events with the provided filter.
+message WatchRequest {
+    string filter = 1;
+}
+
+// A trace event
+message TraceEvent {
+    oneof event {
+        // A new thread was registered.
+        RegisterThreads register_thread = 1;
+        // A new span metadata was registered.
+        RegisterMetadata register_metadata = 2;
+        NewSpan new_span = 3;
+        Enter enter_span = 4;
+        Exit exit_span = 5;
+        Close close_span = 6;
+    };
+
+    message RegisterThreads {
+        map<uint64, string> names = 1;
+    }
+
+    message RegisterMetadata {
+        repeated NewMetadata metadata = 1;
+        
+        message NewMetadata {
+            MetaId id = 1;
+            Metadata metadata = 2;
+        }
+    }
+
+    message NewSpan {
+        uint64 span_id = 1;
+        MetaId metadata_id = 2;
+        map<string, Field> fields = 3;
+        google.protobuf.Timestamp at = 4;
+    }
+
+    message Enter {
+        SpanId span_id = 1;
+        uint64 thread_id = 2;
+        google.protobuf.Timestamp at = 3;
+    }
+
+    message Exit {
+        SpanId span_id = 1;
+        uint64 thread_id = 2;
+        google.protobuf.Timestamp at = 3;
+    }
+
+    message Close {
+        SpanId span_id = 1;
+        google.protobuf.Timestamp at = 2;
+    }
+}
+
+message SpanId {
+    uint64 id = 1;
+}
+
+message MetaId {
+    uint64 id = 1;
+}
+
+message Field {
+    oneof field {
+        string debug = 1;
+    }
+}
+
+message Metadata {
+    string name = 1;
+    string target = 2;
+    string module_path = 3;
+    string file = 4;
+    uint32 line = 5;
+    uint32 column = 6;
+    Kind kind = 7;
+    Level level = 8;
+
+    enum Kind {
+        SPAN = 0;
+        EVENT = 1;
+    }
+
+    enum Level {
+        ERROR = 0;
+        WARN = 1;
+        INFO = 2;
+        DEBUG = 3;
+        TRACE = 4;
+    }
+}
