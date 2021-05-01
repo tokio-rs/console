@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package rs.tokio.console.common;
+import "google/protobuf/timestamp/timestamp.proto";
+
+/// A Rust source code location.
+message Location {
+    // The file path
+    optional string file = 1;
+    // The Rust module path
+    optional string module_path = 2;
+    // The line number in the source code file.
+    optional uint32 line = 3;
+    // The character in `line`.
+    optional uint32 column = 4;
+}
+
+message MetaId {
+    uint64 id = 1;
+}
+
+
+message SpanId {
+    uint64 id = 1;
+}
+
+message Field {
+    oneof field {
+        string debug = 1;
+    }
+}
+
+message Span {
+    SpanId id = 1;
+    MetaId metadata_id = 2;
+    map<string, Field> fields = 3;
+    google.protobuf.Timestamp at = 4;
+}
+
+message RegisterMetadata {
+    repeated NewMetadata metadata = 1;
+
+    message NewMetadata {
+        common.MetaId id = 1;
+        common.Metadata metadata = 2;
+    }
+}
+
+message Metadata {
+    string name = 1;
+    string target = 2;
+    string module_path = 3;
+    Location location = 4;
+    Kind kind = 5;
+    Level level = 6;
+
+    enum Kind {
+        SPAN = 0;
+        EVENT = 1;
+    }
+
+    enum Level {
+        ERROR = 0;
+        WARN = 1;
+        INFO = 2;
+        DEBUG = 3;
+        TRACE = 4;
+    }
+}

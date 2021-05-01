@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package rs.tokio.console.tasks;
+
+import "google/protobuf/timestamp/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "common.proto";
+
+service Trace {
+    rpc WatchTasks(TasksRequest) returns (stream TaskUpdate) {}
+}
+
+message TasksRequest {
+}
+
+message TaskUpdate {
+    repeated Task new_tasks = 1;
+    common.RegisterMetadata new_metadata = 2;
+    map<uint64, Stats> stats_update = 3;
+    repeated common.SpanId completed = 4;
+}
+
+message Task {
+    common.SpanId id = 1;
+    common.MetaId metadata = 2;
+    Kind kind = 3;
+    oneof fields {
+        string string_fields = 4;
+
+    }
+    repeated common.SpanId parents = 5;
+
+    enum Kind {
+        SPAWN = 0;
+        BLOCKING = 1;
+    }
+
+}
+
+message Stats {
+    uint64 polls = 1;
+    google.protobuf.Timestamp created_at = 2;
+    optional google.protobuf.Timestamp first_poll = 3;
+    optional google.protobuf.Timestamp last_poll = 4;
+    google.protobuf.Duration busy_time = 5;
+    google.protobuf.Duration total_time = 6;
+
+}

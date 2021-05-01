@@ -1,7 +1,11 @@
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let iface_files = &["../proto/trace.proto"];
+    let iface_files = &[
+        "../proto/trace.proto",
+        "../proto/common.proto",
+        "../proto/tasks.proto",
+    ];
     let dirs = &["../proto"];
 
     tonic_build::configure()

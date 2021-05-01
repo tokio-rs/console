@@ -1,4 +1,6 @@
 [workspace]
 members = [
+    "console",
+    "console-subscriber",
     "console-api"
 ]
