@@ -2,12 +2,13 @@ use console_api as proto;
 use tokio::sync::mpsc;
 
 use std::{
+    collections::HashMap,
+    marker::PhantomData,
+    mem,
+    ops::{Deref, DerefMut},
     ptr,
     sync::atomic::{AtomicPtr, Ordering::*},
-    collections::HashMap,
-    time::{SystemTime, Duration},
-    mem,
-    marker::PhantomData,
+    time::{Duration, SystemTime},
 };
 use tracing_core::{
     field::{self, Field},
@@ -30,11 +31,20 @@ enum Event {
         id: span::Id,
         metadata: &'static Metadata<'static>,
         at: SystemTime,
-        fields: String
+        fields: String,
     },
-    Enter { id: span::Id, at: SystemTime, },
-    Exit { id: span::Id, at: SystemTime, },
-    Close { id: span::Id, at: SystemTime, },
+    Enter {
+        id: span::Id,
+        at: SystemTime,
+    },
+    Exit {
+        id: span::Id,
+        at: SystemTime,
+    },
+    Close {
+        id: span::Id,
+        at: SystemTime,
+    },
 }
 
 pub struct TasksLayer<F = DefaultFields> {
@@ -48,7 +58,7 @@ pub struct Server {
     events: mpsc::Receiver<Event>,
 }
 
-struct Watch(mpsc::Sender<proto::tasks::TaskUpdate>);
+struct Watch(mpsc::Sender<Result<proto::tasks::TaskUpdate, tonic::Status>>);
 
 #[derive(Default)]
 struct Stats {
@@ -75,7 +85,7 @@ impl<F> TasksLayer<F> {
     #[inline(always)]
     fn is_spawn(&self, meta: &'static Metadata<'static>) -> bool {
         ptr::eq(self.task_meta.load(Relaxed), meta as *const _ as *mut _)
-            // || ptr::eq(self.blocking_meta.load(Relaxed), meta as *const _ as *mut _)
+        // || ptr::eq(self.blocking_meta.load(Relaxed), meta as *const _ as *mut _)
     }
 }
 
@@ -87,16 +97,18 @@ where
     fn register_callsite(&self, meta: &'static Metadata<'static>) -> subscriber::Interest {
         if meta.target() == "tokio::task" && meta.name() == "task" {
             if meta.fields().iter().any(|f| f.name() == "function") {
-                self.blocking_meta.compare_and_swap(
+                let _ = self.blocking_meta.compare_exchange(
                     ptr::null_mut(),
                     meta as *const _ as *mut _,
                     AcqRel,
+                    Acquire,
                 );
             } else {
-                self.task_meta.compare_and_swap(
+                let _ = self.task_meta.compare_exchange(
                     ptr::null_mut(),
                     meta as *const _ as *mut _,
                     AcqRel,
+                    Acquire,
                 );
             }
         }
@@ -111,8 +123,11 @@ where
         if self.is_spawn(metadata) {
             let at = SystemTime::now();
             let _ = self.tx.blocking_send(Event::Spawn {
-                id, at, metadata, fields: String::new() // TODO(eliza): format fields
-            }));
+                id: id.clone(),
+                at,
+                metadata,
+                fields: String::new(), // TODO(eliza): format fields
+            });
         }
     }
 
@@ -124,11 +139,10 @@ where
         todo!("track only spawned tasks")
     }
 
-    fn on_close(&self, id: &span::Id, cx: Context<'_, S>) {
+    fn on_close(&self, id: span::Id, cx: Context<'_, S>) {
         todo!("track only spawned tasks")
     }
 }
-
 
 impl Server {
     async fn run_bg(
@@ -140,101 +154,106 @@ impl Server {
         let mut watches = Vec::new();
         let mut metadata = Vec::new();
         let mut new_metadata = Vec::new();
-        let mut tasks = TaskData::default();
-        let mut stats = TaskData::default();
+        let mut tasks = TaskData {
+            data: HashMap::<span::Id, (Task, bool)>::new(),
+        };
+        let mut stats = TaskData::<Stats>::default();
         let mut completed_spans = Vec::new();
+        loop {
+            tokio::select! { biased;
+                _ = flush.tick() => {
+                    let new_metadata = if !new_metadata.is_empty() {
+                        Some(proto::RegisterMetadata {
+                            metadata: mem::replace(&mut new_metadata, Vec::new()),
+                        })
+                    } else {
+                        None
+                    };
+                    let new_tasks = tasks.since_last_update().map(|(id, task)| {
+                        task.to_proto(id.clone())
+                    }).collect();
+                    let now = SystemTime::now();
+                    let stats_update = stats.since_last_update().map(|(id, stats)| {
+                        (id.into_u64(), stats.to_proto(now))
+                    }).collect();
+                    let update = proto::tasks::TaskUpdate {
+                        new_metadata,
+                        new_tasks,
+                        stats_update,
+                        completed: mem::replace(&mut completed_spans, Vec::new()),
+                    };
+                    watches.retain(|watch: &Watch| watch.update(&update));
+                }
+                event = events.recv() => {
+                    let event = match event {
+                        Some(event) => event,
+                        None => return,
+                    };
 
-        tokio::select! { biased;
-            _ = flush.tick() => {
-                let new_metadata = if !new_metadata.is_empty() {
-                    Some(proto::RegisterMetadata {
-                        new_metadata: mem::replace(&mut new_metadata, Vec::new()),
-                    })
-                } else {
-                    None
-                };
-                let new_tasks = tasks.since_last_update().map(|(id, task)| {
-                    task.to_proto(id)
-                }).collect();
-                let now = SystemTime::now();
-                let stats_update = stats.since_last_update().map(|(id, stats)| {
-                    (id.into_u64(), stats.to_proto(now))
-                }).collect();
-                let update = proto::tasks::TaskUpdate {
-                    new_metadata,
-                    new_tasks,
-                    stats_update,
-                    completed_spans: mem::replace(&mut completed_spans, Vec::new());
-                };
-                watches.retain(|watch| watch.update(&update));
-            }
-            event = events.recv() => {
-                let event = match event {
-                    Some(event) => event,
-                    None => return,
-                };
-
-                // do state update
-                match event {
-                    Event::Metadata(meta) => {
-                        metadata.push(meta.into());
-                        new_metadata.push(meta.into());
-                    },
-                    Event::Spawn { id, metadata, at, fields } => {
-                        tasks.insert(id.clone(), Task {
-                            metadata,
-                            fields,
-                            // TODO: parents
-                        });
-                        stats.insert(id, Stats { polls: 0, created_at: Some(at), ..Default::default() })
-                    }
-                    Event::Enter { id, at } => {
-                        let mut stats = stats.update_or_default(id);
-                        if stats.current_polls == 0 {
-                            stats.last_poll = Some(at);
-                            if stats.first_poll == None {
-                                stats.first_poll = Some(at);
-                            }
-                            stats.polls += 1;
+                    // do state update
+                    match event {
+                        Event::Metadata(meta) => {
+                            metadata.push(meta.into());
+                            new_metadata.push(meta.into());
+                        },
+                        Event::Spawn { id, metadata, at, fields } => {
+                            tasks.insert(id.clone(), Task {
+                                metadata,
+                                fields,
+                                // TODO: parents
+                            });
+                            stats.insert(id, Stats { polls: 0, created_at: Some(at), ..Default::default() });
                         }
-                        stats.current_polls += 1;
-                    }
-
-                    Event::Exit { id, at } => {
-                        let mut stats = stats.update_or_default(id);
-                        stats.current_polls -= 1;
-                        if stats.current_polls == 0 {
-                            if let Some(last_poll) = stats.last_poll {
-                                stats.busy_time += at.duration_since(last_poll).unwrap();
+                        Event::Enter { id, at } => {
+                            let mut stats = stats.update_or_default(id);
+                            if stats.current_polls == 0 {
+                                stats.last_poll = Some(at);
+                                if stats.first_poll == None {
+                                    stats.first_poll = Some(at);
+                                }
+                                stats.polls += 1;
                             }
+                            stats.current_polls += 1;
                         }
-                    },
 
-                    Event::Close { id, at } => {
-                        stats.update_or_default(id).closed_at = Some(at);
-                        completed_spans.push(id.into());
+                        Event::Exit { id, at } => {
+                            let mut stats = stats.update_or_default(id);
+                            stats.current_polls -= 1;
+                            if stats.current_polls == 0 {
+                                if let Some(last_poll) = stats.last_poll {
+                                    stats.busy_time += at.duration_since(last_poll).unwrap();
+                                }
+                            }
+                        },
+
+                        Event::Close { id, at } => {
+                            stats.update_or_default(id.clone()).closed_at = Some(at);
+                            completed_spans.push(id.into());
+                        }
                     }
                 }
-            }
-            subscription = rpcs.recv() => {
-                let new_tasks = tasks.all().map(|(id, task)| {
-                    task.to_proto(id)
-                }).collect();
-                let now = SystemTime::now();
-                let stats_update = stats.all().map(|(id, stats)| {
-                    (id.into_u64(), stats.to_proto(now))
-                }).collect();
-                // Send the initial state --- if this fails, the subscription is
-                // already dead.
-                if subscription.update(proto::tasks::TaskUpdate {
-                    new_metadata: Some(proto::RegisterMetadata {
-                        new_metadata: metadata.clone(),
-                    }),
-                    new_tasks,
-                    stats_update,
-                    ..Default::default()
-                }) {
-                    watches.push(subscription)
+                subscription = rpcs.recv() => {
+                    if let Some(subscription) = subscription {
+                        let new_tasks = tasks.all().map(|(id, task)| {
+                            task.to_proto(id.clone())
+                        }).collect();
+                        let now = SystemTime::now();
+                        let stats_update = stats.all().map(|(id, stats)| {
+                            (id.into_u64(), stats.to_proto(now))
+                        }).collect();
+                        // Send the initial state --- if this fails, the subscription is
+                        // already dead.
+                        if subscription.update(&proto::tasks::TaskUpdate {
+                            new_metadata: Some(proto::RegisterMetadata {
+                                metadata: metadata.clone(),
+                            }),
+                            new_tasks,
+                            stats_update,
+                            ..Default::default()
+                        }) {
+                            watches.push(subscription)
+                        }
+                    }
                 }
             }
         }
@@ -249,20 +268,18 @@ impl<T> TaskData<T> {
         Updating(self.data.entry(id).or_default())
     }
 
-    fn update(&mut self, id: span::Id) -> Option<Updating<'_, T>>
-    {
-        Updating(self.data.get_mut(id))
+    fn update(&mut self, id: &span::Id) -> Option<Updating<'_, T>> {
+        Some(Updating(self.data.get_mut(id)?))
     }
 
-    fn insert(&mut self, id: span::Id, data: T) -> Updating<'_, T> {
-        self.data.insert(id, (data, true))
+    fn insert(&mut self, id: span::Id, data: T) {
+        self.data.insert(id, (data, true));
     }
 
-
-    fn since_last_update(&mut self) -> impl Iterator<Item = (span::Id, T)> {
-        self.data.iter_mut().filter_map(|(id, (data, dirty)| {
-            if dirty {
-                dirty = false;
+    fn since_last_update(&mut self) -> impl Iterator<Item = (&span::Id, &mut T)> {
+        self.data.iter_mut().filter_map(|(id, (data, dirty))| {
+            if *dirty {
+                *dirty = false;
                 Some((id, data))
             } else {
                 None
@@ -270,36 +287,36 @@ impl<T> TaskData<T> {
         })
     }
 
-    fn all(&self) -> impl Iterator<Item = (span::Id, T)> {
-        self.data.iter().map(|(id, (data, dirty)| (id, data)))
+    fn all(&self) -> impl Iterator<Item = (&span::Id, &T)> {
+        self.data.iter().map(|(id, (data, dirty))| (id, data))
     }
 }
 
 struct Updating<'a, T>(&'a mut (T, bool));
 
-impl<'a, T> Deref<T> for Updating<'a, T> {
+impl<'a, T> Deref for Updating<'a, T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.0 .0
     }
 }
 
-impl<'a, T> DerefMut<T> for Updating<'a, T> {
-    fn deref(&mut self) -> &mut Self::Target {
+impl<'a, T> DerefMut for Updating<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0 .0
     }
 }
 
 impl<'a, T> Drop for Updating<'a, T> {
-    fn drop(&mut self) -> Self {
+    fn drop(&mut self) {
         self.0 .1 = true;
     }
 }
 
 impl Watch {
-    fn update(&self, update: impl ToOwned<Owned = proto::tasks::TaskUpdate>) -> bool {
+    fn update(&self, update: &proto::tasks::TaskUpdate) -> bool {
         if let Ok(reserve) = self.0.try_reserve() {
-            reserve.send(Ok(update.to_owned()));
+            reserve.send(Ok(update.clone()));
             true
         } else {
             false
@@ -310,7 +327,8 @@ impl Watch {
 impl Stats {
     fn total_time(&self, now: SystemTime) -> Option<Duration> {
         let now = self.closed_at.unwrap_or(now);
-        self.created_at.and_then(|then| now.duration_since(then).ok())
+        self.created_at
+            .and_then(|then| now.duration_since(then).ok())
     }
 
     fn to_proto(&self, now: SystemTime) -> proto::tasks::Stats {
@@ -319,12 +337,11 @@ impl Stats {
             created_at: self.created_at.map(Into::into),
             first_poll: self.created_at.map(Into::into),
             last_poll: self.created_at.map(Into::into),
-            busy_time: self.busy_time.into(),
-            total_time: self.total_time(now),
-        };
+            busy_time: Some(self.busy_time.into()),
+            total_time: self.total_time(now).map(Into::into),
+        }
     }
 }
-
 
 impl Task {
     fn to_proto(&self, id: span::Id) -> proto::tasks::Task {
@@ -332,9 +349,9 @@ impl Task {
             id: Some(id.into()),
             // TODO: more kinds of tasks...
             kind: proto::tasks::task::Kind::Spawn as i32,
-            fields: Some(proto::tasks::task::Fields::StringFields(self.fields.clone())),
-            meta_id: Some(self.metadata.into()),
-            parents: Vec::new() // TODO: implement parents nicely
+            string_fields: self.fields.clone(),
+            metadata: Some(self.metadata.into()),
+            parents: Vec::new(), // TODO: implement parents nicely
         }
     }
 }
