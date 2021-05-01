@@ -24,10 +24,11 @@ message Task {
     common.SpanId id = 1;
     common.MetaId metadata = 2;
     Kind kind = 3;
-    oneof fields {
-        string string_fields = 4;
+    
+    // NOTE: eventually, it would be nice to support structured fields in tasks;
+    // we can deprecate this when we add that.
+    string string_fields = 4;
 
-    }
     repeated common.SpanId parents = 5;
 
     enum Kind {
