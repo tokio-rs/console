@@ -412,9 +412,9 @@ impl<T> TaskData<T> {
         Updating(self.data.entry(id).or_default())
     }
 
-    fn update(&mut self, id: &span::Id) -> Option<Updating<'_, T>> {
-        Some(Updating(self.data.get_mut(id)?))
-    }
+    // fn update(&mut self, id: &span::Id) -> Option<Updating<'_, T>> {
+    //     Some(Updating(self.data.get_mut(id)?))
+    // }
 
     fn insert(&mut self, id: span::Id, data: T) {
         self.data.insert(id, (data, true));
@@ -432,7 +432,7 @@ impl<T> TaskData<T> {
     }
 
     fn all(&self) -> impl Iterator<Item = (&span::Id, &T)> {
-        self.data.iter().map(|(id, (data, dirty))| (id, data))
+        self.data.iter().map(|(id, (data, _))| (id, data))
     }
 }
 
