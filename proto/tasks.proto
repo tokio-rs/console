@@ -6,7 +6,7 @@ import "google/protobuf/timestamp/timestamp.proto";
 import "google/protobuf/duration.proto";
 import "common.proto";
 
-service Trace {
+service Tasks {
     rpc WatchTasks(TasksRequest) returns (stream TaskUpdate) {}
 }
 
@@ -24,7 +24,7 @@ message Task {
     common.SpanId id = 1;
     common.MetaId metadata = 2;
     Kind kind = 3;
-    
+
     // NOTE: eventually, it would be nice to support structured fields in tasks;
     // we can deprecate this when we add that.
     string string_fields = 4;
