@@ -4,3 +4,4 @@ members = [
     "console-subscriber",
     "console-api"
 ]
+resolver = "2"

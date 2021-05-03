@@ -3,15 +3,14 @@ use tokio::sync::mpsc;
 
 use std::{
     collections::HashMap,
-    marker::PhantomData,
     mem,
+    net::SocketAddr,
     ops::{Deref, DerefMut},
     ptr,
     sync::atomic::{AtomicPtr, Ordering::*},
     time::{Duration, SystemTime},
 };
 use tracing_core::{
-    field::{self, Field},
     span,
     subscriber::{self, Subscriber},
     Metadata,
@@ -56,7 +55,16 @@ pub struct TasksLayer<F = DefaultFields> {
 }
 
 pub struct Server {
+    subscribe: mpsc::Sender<Watch>,
+    addr: SocketAddr,
+    aggregator: Option<Aggregator>,
+    client_buffer: usize,
+}
+
+struct Aggregator {
     events: mpsc::Receiver<Event>,
+    rpcs: mpsc::Receiver<Watch>,
+    flush_interval: Duration,
 }
 
 struct Watch(mpsc::Sender<Result<proto::tasks::TaskUpdate, tonic::Status>>);
@@ -82,7 +90,37 @@ struct Task {
     fields: String,
 }
 
+impl TasksLayer {
+    pub fn new() -> (Self, Server) {
+        // TODO(eliza): builder
+        let (tx, events) = mpsc::channel(Self::DEFAULT_EVENT_BUFFER_CAPACITY);
+        let (subscribe, rpcs) = mpsc::channel(256);
+        let aggregator = Aggregator {
+            events,
+            rpcs,
+            flush_interval: Self::DEFAULT_FLUSH_INTERVAL,
+        };
+        let addr = SocketAddr::from(([127, 0, 0, 1], 6669));
+        let server = Server {
+            aggregator: Some(aggregator),
+            addr,
+            subscribe,
+            client_buffer: Self::DEFAULT_CLIENT_BUFFER_CAPACITY,
+        };
+        let layer = Self {
+            tx,
+            task_meta: AtomicPtr::new(ptr::null_mut()),
+            blocking_meta: AtomicPtr::new(ptr::null_mut()),
+            format: Default::default(),
+        };
+        (layer, server)
+    }
+}
+
 impl<F> TasksLayer<F> {
+    pub const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 1024 * 10;
+    pub const DEFAULT_CLIENT_BUFFER_CAPACITY: usize = 1024 * 4;
+    pub const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_secs(1);
     #[inline(always)]
     fn is_spawn(&self, meta: &'static Metadata<'static>) -> bool {
         ptr::eq(self.task_meta.load(Relaxed), meta as *const _ as *mut _)
@@ -136,7 +174,7 @@ where
             }
         }
 
-        let _ = self.tx.blocking_send(Event::Metadata(meta));
+        self.try_send(Event::Metadata(meta));
 
         subscriber::Interest::always()
     }
@@ -160,7 +198,7 @@ where
                     fields
                 }
             };
-            let _ = self.tx.blocking_send(Event::Spawn {
+            self.try_send(Event::Spawn {
                 id: id.clone(),
                 at,
                 metadata,
@@ -201,12 +239,62 @@ where
 }
 
 impl Server {
-    async fn run_bg(
-        mut events: mpsc::Receiver<Event>,
-        mut rpcs: mpsc::Receiver<Watch>,
-        flush_interval: Duration,
-    ) {
-        let mut flush = tokio::time::interval(flush_interval);
+    pub fn with_addr(self, addr: impl Into<SocketAddr>) -> Self {
+        Self {
+            addr: addr.into(),
+            ..self
+        }
+    }
+
+    pub async fn serve(self) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+        self.serve_with(tonic::transport::Server::default()).await
+    }
+
+    pub async fn serve_with(
+        mut self,
+        mut builder: tonic::transport::Server,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+        let aggregate = self
+            .aggregator
+            .take()
+            .expect("cannot start server multiple times");
+        let aggregate = tokio::spawn(aggregate.run());
+        let addr = self.addr;
+        let res = builder
+            .add_service(proto::tasks::tasks_server::TasksServer::new(self))
+            .serve(addr)
+            .await;
+        aggregate.abort();
+        res.map_err(Into::into)
+    }
+}
+
+#[tonic::async_trait]
+impl proto::tasks::tasks_server::Tasks for Server {
+    type WatchTasksStream =
+        tokio_stream::wrappers::ReceiverStream<Result<proto::tasks::TaskUpdate, tonic::Status>>;
+    async fn watch_tasks(
+        &self,
+        req: tonic::Request<proto::tasks::TasksRequest>,
+    ) -> Result<tonic::Response<Self::WatchTasksStream>, tonic::Status> {
+        match req.remote_addr() {
+            Some(addr) => tracing::debug!(client.addr = %addr, "starting a new watch"),
+            None => tracing::debug!(client.addr = %"<unknown>", "starting a new watch"),
+        }
+        let permit = self.subscribe.reserve().await.map_err(|_| {
+            tonic::Status::internal("cannot start new watch, aggregation task is not running")
+        })?;
+        let (tx, rx) = mpsc::channel(self.client_buffer);
+        permit.send(Watch(tx));
+        tracing::debug!("watch started");
+        let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        Ok(tonic::Response::new(stream))
+    }
+}
+
+impl Aggregator {
+    async fn run(mut self) {
+        let mut flush = tokio::time::interval(self.flush_interval);
         let mut watches = Vec::new();
         let mut metadata = Vec::new();
         let mut new_metadata = Vec::new();
@@ -240,7 +328,7 @@ impl Server {
                     };
                     watches.retain(|watch: &Watch| watch.update(&update));
                 }
-                event = events.recv() => {
+                event = self.events.recv() => {
                     let event = match event {
                         Some(event) => event,
                         None => return,
@@ -288,7 +376,7 @@ impl Server {
                         }
                     }
                 }
-                subscription = rpcs.recv() => {
+                subscription = self.rpcs.recv() => {
                     if let Some(subscription) = subscription {
                         let new_tasks = tasks.all().map(|(id, task)| {
                             task.to_proto(id.clone())
