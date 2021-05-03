@@ -48,6 +48,11 @@ message TaskUpdate {
     // When a task ID is present in this list, the `stats_update` field of this
     // `TaskUpdate` will contain the final statistics recorded for that task.
     repeated common.SpanId completed = 4;
+    // The system time when this update was recorded.
+    //
+    // This is the timestamp any durations in the included `Stats` were
+    // calculated relative to.
+    google.protobuf.Timestamp now = 5;
 }
 
 // Data recorded when a new task is spawned.

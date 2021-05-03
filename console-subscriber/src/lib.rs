@@ -325,6 +325,7 @@ impl Aggregator {
                         new_tasks,
                         stats_update,
                         completed: mem::replace(&mut completed_spans, Vec::new()),
+                        now: Some(now.into()),
                     };
                     watches.retain(|watch: &Watch| watch.update(&update));
                 }
