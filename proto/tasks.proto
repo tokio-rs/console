@@ -13,22 +13,79 @@ service Tasks {
 message TasksRequest {
 }
 
+// A task state update.
+//
+// Each `TaskUpdate` contains any task data that has changed since the last
+// update. This includes:
+// - any new tasks that were spawned since the last update
+// - metadata for any new spans that were registered since the last update
+// - the current stats for any task whose stats changed since the last update
+// - a list of the IDs of any tasks which *completed* since the last update
 message TaskUpdate {
+    // A list of new tasks that were spawned since the last `TaskUpdate` was
+    // sent.
+    //
+    // If this is empty, no new tasks were spawned.
     repeated Task new_tasks = 1;
+    // Any new span metadata that was registered since the last update.
     common.RegisterMetadata new_metadata = 2;
+    // Any task stats that have changed since the last update.
+    //
+    // This is a map of task IDs (64-bit unsigned integers) to task stats. If a
+    // task's ID is not included in this map, then its stats have *not* changed
+    // since the last `TaskUpdate` in which they were present. If a task's ID
+    // *is* included in this map, the corresponding value represents a complete
+    // snapshot of that task's stats at in the current time window.
     map<uint64, Stats> stats_update = 3;
+    // The IDs of any tasks which have *completed* since the last update.
+    //
+    // If a task's ID is present in this list, that task has terminated. The
+    // client is free to delete any data it has stored for that task if it is no
+    // longer relevant. Task IDs *may* be reused when new tasks are spawned; if
+    // a new task is spawned for the same ID, it will appear in the `new_tasks`
+    // list in a future `TaskUpdate`.
+    //
+    // When a task ID is present in this list, the `stats_update` field of this
+    // `TaskUpdate` will contain the final statistics recorded for that task.
     repeated common.SpanId completed = 4;
 }
 
+// Data recorded when a new task is spawned.
 message Task {
+    // The task's ID.
+    //
+    // This uniquely identifies this task across all *currently live* tasks.
+    // When the task's stats change, or when the task completes, it will be
+    // identified by this ID; if the client requires additional information
+    // included in the `Task` message, it should store that data and access it
+    // by ID. 
     common.SpanId id = 1;
+    // The numeric ID of the task's `Metadata`.
+    //
+    // This identifies the `Metadata` that describes the `tracing` span
+    // corresponding to this task. The metadata for this ID will have been sent
+    // in a prior `RegisterMetadata` message.
     common.MetaId metadata = 2;
+    // The category of task this task belongs to.
     Kind kind = 3;
 
+    // A string representation of any fields recorded about this task.
+    //
     // NOTE: eventually, it would be nice to support structured fields in tasks;
     // we can deprecate this when we add that.
     string string_fields = 4;
 
+    // An ordered list of span IDs corresponding to the `tracing` span context
+    // in which this task was spawned.
+    //
+    // The first span ID in this list is the immediate parent, followed by that
+    // span's parent, and so on. The final ID is the root span of the current
+    // trace.
+    //
+    // If this is empty, there were *no* active spans when the task was spawned.
+    //
+    // These IDs may correspond to `tracing` spans which are *not* tasks, if
+    // additional trace data is being collected.
     repeated common.SpanId parents = 5;
 
     enum Kind {
@@ -38,11 +95,35 @@ message Task {
 
 }
 
+// Task performance statistics.
 message Stats {
+    // The total number of times this task has been polled.
     uint64 polls = 1;
+    // Timestamp of when the task was spawned.
     google.protobuf.Timestamp created_at = 2;
+    // The timestamp of the first time this task was polled.
+    //
+    // If this is `None`, the task has not yet been polled.
+    //
+    // Subtracting this timestamp from `created_at` can be used to calculate the
+    // time to first poll for this task, a measurement of executor latency.
     optional google.protobuf.Timestamp first_poll = 3;
+    // The timestamp of the most recent time this task was polled.
+    //
+    // If this is `None`, the task has not yet been polled.
+    //
+    // If the task has only been polled a single time, then this value may be
+    // equal to the `first_poll` timestamp.
+    //
+    // If the task has completed, then this is the time the final poll occurred.
     optional google.protobuf.Timestamp last_poll = 4;
+    // The total duration this task was being *actively polled*, summed across
+    // all polls.
     google.protobuf.Duration busy_time = 5;
+    // The amount of time this task has *existed*, regardless of whether or not
+    // it was being polled.
+    //
+    // Subtracting `busy_time` from `total_time` calculates the task's idle
+    // time, the amount of time it has spent *waiting* to be polled.
     google.protobuf.Duration total_time = 6;
 }
