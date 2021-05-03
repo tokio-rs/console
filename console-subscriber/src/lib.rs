@@ -22,6 +22,7 @@ use tracing_subscriber::{
         FormattedFields,
     },
     layer::Context,
+    registry::LookupSpan,
     Layer,
 };
 
@@ -51,7 +52,7 @@ pub struct TasksLayer<F = DefaultFields> {
     task_meta: AtomicPtr<Metadata<'static>>,
     blocking_meta: AtomicPtr<Metadata<'static>>,
     tx: mpsc::Sender<Event>,
-    _f: PhantomData<fn(F)>,
+    format: F,
 }
 
 pub struct Server {
@@ -87,11 +88,33 @@ impl<F> TasksLayer<F> {
         ptr::eq(self.task_meta.load(Relaxed), meta as *const _ as *mut _)
         // || ptr::eq(self.blocking_meta.load(Relaxed), meta as *const _ as *mut _)
     }
+
+    fn is_id_spawned<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
+    where
+        S: Subscriber + for<'a> LookupSpan<'a>,
+    {
+        cx.span(id)
+            .map(|span| self.is_spawn(span.metadata()))
+            .unwrap_or(false)
+    }
+
+    fn try_send(&self, event: Event) {
+        use mpsc::error::TrySendError;
+        match self.tx.try_send(event) {
+            Ok(_) => {}
+            Err(TrySendError::Closed(_)) => tracing::warn!(
+                "console server task has terminated; task stats will no longer be updated"
+            ),
+            Err(TrySendError::Full(_)) => {
+                tracing::warn!("console buffer is full; some task stats may be missing")
+            }
+        }
+    }
 }
 
 impl<S, F> Layer<S> for TasksLayer<F>
 where
-    S: Subscriber,
+    S: Subscriber + for<'a> LookupSpan<'a>,
     F: for<'writer> FormatFields<'writer> + 'static,
 {
     fn register_callsite(&self, meta: &'static Metadata<'static>) -> subscriber::Interest {
@@ -122,25 +145,58 @@ where
         let metadata = attrs.metadata();
         if self.is_spawn(metadata) {
             let at = SystemTime::now();
+            let span = cx.span(id).expect("newly-created span should exist");
+            let mut exts = span.extensions_mut();
+            let fields = match exts.get_mut::<FormattedFields<F>>() {
+                Some(fields) => fields.fields.clone(),
+                None => {
+                    let mut fields = String::new();
+                    match self.format.format_fields(&mut fields, attrs) {
+                        Ok(()) => exts.insert(FormattedFields::<F>::new(fields.clone())),
+                        Err(_) => {
+                            tracing::warn!(span.id = ?id, span.attrs = ?attrs, "error formatting fields for span")
+                        }
+                    }
+                    fields
+                }
+            };
             let _ = self.tx.blocking_send(Event::Spawn {
                 id: id.clone(),
                 at,
                 metadata,
-                fields: String::new(), // TODO(eliza): format fields
+                fields,
             });
         }
     }
 
     fn on_enter(&self, id: &span::Id, cx: Context<'_, S>) {
-        todo!("track only spawned tasks")
+        if !self.is_id_spawned(id, &cx) {
+            return;
+        }
+        self.try_send(Event::Enter {
+            at: SystemTime::now(),
+            id: id.clone(),
+        });
     }
 
     fn on_exit(&self, id: &span::Id, cx: Context<'_, S>) {
-        todo!("track only spawned tasks")
+        if !self.is_id_spawned(id, &cx) {
+            return;
+        }
+        self.try_send(Event::Exit {
+            at: SystemTime::now(),
+            id: id.clone(),
+        });
     }
 
     fn on_close(&self, id: span::Id, cx: Context<'_, S>) {
-        todo!("track only spawned tasks")
+        if !self.is_id_spawned(&id, &cx) {
+            return;
+        }
+        self.try_send(Event::Close {
+            at: SystemTime::now(),
+            id,
+        });
     }
 }
 
