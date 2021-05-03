@@ -3,6 +3,11 @@ use tracing_subscriber::prelude::*;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    assert!(
+        cfg!(tokio_unstable),
+        "task tracing requires Tokio to be built with RUSTFLAGS=\"--cfg tokio_unstable\"!"
+    );
+
     let (layer, server) = console_subscriber::TasksLayer::new();
     let filter =
         tracing_subscriber::EnvFilter::from_default_env().add_directive("tokio=trace".parse()?);
