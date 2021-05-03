@@ -11,6 +11,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     tonic_build::configure()
         .build_client(true)
         .build_server(true)
+        .protoc_arg("--experimental_allow_proto3_optional")
         .compile(iface_files, dirs)?;
 
     // recompile protobufs only if any of the proto files changes.

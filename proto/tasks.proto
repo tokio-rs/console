@@ -45,5 +45,4 @@ message Stats {
     optional google.protobuf.Timestamp last_poll = 4;
     google.protobuf.Duration busy_time = 5;
     google.protobuf.Duration total_time = 6;
-
 }
