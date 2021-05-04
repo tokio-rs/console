@@ -13,3 +13,5 @@ tokio = { version = "1", features = ["full", "rt-multi-thread"]}
 futures = "0.3"
 tui = { version = "0.15.0", features = ["crossterm"] }
 chrono = "0.4"
+tracing = "0.1"
+prost-types = "0.7"

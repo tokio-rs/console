@@ -18,6 +18,8 @@ use tui::style::*;
 use tui::text::*;
 use tui::widgets::*;
 
+mod tasks;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args();
@@ -31,46 +33,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
 
-    let mut client = TasksClient::connect(target).await?;
+    let mut client = TasksClient::connect(target.clone()).await?;
     let request = tonic::Request::new(TasksRequest {});
     let mut stream = client.watch_tasks(request).await?.into_inner();
-
+    let mut tasks = tasks::State::default();
     while let Some(update) = stream.next().await {
         match update {
             Ok(update) => {
-                eprintln!("UPDATE {:?}", update);
+                tasks.update(update);
             }
             Err(e) => {
                 eprintln!("update stream error: {}", e);
                 return Err(e.into());
             }
         }
-    }
 
-    loop {
         terminal.draw(|f| {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(0)
-                .constraints([Constraint::Length(10), Constraint::Percentage(95)].as_ref())
+                .constraints([Constraint::Length(2), Constraint::Percentage(95)].as_ref())
                 .split(f.size());
 
-            let header_block = Block::default()
-                .title(vec![Span::styled(
-                    "desolation",
+            let header_block = Block::default().title(vec![
+                Span::raw("connected to: "),
+                Span::styled(
+                    target.as_str(),
                     Style::default().add_modifier(Modifier::BOLD),
-                )])
-                .borders(Borders::ALL);
+                ),
+            ]);
 
             let text = vec![Spans::from(vec![
-                Span::styled("controls: ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw("up/down = scroll, q = quit"),
+                Span::styled(
+                    format!("{}", tasks.len()),
+                    Style::default().add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" tasks"),
             ])];
             let header = Paragraph::new(text)
                 .block(header_block)
                 .wrap(Wrap { trim: true });
-
             f.render_widget(header, chunks[0]);
+            tasks.render(f, chunks[1]);
         })?;
     }
 
