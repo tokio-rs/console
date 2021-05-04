@@ -19,6 +19,7 @@ struct Task {
     fields: String,
     kind: &'static str,
     stats: Stats,
+    completed_for: usize,
 }
 
 #[derive(Default, Debug)]
@@ -28,10 +29,15 @@ struct Stats {
     idle: Duration,
     total: Duration,
 }
+
 impl State {
+    // How many updates to retain completed tasks for
+    const RETAIN_COMPLETED_FOR: usize = 6;
+
     pub(crate) fn len(&self) -> usize {
         self.tasks.len()
     }
+
     pub(crate) fn update(&mut self, update: proto::tasks::TaskUpdate) {
         let new_tasks = update.new_tasks.into_iter().filter_map(|task| {
             if task.id.is_none() {
@@ -48,6 +54,7 @@ impl State {
                 fields: task.string_fields,
                 kind,
                 stats: Default::default(),
+                completed_for: 0,
             };
             Some((id, task))
         });
@@ -60,7 +67,10 @@ impl State {
         }
 
         for proto::SpanId { id } in update.completed {
-            if self.tasks.remove(&id).is_none() {
+            if let Some(task) = self.tasks.get_mut(&id) {
+                task.kind = "!";
+                task.completed_for = 1;
+            } else {
                 tracing::warn!(?id, "tried to complete a task that didn't exist");
             }
         }
@@ -79,7 +89,7 @@ impl State {
         const DUR_PRECISION: usize = 4;
         const POLLS_LEN: usize = 5;
         let rows = self.tasks.values().map(|task| {
-            let row = Row::new(vec![
+            let mut row = Row::new(vec![
                 Cell::from(task.id_hex.as_str()),
                 // TODO(eliza): is there a way to write a `fmt::Debug` impl
                 // directly to tui without doing an allocation?
@@ -105,6 +115,9 @@ impl State {
                 Cell::from(format!("{:>width$}", task.stats.polls, width = POLLS_LEN)),
                 Cell::from(task.fields.as_str()),
             ]);
+            if task.completed_for > 0 {
+                row = row.style(Style::default().add_modifier(style::Modifier::DIM));
+            }
             row
         });
         let t = Table::new(rows)
@@ -125,6 +138,16 @@ impl State {
             ]);
 
         frame.render_widget(t, area)
+    }
+
+    pub(crate) fn retain_active(&mut self) {
+        self.tasks.retain(|_, task| {
+            if task.completed_for == 0 {
+                return true;
+            }
+            task.completed_for += 1;
+            task.completed_for <= Self::RETAIN_COMPLETED_FOR
+        })
     }
 }
 

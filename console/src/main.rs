@@ -69,6 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .wrap(Wrap { trim: true });
             f.render_widget(header, chunks[0]);
             tasks.render(f, chunks[1]);
+            tasks.retain_active();
         })?;
     }
 
