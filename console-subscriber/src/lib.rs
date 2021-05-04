@@ -92,6 +92,9 @@ struct Task {
 
 impl TasksLayer {
     pub fn new() -> (Self, Server) {
+        // The `cfg` value *appears* to be a constant to clippy, but it changes
+        // depending on the build-time configuration...
+        #[allow(clippy::assertions_on_constants)]
         assert!(
             cfg!(tokio_unstable),
             "task tracing requires Tokio to be built with RUSTFLAGS=\"--cfg tokio_unstable\"!"
