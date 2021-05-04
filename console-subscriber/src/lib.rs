@@ -92,6 +92,10 @@ struct Task {
 
 impl TasksLayer {
     pub fn new() -> (Self, Server) {
+        assert!(
+            cfg!(tokio_unstable),
+            "task tracing requires Tokio to be built with RUSTFLAGS=\"--cfg tokio_unstable\"!"
+        );
         // TODO(eliza): builder
         let (tx, events) = mpsc::channel(Self::DEFAULT_EVENT_BUFFER_CAPACITY);
         let (subscribe, rpcs) = mpsc::channel(256);
