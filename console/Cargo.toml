@@ -1,9 +1,17 @@
 [package]
 name = "console"
 version = "0.1.0"
-authors = ["Eliza Weisman <eliza@buoyant.io>"]
+authors = ["Eliza Weisman <eliza@buoyant.io>", "David Barsky <me@davidbarsky.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+tonic = { version = "0.4", features = ["transport"] }
+console-api = { path = "../console-api", features = ["transport"]}
+tokio = { version = "1", features = ["full", "rt-multi-thread"]}
+futures = "0.3"
+tui = { version = "0.15.0", features = ["crossterm"] }
+chrono = "0.4"
+tracing = "0.1"
+prost-types = "0.7"
