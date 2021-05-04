@@ -40,7 +40,7 @@ toolkit consists of multiple components:
 
 ## extremely cool and amazing demo
 
-<script id="asciicast-v2IhhVVuYJ3JF2HNChs64rf6z" src="https://asciinema.org/a/v2IhhVVuYJ3JF2HNChs64rf6z.js" async></script>
+[![asciicast](https://asciinema.org/a/411748.svg)](https://asciinema.org/a/411748)
 
 wow! whoa! it's like `top(1)` for tasks!
 
