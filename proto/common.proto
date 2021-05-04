@@ -19,21 +19,28 @@ message MetaId {
     uint64 id = 1;
 }
 
-
 message SpanId {
     uint64 id = 1;
 }
 
 message Field {
-    oneof field {
-        string debug = 1;
+    oneof name {
+        string str_name = 1;
+        // TODO(eliza): support name indices here?
+    }
+    oneof value {
+        string debug_val = 2;
+        string str_val = 3;
+        uint64 u64_val = 4;
+        sint64 i64_val = 5;
+        bool bool_val = 6;
     }
 }
 
 message Span {
     SpanId id = 1;
     MetaId metadata_id = 2;
-    map<string, Field> fields = 3;
+    repeated Field fields = 3;
     google.protobuf.Timestamp at = 4;
 }
 
