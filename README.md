@@ -38,6 +38,12 @@ toolkit consists of multiple components:
 [`tonic`]: https://lib.rs/crates/tonic
 [Tokio]: https://tokio.rs
 
+## extremely cool and amazing demo
+
+<script id="asciicast-v2IhhVVuYJ3JF2HNChs64rf6z" src="https://asciinema.org/a/v2IhhVVuYJ3JF2HNChs64rf6z.js" async></script>
+
+wow! whoa! it's like `top(1)` for tasks!
+
 ## using it
 
 to **instrument an application using Tokio**, add a dependency on the
