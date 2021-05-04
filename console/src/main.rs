@@ -1,22 +1,16 @@
-use chrono::Local;
 use console_api::tasks::{tasks_client::TasksClient, TasksRequest};
 use futures::stream::StreamExt;
 use std::io;
-use tokio::select;
 
 use tui::{
-    backend::TermionBackend,
     layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Span, Spans},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Paragraph, Wrap},
     Terminal,
 };
 
 use tui::backend::CrosstermBackend;
-use tui::style::*;
-use tui::text::*;
-use tui::widgets::*;
 
 mod tasks;
 
