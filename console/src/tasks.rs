@@ -82,13 +82,13 @@ impl State {
         match code {
             Left => {
                 if self.selected_column == 0 {
-                    self.selected_column = Self::HEADER.len();
+                    self.selected_column = Self::HEADER.len() - 1;
                 } else {
                     self.selected_column -= 1;
                 }
             }
             Right => {
-                if self.selected_column == Self::HEADER.len() {
+                if self.selected_column == Self::HEADER.len() - 1 {
                     self.selected_column = 0;
                 } else {
                     self.selected_column += 1;
