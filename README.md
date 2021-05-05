@@ -49,12 +49,12 @@ wow! whoa! it's like `top(1)` for tasks!
 
 the console is **part of a much larger effort** to improve debugging tooling for
 async Rust. **a [2019 Google Summer of Code project][gsoc] by Matthias Prechtl**
-(@matprec) implemented an initial prototype, with a focus on interactive log
+([**@matprec**]) implemented an initial prototype, with a focus on interactive log
 viewing. more recently, both **the [Tokio team][tokio-blog] and the [async
 foundations working group][shiny-future]** have made diagnostics and debugging
 tools a priority for async Rust in 2021 and beyond. in particular, a
-[series][tw-1] of [blog][tw-2] [posts][tw-3] by @pnkfelix lay out much of the
-vision that this project seeks to eventually implement.
+[series][tw-1] of [blog][tw-2] [posts][tw-3] by [**@pnkfelix**] lay out much of
+the vision that this project seeks to eventually implement.
 
 furthermore, we're indebted to our antecedents in other programming languages
 and environments for inspiration. this includes tools and systems such as
@@ -71,7 +71,8 @@ others.
 [`top(1)`]: https://man7.org/linux/man-pages/man1/top.1.html
 [`htop(1)`]: https://htop.dev/
 [Instruments]: https://developer.apple.com/library/archive/documentation/ToolsLanguages/Conceptual/Xcode_Overview/MeasuringPerformance.html
-
+[**@matprec**]: https://github.com/matprec
+[**@pnkfelix**]: https://github.com/pnkfelix
 ## using it
 
 to **instrument an application using Tokio**, add a dependency on the
