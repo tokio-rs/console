@@ -128,6 +128,7 @@ impl<F> TasksLayer<F> {
     pub const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 1024 * 10;
     pub const DEFAULT_CLIENT_BUFFER_CAPACITY: usize = 1024 * 4;
     pub const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_secs(1);
+
     #[inline(always)]
     fn is_spawn(&self, meta: &'static Metadata<'static>) -> bool {
         ptr::eq(self.task_meta.load(Relaxed), meta as *const _ as *mut _)
@@ -163,48 +164,49 @@ where
     F: for<'writer> FormatFields<'writer> + 'static,
 {
     fn register_callsite(&self, meta: &'static Metadata<'static>) -> subscriber::Interest {
-        if meta.target() == "tokio::task" && meta.name() == "task" {
-            if meta.fields().iter().any(|f| f.name() == "function") {
-                let _ = self.blocking_meta.compare_exchange(
-                    ptr::null_mut(),
-                    meta as *const _ as *mut _,
-                    AcqRel,
-                    Acquire,
-                );
-            } else {
-                let _ = self.task_meta.compare_exchange(
-                    ptr::null_mut(),
-                    meta as *const _ as *mut _,
-                    AcqRel,
-                    Acquire,
-                );
-            }
+        if meta.fields().iter().any(|f| f.name() == "function") {
+            let _ = self.blocking_meta.compare_exchange(
+                ptr::null_mut(),
+                meta as *const _ as *mut _,
+                AcqRel,
+                Acquire,
+            );
+        } else {
+            let _ = self.task_meta.compare_exchange(
+                ptr::null_mut(),
+                meta as *const _ as *mut _,
+                AcqRel,
+                Acquire,
+            );
         }
 
-        self.try_send(Event::Metadata(meta));
+        if meta.target() == "tokio::task" && meta.name() == "task" {
+            self.try_send(Event::Metadata(meta));
+        }
 
         subscriber::Interest::always()
     }
 
     fn new_span(&self, attrs: &span::Attributes<'_>, id: &span::Id, cx: Context<'_, S>) {
         let metadata = attrs.metadata();
-        if self.is_spawn(metadata) {
-            let at = SystemTime::now();
-            let span = cx.span(id).expect("newly-created span should exist");
-            let mut exts = span.extensions_mut();
-            let fields = match exts.get_mut::<FormattedFields<F>>() {
-                Some(fields) => fields.fields.clone(),
-                None => {
-                    let mut fields = String::new();
-                    match self.format.format_fields(&mut fields, attrs) {
-                        Ok(()) => exts.insert(FormattedFields::<F>::new(fields.clone())),
-                        Err(_) => {
-                            tracing::warn!(span.id = ?id, span.attrs = ?attrs, "error formatting fields for span")
-                        }
+        let at = SystemTime::now();
+        let span = cx.span(id).expect("newly-created span should exist");
+        let mut exts = span.extensions_mut();
+        let fields = match exts.get_mut::<FormattedFields<F>>() {
+            Some(fields) => fields.fields.clone(),
+            None => {
+                let mut fields = String::new();
+                match self.format.format_fields(&mut fields, attrs) {
+                    Ok(()) => exts.insert(FormattedFields::<F>::new(fields.clone())),
+                    Err(_) => {
+                        tracing::warn!(span.id = ?id, span.attrs = ?attrs, "error formatting fields for span")
                     }
-                    fields
                 }
-            };
+                fields
+            }
+        };
+
+        if self.is_spawn(metadata) {
             self.try_send(Event::Spawn {
                 id: id.clone(),
                 at,
