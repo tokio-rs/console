@@ -64,6 +64,10 @@ impl State {
     }
 
     pub(crate) fn update_input(&mut self, event: input::Event) {
+        // Clippy likes to remind us that we could use an `if let` here, since
+        // the match only has one arm...but this is a `match` because I
+        // anticipate adding more cases later...
+        #[allow(clippy::single_match)]
         match event {
             input::Event::Key(event) => self.key_input(event),
             _ => {
