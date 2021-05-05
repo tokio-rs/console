@@ -35,6 +35,7 @@ toolkit consists of multiple components:
 
 [gRPC]: https://grpc.io/
 [protocol buffers]: https://developers.google.com/protocol-buffers
+[the protobuf definitions]: ../proto
 [`tonic`]: https://lib.rs/crates/tonic
 [Tokio]: https://tokio.rs
 
@@ -43,6 +44,33 @@ toolkit consists of multiple components:
 [![asciicast](https://asciinema.org/a/412139.svg)](https://asciinema.org/a/412139?t=44)
 
 wow! whoa! it's like `top(1)` for tasks!
+
+## on the shoulders of giants...
+
+the console is **part of a much larger effort** to improve debugging tooling for
+async Rust. **a [2019 Google Summer of Code project][gsoc] by Matthias Prechtl**
+(@matprec) implemented an initial prototype, with a focus on interactive log
+viewing. more recently, both **the [Tokio team][tokio-blog] and the [async
+foundations working group][shiny-future]** have made diagnostics and debugging
+tools a priority for async Rust in 2021 and beyond. in particular, a
+[series][tw-1] of [blog][tw-2] [posts][tw-3] by @pnkfelix lay out much of the
+vision that this project seeks to eventually implement.
+
+furthermore, we're indebted to our antecedents in other programming languages
+and environments for inspiration. this includes tools and systems such as
+[`pprof`], Unix [`top(1)`] and [`htop(1)`], XCode's [Instruments], and many
+others.
+
+[gsoc]: https://github.com/tokio-rs/console-gsoc
+[tokio-blog]: https://tokio.rs/blog/2020-12-tokio-1-0#tracing
+[shiny-future]: https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/barbara_makes_a_wish.html
+[tw-1]: http://blog.pnkfx.org/blog/2021/04/26/road-to-turbowish-part-1-goals/
+[tw-2]: http://blog.pnkfx.org/blog/2021/04/27/road-to-turbowish-part-2-stories/
+[tw-3]: http://blog.pnkfx.org/blog/2021/05/03/road-to-turbowish-part-3-design/
+[`pprof`]: https://github.com/google/pprof
+[`top(1)`]: https://man7.org/linux/man-pages/man1/top.1.html
+[`htop(1)`]: https://htop.dev/
+[Instruments]: https://developer.apple.com/library/archive/documentation/ToolsLanguages/Conceptual/Xcode_Overview/MeasuringPerformance.html
 
 ## using it
 
