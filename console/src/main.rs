@@ -1,21 +1,22 @@
+use color_eyre::{eyre::eyre, Help, SectionExt};
 use console_api::tasks::{tasks_client::TasksClient, TasksRequest};
 use futures::stream::StreamExt;
-use std::io;
 
 use tui::{
     layout::{Constraint, Direction, Layout},
     style::{Modifier, Style},
     text::{Span, Spans},
     widgets::{Block, Paragraph, Wrap},
-    Terminal,
 };
 
-use tui::backend::CrosstermBackend;
-
+mod input;
 mod tasks;
+mod term;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> color_eyre::Result<()> {
+    color_eyre::install()?;
+
     let mut args = std::env::args();
     args.next(); // drop the first arg (the name of the binary)
     let target = args.next().unwrap_or_else(|| {
@@ -23,25 +24,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         String::from("http://127.0.0.1:6669")
     });
 
-    let backend = CrosstermBackend::new(io::stdout());
-    let mut terminal = Terminal::new(backend)?;
+    let (mut terminal, _cleanup) = term::init_crossterm()?;
     terminal.clear()?;
 
     let mut client = TasksClient::connect(target.clone()).await?;
     let request = tonic::Request::new(TasksRequest {});
     let mut stream = client.watch_tasks(request).await?.into_inner();
     let mut tasks = tasks::State::default();
-    while let Some(update) = stream.next().await {
-        match update {
-            Ok(update) => {
-                tasks.update(update);
-            }
-            Err(e) => {
-                eprintln!("update stream error: {}", e);
-                return Err(e.into());
+    let mut input = input::EventStream::new();
+    loop {
+        tokio::select! { biased;
+            input = input.next() => {
+                let input = input
+                    .ok_or_else(|| eyre!("keyboard input stream ended early"))
+                    .with_section(|| "this is probably a bug".header("Note:"))??;
+                if input::should_quit(&input) {
+                    return Ok(());
+                }
+                tasks.update_input(input);
+            },
+            task_update = stream.next() => {
+                let update = task_update
+                    .ok_or_else(|| eyre!("data stream closed by server"))
+                    .with_section(|| "in the future, this should be reconnected automatically...".header("Note:"))?;
+                tasks.update_tasks(update?);
             }
         }
-
         terminal.draw(|f| {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
@@ -72,6 +80,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tasks.retain_active();
         })?;
     }
-
-    Ok(())
 }

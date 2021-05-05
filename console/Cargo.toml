@@ -15,3 +15,5 @@ tui = { version = "0.15.0", features = ["crossterm"] }
 chrono = "0.4"
 tracing = "0.1"
 prost-types = "0.7"
+crossterm = { version = "0.19", features = ["event-stream"] }
+color-eyre = "0.5"
