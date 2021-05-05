@@ -95,6 +95,8 @@ impl State {
                 }
             }
             Char('i') => self.sort_descending = !self.sort_descending,
+            Down => self.scroll_next(),
+            Up => self.scroll_prev(),
             _ => {} // do nothing for now...
         }
         if let Ok(sort_by) = SortBy::try_from(self.selected_column) {
@@ -196,11 +198,21 @@ impl State {
         });
 
         let block = Block::default().title(vec![
+            text::Span::raw("controls: "),
             text::Span::styled(
-                "controls: ",
+                "\u{2190}\u{2192}",
                 Style::default().add_modifier(style::Modifier::BOLD),
             ),
-            text::Span::raw("\u{2190}/\u{2192} = select column (sort), i = invert sort (highest/lowest), q = quit"),
+            text::Span::raw(" = select column (sort), "),
+            text::Span::styled(
+                "\u{2191}\u{2193}",
+                Style::default().add_modifier(style::Modifier::BOLD),
+            ),
+            text::Span::raw(" = scroll, "),
+            text::Span::styled("i", Style::default().add_modifier(style::Modifier::BOLD)),
+            text::Span::raw(" = invert sort (highest/lowest), "),
+            text::Span::styled("q", Style::default().add_modifier(style::Modifier::BOLD)),
+            text::Span::raw(" = quit"),
         ]);
 
         let header = Row::new(Self::HEADER.iter().enumerate().map(|(idx, &value)| {
@@ -219,17 +231,22 @@ impl State {
         } else {
             Table::new(rows.rev())
         };
-        let t = t.header(header).block(block).widths(&[
-            layout::Constraint::Min(20),
-            layout::Constraint::Length(4),
-            layout::Constraint::Min(DUR_LEN as u16),
-            layout::Constraint::Min(DUR_LEN as u16),
-            layout::Constraint::Min(DUR_LEN as u16),
-            layout::Constraint::Min(POLLS_LEN as u16),
-            layout::Constraint::Min(10),
-        ]);
+        let t = t
+            .header(header)
+            .block(block)
+            .widths(&[
+                layout::Constraint::Min(20),
+                layout::Constraint::Length(4),
+                layout::Constraint::Min(DUR_LEN as u16),
+                layout::Constraint::Min(DUR_LEN as u16),
+                layout::Constraint::Min(DUR_LEN as u16),
+                layout::Constraint::Min(POLLS_LEN as u16),
+                layout::Constraint::Min(10),
+            ])
+            .highlight_symbol(">> ")
+            .highlight_style(Style::default().add_modifier(style::Modifier::BOLD));
 
-        frame.render_widget(t, area);
+        frame.render_stateful_widget(t, area, &mut self.table_state);
         self.sorted_tasks.retain(|t| t.upgrade().is_some());
     }
 
@@ -242,6 +259,34 @@ impl State {
             task.completed_for += 1;
             task.completed_for <= Self::RETAIN_COMPLETED_FOR
         })
+    }
+
+    fn scroll_next(&mut self) {
+        let i = match self.table_state.selected() {
+            Some(i) => {
+                if i >= self.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.table_state.select(Some(i));
+    }
+
+    pub fn scroll_prev(&mut self) {
+        let i = match self.table_state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.table_state.select(Some(i));
     }
 }
 
