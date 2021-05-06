@@ -15,6 +15,7 @@ console-api = { path = "../console-api", features = ["transport"]}
 tracing-core = "0.1.18"
 tracing = "0.1.26"
 tracing-subscriber = { version = "0.2.17", default-features = false, features = ["fmt", "registry"] }
+futures = { version = "0.3", default-features = false }
 
 [dev-dependencies]
 

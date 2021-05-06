@@ -1,13 +1,17 @@
 use console_api as proto;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Notify};
 
+use futures::FutureExt;
 use std::{
     collections::HashMap,
     mem,
     net::SocketAddr,
     ops::{Deref, DerefMut},
     ptr,
-    sync::atomic::{AtomicPtr, Ordering::*},
+    sync::{
+        atomic::{AtomicBool, AtomicPtr, Ordering::*},
+        Arc,
+    },
     time::{Duration, SystemTime},
 };
 use tracing_core::{
@@ -51,6 +55,7 @@ pub struct TasksLayer<F = DefaultFields> {
     task_meta: AtomicPtr<Metadata<'static>>,
     blocking_meta: AtomicPtr<Metadata<'static>>,
     tx: mpsc::Sender<Event>,
+    flush: Arc<Flush>,
     format: F,
 }
 
@@ -65,9 +70,16 @@ struct Aggregator {
     events: mpsc::Receiver<Event>,
     rpcs: mpsc::Receiver<Watch>,
     flush_interval: Duration,
+    flush_capacity: Arc<Flush>,
 }
 
 struct Watch(mpsc::Sender<Result<proto::tasks::TaskUpdate, tonic::Status>>);
+
+#[derive(Debug)]
+struct Flush {
+    should_flush: Notify,
+    triggered: AtomicBool,
+}
 
 #[derive(Default)]
 struct Stats {
@@ -102,10 +114,15 @@ impl TasksLayer {
         // TODO(eliza): builder
         let (tx, events) = mpsc::channel(Self::DEFAULT_EVENT_BUFFER_CAPACITY);
         let (subscribe, rpcs) = mpsc::channel(256);
+        let flush = Arc::new(Flush {
+            should_flush: Notify::new(),
+            triggered: AtomicBool::new(false),
+        });
         let aggregator = Aggregator {
             events,
             rpcs,
             flush_interval: Self::DEFAULT_FLUSH_INTERVAL,
+            flush_capacity: flush.clone(),
         };
         let addr = SocketAddr::from(([127, 0, 0, 1], 6669));
         let server = Server {
@@ -116,6 +133,7 @@ impl TasksLayer {
         };
         let layer = Self {
             tx,
+            flush,
             task_meta: AtomicPtr::new(ptr::null_mut()),
             blocking_meta: AtomicPtr::new(ptr::null_mut()),
             format: Default::default(),
@@ -128,6 +146,13 @@ impl<F> TasksLayer<F> {
     pub const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 1024 * 10;
     pub const DEFAULT_CLIENT_BUFFER_CAPACITY: usize = 1024 * 4;
     pub const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_secs(1);
+
+    // how much capacity should remain in the buffer before triggering a
+    // flush on capacity?
+    //
+    // chosen by fair die roll, guaranteed to be random :)
+    const FLUSH_AT_CAPACITY: usize = 100;
+
     #[inline(always)]
     fn is_spawn(&self, meta: &'static Metadata<'static>) -> bool {
         ptr::eq(self.task_meta.load(Relaxed), meta as *const _ as *mut _)
@@ -143,15 +168,49 @@ impl<F> TasksLayer<F> {
             .unwrap_or(false)
     }
 
-    fn try_send(&self, event: Event) {
+    fn send(&self, event: Event) {
         use mpsc::error::TrySendError;
-        match self.tx.try_send(event) {
-            Ok(_) => {}
+        match self.tx.try_reserve() {
+            Ok(permit) => permit.send(event),
             Err(TrySendError::Closed(_)) => tracing::warn!(
                 "console server task has terminated; task stats will no longer be updated"
             ),
             Err(TrySendError::Full(_)) => {
-                tracing::warn!("console buffer is full; some task stats may be missing")
+                // this shouldn't happen, since we trigger a flush when
+                // approaching the high water line...but if the executor wait
+                // time is very high, maybe the aggregator task hasn't been
+                // polled yet. so, try to handle it gracefully...
+                tracing::warn!(
+                    "console buffer is full; some task stats may be delayed. \
+                     preemptive flush interval should be adjusted..."
+                );
+                let tx = self.tx.clone();
+                tokio::spawn(async move {
+                    if tx.send(event).await.is_err() {
+                        tracing::debug!("task event channel closed after lag");
+                    }
+                });
+            }
+        }
+
+        let capacity = self.tx.capacity();
+        if capacity <= Self::FLUSH_AT_CAPACITY {
+            tracing::trace!(
+                flush_at = Self::FLUSH_AT_CAPACITY,
+                capacity,
+                "at flush capacity..."
+            );
+            if self
+                .flush
+                .triggered
+                .compare_exchange(false, true, AcqRel, Acquire)
+                .is_ok()
+            {
+                self.flush.should_flush.notify_one();
+                tracing::trace!("flush triggered");
+            } else {
+                // someone else already did it, that's fine...
+                tracing::trace!("flush already triggered");
             }
         }
     }
@@ -181,7 +240,7 @@ where
             }
         }
 
-        self.try_send(Event::Metadata(meta));
+        self.send(Event::Metadata(meta));
 
         subscriber::Interest::always()
     }
@@ -205,7 +264,7 @@ where
                     fields
                 }
             };
-            self.try_send(Event::Spawn {
+            self.send(Event::Spawn {
                 id: id.clone(),
                 at,
                 metadata,
@@ -218,7 +277,7 @@ where
         if !self.is_id_spawned(id, &cx) {
             return;
         }
-        self.try_send(Event::Enter {
+        self.send(Event::Enter {
             at: SystemTime::now(),
             id: id.clone(),
         });
@@ -228,7 +287,7 @@ where
         if !self.is_id_spawned(id, &cx) {
             return;
         }
-        self.try_send(Event::Exit {
+        self.send(Event::Exit {
             at: SystemTime::now(),
             id: id.clone(),
         });
@@ -238,7 +297,7 @@ where
         if !self.is_id_spawned(&id, &cx) {
             return;
         }
-        self.try_send(Event::Close {
+        self.send(Event::Close {
             at: SystemTime::now(),
             id,
         });
@@ -311,81 +370,20 @@ impl Aggregator {
         let mut stats = TaskData::<Stats>::default();
         let mut completed_spans = Vec::new();
         loop {
-            tokio::select! { biased;
+            let should_send = tokio::select! {
+                // if the flush interval elapses, flush data to the client
                 _ = flush.tick() => {
-                    let new_metadata = if !new_metadata.is_empty() {
-                        Some(proto::RegisterMetadata {
-                            metadata: mem::replace(&mut new_metadata, Vec::new()),
-                        })
-                    } else {
-                        None
-                    };
-                    let new_tasks = tasks.since_last_update().map(|(id, task)| {
-                        task.to_proto(id.clone())
-                    }).collect();
-                    let now = SystemTime::now();
-                    let stats_update = stats.since_last_update().map(|(id, stats)| {
-                        (id.into_u64(), stats.to_proto(now))
-                    }).collect();
-                    let update = proto::tasks::TaskUpdate {
-                        new_metadata,
-                        new_tasks,
-                        stats_update,
-                        completed: mem::replace(&mut completed_spans, Vec::new()),
-                        now: Some(now.into()),
-                    };
-                    watches.retain(|watch: &Watch| watch.update(&update));
+                    true
                 }
-                event = self.events.recv() => {
-                    let event = match event {
-                        Some(event) => event,
-                        None => return,
-                    };
-
-                    // do state update
-                    match event {
-                        Event::Metadata(meta) => {
-                            metadata.push(meta.into());
-                            new_metadata.push(meta.into());
-                        },
-                        Event::Spawn { id, metadata, at, fields } => {
-                            tasks.insert(id.clone(), Task {
-                                metadata,
-                                fields,
-                                // TODO: parents
-                            });
-                            stats.insert(id, Stats { polls: 0, created_at: Some(at), ..Default::default() });
-                        }
-                        Event::Enter { id, at } => {
-                            let mut stats = stats.update_or_default(id);
-                            if stats.current_polls == 0 {
-                                stats.last_poll = Some(at);
-                                if stats.first_poll == None {
-                                    stats.first_poll = Some(at);
-                                }
-                                stats.polls += 1;
-                            }
-                            stats.current_polls += 1;
-                        }
-
-                        Event::Exit { id, at } => {
-                            let mut stats = stats.update_or_default(id);
-                            stats.current_polls -= 1;
-                            if stats.current_polls == 0 {
-                                if let Some(last_poll) = stats.last_poll {
-                                    stats.busy_time += at.duration_since(last_poll).unwrap();
-                                }
-                            }
-                        },
-
-                        Event::Close { id, at } => {
-                            stats.update_or_default(id.clone()).closed_at = Some(at);
-                            completed_spans.push(id.into());
-                        }
-                    }
+                // triggered when the event buffer is approaching capacity
+                _ = self.flush_capacity.should_flush.notified() => {
+                    self.flush_capacity.triggered.store(false, Release);
+                    tracing::debug!("approaching capacity; draining buffer");
+                    false
                 }
                 subscription = self.rpcs.recv() => {
                     if let Some(subscription) = subscription {
+                        tracing::debug!("new subscription");
                         let new_tasks = tasks.all().map(|(id, task)| {
                             task.to_proto(id.clone())
                         }).collect();
@@ -405,8 +403,114 @@ impl Aggregator {
                         }) {
                             watches.push(subscription)
                         }
+                    } else {
+                        tracing::debug!("rpc channel closed, terminating");
+                        return;
+                    }
+
+                    false
+                }
+
+            };
+
+            // drain and aggregate buffered events.
+            //
+            // Note: we *don't* want to actually await the call to `recv` --- we
+            // don't want the aggregator task to be woken on every event,
+            // because it will then be woken when its own `poll` calls are
+            // exited. that would result in a busy-loop. instead, we only want
+            // to be woken when the flush interval has elapsed, or when the
+            // channel is almost full.
+            while let Some(event) = self.events.recv().now_or_never() {
+                let event = match event {
+                    Some(event) => event,
+                    None => return,
+                };
+
+                // do state update
+                match event {
+                    Event::Metadata(meta) => {
+                        metadata.push(meta.into());
+                        new_metadata.push(meta.into());
+                    }
+                    Event::Spawn {
+                        id,
+                        metadata,
+                        at,
+                        fields,
+                    } => {
+                        tasks.insert(
+                            id.clone(),
+                            Task {
+                                metadata,
+                                fields,
+                                // TODO: parents
+                            },
+                        );
+                        stats.insert(
+                            id,
+                            Stats {
+                                polls: 0,
+                                created_at: Some(at),
+                                ..Default::default()
+                            },
+                        );
+                    }
+                    Event::Enter { id, at } => {
+                        let mut stats = stats.update_or_default(id);
+                        if stats.current_polls == 0 {
+                            stats.last_poll = Some(at);
+                            if stats.first_poll == None {
+                                stats.first_poll = Some(at);
+                            }
+                            stats.polls += 1;
+                        }
+                        stats.current_polls += 1;
+                    }
+
+                    Event::Exit { id, at } => {
+                        let mut stats = stats.update_or_default(id);
+                        stats.current_polls -= 1;
+                        if stats.current_polls == 0 {
+                            if let Some(last_poll) = stats.last_poll {
+                                stats.busy_time += at.duration_since(last_poll).unwrap();
+                            }
+                        }
+                    }
+
+                    Event::Close { id, at } => {
+                        stats.update_or_default(id.clone()).closed_at = Some(at);
+                        completed_spans.push(id.into());
                     }
                 }
+            }
+
+            // flush data to clients
+            if should_send {
+                let new_metadata = if !new_metadata.is_empty() {
+                    Some(proto::RegisterMetadata {
+                        metadata: mem::replace(&mut new_metadata, Vec::new()),
+                    })
+                } else {
+                    None
+                };
+                let new_tasks = tasks
+                    .since_last_update()
+                    .map(|(id, task)| task.to_proto(id.clone()))
+                    .collect();
+                let now = SystemTime::now();
+                let stats_update = stats
+                    .since_last_update()
+                    .map(|(id, stats)| (id.into_u64(), stats.to_proto(now)))
+                    .collect();
+                let update = proto::tasks::TaskUpdate {
+                    new_metadata,
+                    new_tasks,
+                    stats_update,
+                    completed: mem::replace(&mut completed_spans, Vec::new()),
+                    now: Some(now.into()),
+                };
+                watches.retain(|watch: &Watch| watch.update(&update));
             }
         }
     }
