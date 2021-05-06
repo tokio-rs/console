@@ -371,8 +371,8 @@ impl Stats {
         proto::tasks::Stats {
             polls: self.polls,
             created_at: self.created_at.map(Into::into),
-            first_poll: self.created_at.map(Into::into),
-            last_poll: self.created_at.map(Into::into),
+            first_poll: self.first_poll.map(Into::into),
+            last_poll: self.last_poll.map(Into::into),
             busy_time: Some(self.busy_time.into()),
             total_time: self.total_time(now).map(Into::into),
         }
