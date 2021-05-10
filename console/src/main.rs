@@ -12,6 +12,7 @@ use tui::{
 mod input;
 mod tasks;
 mod term;
+mod view;
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
@@ -32,6 +33,7 @@ async fn main() -> color_eyre::Result<()> {
     let mut stream = client.watch_tasks(request).await?.into_inner();
     let mut tasks = tasks::State::default();
     let mut input = input::EventStream::new();
+    let mut view = view::View::default();
     loop {
         tokio::select! { biased;
             input = input.next() => {
@@ -41,7 +43,7 @@ async fn main() -> color_eyre::Result<()> {
                 if input::should_quit(&input) {
                     return Ok(());
                 }
-                tasks.update_input(input);
+                view.update_input(input, &mut tasks);
             },
             task_update = stream.next() => {
                 let update = task_update
@@ -76,8 +78,7 @@ async fn main() -> color_eyre::Result<()> {
                 .block(header_block)
                 .wrap(Wrap { trim: true });
             f.render_widget(header, chunks[0]);
-            tasks.render(f, chunks[1]);
-            tasks.retain_active();
+            view.render(f, chunks[1], &mut tasks);
         })?;
     }
 }
