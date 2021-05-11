@@ -93,7 +93,7 @@ to **instrument an application using Tokio**, add a dependency on the
         .init();
 
     // spawn the server task
-    tokio::spawn(server);
+    tokio::spawn(server.serve());
 ```
 
 notes:
