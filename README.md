@@ -128,7 +128,7 @@ tools**:
 
 Examples can be executed with:
 
-```
+```shell
 cargo run --example $name
 ```
 
