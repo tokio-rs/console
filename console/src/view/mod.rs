@@ -10,6 +10,15 @@ pub(crate) enum View {
     TaskInstance(self::task::TaskView),
 }
 
+macro_rules! key {
+    ($code:ident) => {
+        input::Event::Key(input::KeyEvent {
+            code: input::KeyCode::$code,
+            ..
+        })
+    };
+}
+
 impl View {
     pub(crate) fn update_input(&mut self, event: input::Event, tasks: &mut crate::tasks::State) {
         match self {
@@ -17,10 +26,7 @@ impl View {
                 // The enter key changes views, so handle here since we can
                 // mutate the currently selected view.
                 match event {
-                    input::Event::Key(input::KeyEvent {
-                        code: input::KeyCode::Enter,
-                        ..
-                    }) => {
+                    key!(Enter) => {
                         if let Some(task) = tasks.selected_task().upgrade() {
                             *self = View::TaskInstance(self::task::TaskView::new(task));
                         }
@@ -31,7 +37,19 @@ impl View {
                     }
                 }
             }
-            View::TaskInstance(view) => view.update_input(event),
+            View::TaskInstance(view) => {
+                // The escape key changes views, so handle here since we can
+                // mutate the currently selected view.
+                match event {
+                    key!(Esc) => {
+                        *self = View::TasksList;
+                    }
+                    _ => {
+                        // otherwise pass on to view
+                        view.update_input(event);
+                    }
+                }
+            }
         }
     }
 
@@ -44,13 +62,13 @@ impl View {
         match self {
             View::TasksList => {
                 tasks.render(frame, area);
-                tasks.retain_active();
             }
             View::TaskInstance(view) => {
                 view.render(frame, area);
-                // retain_active()? should that always be done?
             }
         }
+
+        tasks.retain_active();
     }
 }
 

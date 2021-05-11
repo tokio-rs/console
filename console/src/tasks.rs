@@ -301,7 +301,7 @@ impl State {
                 let selected = if self.sort_descending {
                     i
                 } else {
-                    self.sorted_tasks.len() - i
+                    self.sorted_tasks.len() - i - 1
                 };
                 self.sorted_tasks[selected].clone()
             })
@@ -325,6 +325,10 @@ impl Default for State {
 impl Task {
     pub(crate) fn id_hex(&self) -> &str {
         &self.id_hex
+    }
+
+    pub(crate) fn fields(&self) -> &str {
+        &self.fields
     }
 
     pub(crate) fn total(&self) -> Duration {

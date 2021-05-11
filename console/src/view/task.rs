@@ -2,6 +2,7 @@ use crate::{input, tasks::Task};
 use std::{cell::RefCell, rc::Rc};
 use tui::{
     layout,
+    style::{self, Style},
     text::{Span, Spans},
     widgets::{Block, Borders, Paragraph},
 };
@@ -33,16 +34,34 @@ impl TaskView {
         let task = &*self.task.borrow();
         const DUR_PRECISION: usize = 4;
 
-        let attrs = Spans::from(vec![Span::raw("ID: "), Span::raw(task.id_hex())]);
+        let attrs = Spans::from(vec![
+            Span::styled("ID: ", Style::default().add_modifier(style::Modifier::BOLD)),
+            Span::raw(task.id_hex()),
+            Span::raw(", "),
+            Span::styled(
+                "Fields: ",
+                Style::default().add_modifier(style::Modifier::BOLD),
+            ),
+            Span::raw(task.fields()),
+        ]);
 
         let metrics = Spans::from(vec![
-            Span::raw("Total Time: "),
+            Span::styled(
+                "Total Time: ",
+                Style::default().add_modifier(style::Modifier::BOLD),
+            ),
             Span::from(format!("{:.prec$?}", task.total(), prec = DUR_PRECISION,)),
             Span::raw(", "),
-            Span::raw("Busy: "),
+            Span::styled(
+                "Busy: ",
+                Style::default().add_modifier(style::Modifier::BOLD),
+            ),
             Span::from(format!("{:.prec$?}", task.busy(), prec = DUR_PRECISION,)),
             Span::raw(", "),
-            Span::raw("Idle: "),
+            Span::styled(
+                "Idle: ",
+                Style::default().add_modifier(style::Modifier::BOLD),
+            ),
             Span::from(format!("{:.prec$?}", task.idle(), prec = DUR_PRECISION,)),
         ]);
 
