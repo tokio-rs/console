@@ -34,7 +34,7 @@ enum SortBy {
 }
 
 #[derive(Debug)]
-struct Task {
+pub(crate) struct Task {
     id: u64,
     id_hex: String,
     fields: String,
@@ -209,6 +209,11 @@ impl State {
                 Style::default().add_modifier(style::Modifier::BOLD),
             ),
             text::Span::raw(" = scroll, "),
+            text::Span::styled(
+                "enter",
+                Style::default().add_modifier(style::Modifier::BOLD),
+            ),
+            text::Span::raw(" = task details, "),
             text::Span::styled("i", Style::default().add_modifier(style::Modifier::BOLD)),
             text::Span::raw(" = invert sort (highest/lowest), "),
             text::Span::styled("q", Style::default().add_modifier(style::Modifier::BOLD)),
@@ -288,6 +293,20 @@ impl State {
         };
         self.table_state.select(Some(i));
     }
+
+    pub(crate) fn selected_task(&self) -> Weak<RefCell<Task>> {
+        self.table_state
+            .selected()
+            .map(|i| {
+                let selected = if self.sort_descending {
+                    i
+                } else {
+                    self.sorted_tasks.len() - i - 1
+                };
+                self.sorted_tasks[selected].clone()
+            })
+            .unwrap_or_default()
+    }
 }
 
 impl Default for State {
@@ -300,6 +319,28 @@ impl Default for State {
             table_state: Default::default(),
             sort_descending: false,
         }
+    }
+}
+
+impl Task {
+    pub(crate) fn id_hex(&self) -> &str {
+        &self.id_hex
+    }
+
+    pub(crate) fn fields(&self) -> &str {
+        &self.fields
+    }
+
+    pub(crate) fn total(&self) -> Duration {
+        self.stats.total
+    }
+
+    pub(crate) fn busy(&self) -> Duration {
+        self.stats.busy
+    }
+
+    pub(crate) fn idle(&self) -> Duration {
+        self.stats.idle
     }
 }
 
