@@ -24,10 +24,3 @@ futures = "0.3"
 
 tracing-subscriber = { version = "0.2.17", features = ["fmt", "registry", "env-filter"] }
 
-[[example]]
-name = "app"
-path = "examples/app.rs"
-
-[[example]]
-name = "dump"
-path = "examples/dump.rs"
