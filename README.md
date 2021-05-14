@@ -126,6 +126,12 @@ tools**:
 * `dump.rs`: a simple CLI program that dumps the data stream from a `Tasks`
   server
 
+Examples can be executed with:
+
+```shell
+cargo run --example $name
+```
+
 [`tracing`]: https://lib.rs/crates/tracing
 [`tracing-subscriber`]: https://lib.rs/crates/tracing-subscriber
 [`console-api`]: ../console-api
