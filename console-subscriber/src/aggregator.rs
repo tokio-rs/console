@@ -76,7 +76,7 @@ struct TaskData<T> {
 
 struct Task {
     metadata: &'static Metadata<'static>,
-    fields: String,
+    fields: Vec<proto::Field>,
 }
 
 impl Aggregator {
@@ -385,9 +385,9 @@ impl Task {
             id: Some(id.into()),
             // TODO: more kinds of tasks...
             kind: proto::tasks::task::Kind::Spawn as i32,
-            string_fields: self.fields.clone(),
             metadata: Some(self.metadata.into()),
             parents: Vec::new(), // TODO: implement parents nicely
+            fields: self.fields.clone(),
         }
     }
 }

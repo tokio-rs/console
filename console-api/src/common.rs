@@ -61,6 +61,31 @@ impl<'a> From<&'a std::panic::Location<'a>> for Location {
     }
 }
 
+impl fmt::Display for field::Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            field::Value::BoolVal(v) => write!(f, "{}", v)?,
+            field::Value::StrVal(v) => write!(f, "{}", v)?,
+            field::Value::U64Val(v) => write!(f, "{}", v)?,
+            field::Value::DebugVal(v) => write!(f, "{}", v)?,
+            field::Value::I64Val(v) => write!(f, "{}", v)?,
+        }
+
+        Ok(())
+    }
+}
+
+impl fmt::Display for Field {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name_val = (self.name.as_ref(), self.value.as_ref());
+        if let (Some(field::Name::StrName(name)), Some(val)) = name_val {
+            write!(f, "{}={}", name, val)?;
+        }
+
+        Ok(())
+    }
+}
+
 impl fmt::Display for Location {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match (self.module_path.as_ref(), self.file.as_ref()) {
@@ -107,5 +132,41 @@ impl From<&'static tracing_core::Metadata<'static>> for register_metadata::NewMe
             id: Some(meta.into()),
             metadata: Some(meta.into()),
         }
+    }
+}
+
+impl From<i64> for field::Value {
+    fn from(val: i64) -> Self {
+        field::Value::I64Val(val)
+    }
+}
+
+impl From<u64> for field::Value {
+    fn from(val: u64) -> Self {
+        field::Value::U64Val(val)
+    }
+}
+
+impl From<bool> for field::Value {
+    fn from(val: bool) -> Self {
+        field::Value::BoolVal(val)
+    }
+}
+
+impl From<&str> for field::Value {
+    fn from(val: &str) -> Self {
+        field::Value::StrVal(val.into())
+    }
+}
+
+impl From<&str> for field::Name {
+    fn from(val: &str) -> Self {
+        field::Name::StrName(val.into())
+    }
+}
+
+impl From<&dyn std::fmt::Debug> for field::Value {
+    fn from(val: &dyn std::fmt::Debug) -> Self {
+        field::Value::DebugVal(format!("{:?}", val))
     }
 }
