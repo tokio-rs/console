@@ -93,7 +93,7 @@ to **instrument an application using Tokio**, add a dependency on the
         .init();
 
     // spawn the server task
-    tokio::spawn(server);
+    tokio::spawn(server.serve());
 ```
 
 notes:
@@ -125,6 +125,12 @@ tools**:
   forever
 * `dump.rs`: a simple CLI program that dumps the data stream from a `Tasks`
   server
+
+Examples can be executed with:
+
+```shell
+cargo run --example $name
+```
 
 [`tracing`]: https://lib.rs/crates/tracing
 [`tracing-subscriber`]: https://lib.rs/crates/tracing-subscriber
