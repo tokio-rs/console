@@ -89,7 +89,6 @@ message Task {
     // additional trace data is being collected.
     repeated common.SpanId parents = 5;
 
-
     enum Kind {
         SPAWN = 0;
         BLOCKING = 1;
