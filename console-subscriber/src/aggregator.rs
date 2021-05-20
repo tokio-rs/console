@@ -133,7 +133,7 @@ impl Aggregator {
                         }).collect();
                         let now = SystemTime::now();
                         let stats_update = self.stats.all().map(|(id, stats)| {
-                            (id.into_u64(), stats.to_proto(now))
+                            (id.into_u64(), stats.to_proto())
                         }).collect();
                         // Send the initial state --- if this fails, the subscription is
                         // already dead.
@@ -143,6 +143,7 @@ impl Aggregator {
                             }),
                             new_tasks,
                             stats_update,
+                            now: Some(now.into()),
                             ..Default::default()
                         }) {
                             self.watchers.push(subscription)
@@ -205,7 +206,7 @@ impl Aggregator {
         let stats_update = self
             .stats
             .since_last_update()
-            .map(|(id, stats)| (id.into_u64(), stats.to_proto(now)))
+            .map(|(id, stats)| (id.into_u64(), stats.to_proto()))
             .collect();
         let update = proto::tasks::TaskUpdate {
             new_metadata,
@@ -361,20 +362,21 @@ impl Watch {
 }
 
 impl Stats {
-    fn total_time(&self, now: SystemTime) -> Option<Duration> {
-        let now = self.closed_at.unwrap_or(now);
-        self.created_at
-            .and_then(|then| now.duration_since(then).ok())
+    fn total_time(&self) -> Option<Duration> {
+        self.closed_at.and_then(|end| {
+            self.created_at
+                .and_then(|start| end.duration_since(start).ok())
+        })
     }
 
-    fn to_proto(&self, now: SystemTime) -> proto::tasks::Stats {
+    fn to_proto(&self) -> proto::tasks::Stats {
         proto::tasks::Stats {
             polls: self.polls,
             created_at: self.created_at.map(Into::into),
             first_poll: self.first_poll.map(Into::into),
             last_poll: self.last_poll.map(Into::into),
             busy_time: Some(self.busy_time.into()),
-            total_time: self.total_time(now).map(Into::into),
+            total_time: self.total_time().map(Into::into),
         }
     }
 }
