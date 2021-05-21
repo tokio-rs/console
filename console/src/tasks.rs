@@ -113,7 +113,6 @@ impl State {
         if let Some(now) = update.now {
             self.last_updated_at = Some(now.into());
         }
-        
         let mut stats_update = update.stats_update;
         let sorted = &mut self.sorted_tasks;
         let new_tasks = update.new_tasks.into_iter().filter_map(|task| {
