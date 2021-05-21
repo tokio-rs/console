@@ -148,16 +148,6 @@ impl State {
                 t.updated();
             }
         }
-
-        for proto::SpanId { id } in update.completed {
-            if let Some(task) = self.tasks.get_mut(&id) {
-                let mut task = task.borrow_mut();
-                task.kind = "!";
-                task.completed_for = 1;
-            } else {
-                tracing::warn!(?id, "tried to complete a task that didn't exist");
-            }
-        }
     }
 
     pub(crate) fn render<B: tui::backend::Backend>(
