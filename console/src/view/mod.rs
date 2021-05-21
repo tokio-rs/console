@@ -64,7 +64,10 @@ impl View {
                 tasks.render(frame, area);
             }
             View::TaskInstance(view) => {
-                view.render(frame, area);
+                let now = tasks
+                    .last_updated_at()
+                    .expect("task view implies we've received an update");
+                view.render(frame, area, now);
             }
         }
 

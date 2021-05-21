@@ -1,5 +1,5 @@
 use crate::{input, tasks::Task};
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, time::SystemTime};
 use tui::{
     layout,
     style::{self, Style},
@@ -24,6 +24,7 @@ impl TaskView {
         &mut self,
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
+        now: SystemTime,
     ) {
         // Rows with the following info:
         // - Task main attributes
@@ -50,7 +51,7 @@ impl TaskView {
                 "Total Time: ",
                 Style::default().add_modifier(style::Modifier::BOLD),
             ),
-            Span::from(format!("{:.prec$?}", task.total(), prec = DUR_PRECISION,)),
+            Span::from(format!("{:.prec$?}", task.total(now), prec = DUR_PRECISION,)),
             Span::raw(", "),
             Span::styled(
                 "Busy: ",
@@ -62,7 +63,7 @@ impl TaskView {
                 "Idle: ",
                 Style::default().add_modifier(style::Modifier::BOLD),
             ),
-            Span::from(format!("{:.prec$?}", task.idle(), prec = DUR_PRECISION,)),
+            Span::from(format!("{:.prec$?}", task.idle(now), prec = DUR_PRECISION,)),
         ]);
 
         let lines = vec![attrs, metrics];

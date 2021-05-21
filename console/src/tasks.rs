@@ -21,6 +21,7 @@ pub(crate) struct State {
     table_state: TableState,
     selected_column: usize,
     sort_descending: bool,
+    last_updated_at: Option<SystemTime>,
 }
 
 #[derive(Debug)]
@@ -48,8 +49,8 @@ struct Stats {
     polls: u64,
     created_at: SystemTime,
     busy: Duration,
-    idle: Duration,
-    total: Duration,
+    idle: Option<Duration>,
+    total: Option<Duration>,
 }
 
 impl State {
@@ -61,6 +62,10 @@ impl State {
 
     pub(crate) fn len(&self) -> usize {
         self.tasks.len()
+    }
+
+    pub(crate) fn last_updated_at(&self) -> Option<SystemTime> {
+        self.last_updated_at
     }
 
     pub(crate) fn update_input(&mut self, event: input::Event) {
@@ -105,6 +110,9 @@ impl State {
     }
 
     pub(crate) fn update_tasks(&mut self, update: proto::tasks::TaskUpdate) {
+        if let Some(now) = update.now {
+            self.last_updated_at = Some(now.into());
+        }
         let mut stats_update = update.stats_update;
         let sorted = &mut self.sorted_tasks;
         let new_tasks = update.new_tasks.into_iter().filter_map(|task| {
@@ -154,13 +162,20 @@ impl State {
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
     ) {
+        let now = if let Some(now) = self.last_updated_at {
+            now
+        } else {
+            // If we have never gotten an update yet, skip...
+            return;
+        };
+
         const DUR_LEN: usize = 10;
         // This data is only updated every second, so it doesn't make a ton of
         // sense to have a lot of precision in timestamps (and this makes sure
         // there's room for the unit!)
         const DUR_PRECISION: usize = 4;
         const POLLS_LEN: usize = 5;
-        self.sort_by.sort(&mut self.sorted_tasks);
+        self.sort_by.sort(now, &mut self.sorted_tasks);
 
         let rows = self.sorted_tasks.iter().filter_map(|task| {
             let task = task.upgrade()?;
@@ -172,19 +187,19 @@ impl State {
                 Cell::from(task.kind),
                 Cell::from(format!(
                     "{:>width$.prec$?}",
-                    task.stats.total,
+                    task.total(now),
                     width = DUR_LEN,
                     prec = DUR_PRECISION,
                 )),
                 Cell::from(format!(
                     "{:>width$.prec$?}",
-                    task.stats.busy,
+                    task.busy(),
                     width = DUR_LEN,
                     prec = DUR_PRECISION,
                 )),
                 Cell::from(format!(
                     "{:>width$.prec$?}",
-                    task.stats.idle,
+                    task.idle(now),
                     width = DUR_LEN,
                     prec = DUR_PRECISION,
                 )),
@@ -318,6 +333,7 @@ impl Default for State {
             selected_column: SortBy::default() as usize,
             table_state: Default::default(),
             sort_descending: false,
+            last_updated_at: None,
         }
     }
 }
@@ -331,16 +347,20 @@ impl Task {
         &self.fields
     }
 
-    pub(crate) fn total(&self) -> Duration {
-        self.stats.total
+    pub(crate) fn total(&self, since: SystemTime) -> Duration {
+        self.stats
+            .total
+            .unwrap_or_else(|| since.duration_since(self.stats.created_at).unwrap())
     }
 
     pub(crate) fn busy(&self) -> Duration {
         self.stats.busy
     }
 
-    pub(crate) fn idle(&self) -> Duration {
-        self.stats.idle
+    pub(crate) fn idle(&self, since: SystemTime) -> Duration {
+        self.stats
+            .idle
+            .unwrap_or_else(|| self.total(since) - self.busy())
     }
 }
 
@@ -354,9 +374,9 @@ impl From<proto::tasks::Stats> for Stats {
             Duration::from_secs(secs) + Duration::from_nanos(nanos)
         }
 
-        let total = pb.total_time.map(pb_duration).unwrap_or_default();
+        let total = pb.total_time.map(pb_duration);
         let busy = pb.busy_time.map(pb_duration).unwrap_or_default();
-        let idle = total - busy;
+        let idle = total.map(|total| total - busy);
         Self {
             total,
             idle,
@@ -374,18 +394,18 @@ impl Default for SortBy {
 }
 
 impl SortBy {
-    fn sort(&self, tasks: &mut Vec<Weak<RefCell<Task>>>) {
+    fn sort(&self, now: SystemTime, tasks: &mut Vec<Weak<RefCell<Task>>>) {
         // tasks.retain(|t| t.upgrade().is_some());
         match self {
             Self::Tid => tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().id)),
             Self::Total => {
-                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().stats.total))
+                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().total(now)))
             }
             Self::Idle => {
-                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().stats.idle))
+                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().idle(now)))
             }
             Self::Busy => {
-                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().stats.busy))
+                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().busy()))
             }
             Self::Polls => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().stats.polls))
