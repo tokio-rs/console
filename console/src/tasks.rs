@@ -126,7 +126,7 @@ impl State {
 
             let id = task.id?.id;
             let stats = stats_update.remove(&id)?.into();
-            let task = Task {
+            let mut task = Task {
                 id,
                 id_hex: format!("{:x}", id),
                 fields: task.string_fields,
@@ -134,6 +134,7 @@ impl State {
                 stats,
                 completed_for: 0,
             };
+            task.update();
             let task = Rc::new(RefCell::new(task));
             sorted.push(Rc::downgrade(&task));
             Some((id, task))
@@ -142,17 +143,9 @@ impl State {
 
         for (id, stats) in stats_update {
             if let Some(task) = self.tasks.get_mut(&id) {
-                task.borrow_mut().stats = stats.into();
-            }
-        }
-
-        for proto::SpanId { id } in update.completed {
-            if let Some(task) = self.tasks.get_mut(&id) {
-                let mut task = task.borrow_mut();
-                task.kind = "!";
-                task.completed_for = 1;
-            } else {
-                tracing::warn!(?id, "tried to complete a task that didn't exist");
+                let mut t = task.borrow_mut();
+                t.stats = stats.into();
+                t.update();
             }
         }
     }
@@ -361,6 +354,14 @@ impl Task {
         self.stats
             .idle
             .unwrap_or_else(|| self.total(since) - self.busy())
+    }
+
+    fn update(&mut self) {
+        let completed = self.stats.total.is_some() && self.completed_for == 0;
+        if completed {
+            self.kind = "!";
+            self.completed_for = 1;
+        }
     }
 }
 

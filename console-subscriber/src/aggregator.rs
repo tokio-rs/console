@@ -45,11 +45,6 @@ pub(crate) struct Aggregator {
 
     /// Map of task IDs to task stats.
     stats: TaskData<Stats>,
-
-    /// Task IDs of tasks that completed since the last state update.
-    ///
-    /// This is drained on every state update.
-    completed_spans: Vec<proto::SpanId>,
 }
 
 #[derive(Debug)]
@@ -100,7 +95,6 @@ impl Aggregator {
                 data: HashMap::<span::Id, (Task, bool)>::new(),
             },
             stats: TaskData::default(),
-            completed_spans: Vec::new(),
         }
     }
 
@@ -144,7 +138,6 @@ impl Aggregator {
                             new_tasks,
                             stats_update,
                             now: Some(now.into()),
-                            ..Default::default()
                         }) {
                             self.watchers.push(subscription)
                         }
@@ -212,7 +205,6 @@ impl Aggregator {
             new_metadata,
             new_tasks,
             stats_update,
-            completed: mem::replace(&mut self.completed_spans, Vec::new()),
             now: Some(now.into()),
         };
         self.watchers.retain(|watch: &Watch| watch.update(&update));
@@ -272,8 +264,7 @@ impl Aggregator {
             }
 
             Event::Close { id, at } => {
-                self.stats.update_or_default(id.clone()).closed_at = Some(at);
-                self.completed_spans.push(id.into());
+                self.stats.update_or_default(id).closed_at = Some(at);
             }
         }
     }
