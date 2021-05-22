@@ -134,7 +134,7 @@ impl State {
                 stats,
                 completed_for: 0,
             };
-            task.updated();
+            task.update();
             let task = Rc::new(RefCell::new(task));
             sorted.push(Rc::downgrade(&task));
             Some((id, task))
@@ -145,7 +145,7 @@ impl State {
             if let Some(task) = self.tasks.get_mut(&id) {
                 let mut t = task.borrow_mut();
                 t.stats = stats.into();
-                t.updated();
+                t.update();
             }
         }
     }
@@ -356,7 +356,7 @@ impl Task {
             .unwrap_or_else(|| self.total(since) - self.busy())
     }
 
-    fn updated(&mut self) {
+    fn update(&mut self) {
         let completed = self.stats.total.is_some() && self.completed_for == 0;
         if completed {
             self.kind = "!";
