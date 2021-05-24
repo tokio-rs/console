@@ -171,8 +171,9 @@ impl Aggregator {
                 };
             }
 
-            // flush data to clients
-            if should_send {
+            // flush data to clients, if there are any currently subscribed
+            // watchers and we should send a new update.
+            if !self.watchers.is_empty() && should_send {
                 self.publish();
             }
 
