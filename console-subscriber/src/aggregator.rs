@@ -175,6 +175,10 @@ impl Aggregator {
             if should_send {
                 self.publish();
             }
+
+            // drop any tasks that have completed *and* whose final data has already
+            // been sent off.
+            self.drop_closed_tasks();
         }
     }
 
@@ -268,6 +272,38 @@ impl Aggregator {
             }
         }
     }
+
+    fn drop_closed_tasks(&mut self) {
+        let tasks = &mut self.tasks;
+        let stats = &mut self.stats;
+
+        // drop stats for closed tasks if they have been updated
+        let stats_len_0 = stats.data.len();
+        stats.data.retain(|id, (stats, dirty)| {
+            tracing::trace!(
+                stats.id = ?id,
+                stats.closed = stats.closed_at.is_some(),
+                stats.dirty = *dirty,
+            );
+            *dirty || stats.closed_at.is_none()
+        });
+        let stats_len_1 = stats.data.len();
+
+        // drop closed tasks whose final stats update has been sent
+        let tasks_len_0 = tasks.data.len();
+        tasks
+            .data
+            .retain(|id, (_, dirty)| *dirty || stats.data.contains_key(id));
+        let tasks_len_1 = tasks.data.len();
+
+        tracing::debug!(
+            tasks.dropped = tasks_len_0 - tasks_len_1,
+            tasks.len = tasks_len_1,
+            stats.dropped = stats_len_0 - stats_len_1,
+            stats.tasks = stats_len_1,
+            "dropped closed tasks"
+        );
+    }
 }
 
 // ==== impl Flush ===
@@ -295,10 +331,6 @@ impl<T> TaskData<T> {
     {
         Updating(self.data.entry(id).or_default())
     }
-
-    // fn update(&mut self, id: &span::Id) -> Option<Updating<'_, T>> {
-    //     Some(Updating(self.data.get_mut(id)?))
-    // }
 
     fn insert(&mut self, id: span::Id, data: T) {
         self.data.insert(id, (data, true));
