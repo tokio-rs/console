@@ -45,11 +45,6 @@ pub(crate) struct Aggregator {
 
     /// Map of task IDs to task stats.
     stats: TaskData<Stats>,
-
-    /// Task IDs of tasks that completed since the last state update.
-    ///
-    /// This is drained on every state update.
-    completed_spans: Vec<proto::SpanId>,
 }
 
 #[derive(Debug)]
@@ -100,7 +95,6 @@ impl Aggregator {
                 data: HashMap::<span::Id, (Task, bool)>::new(),
             },
             stats: TaskData::default(),
-            completed_spans: Vec::new(),
         }
     }
 
@@ -133,7 +127,7 @@ impl Aggregator {
                         }).collect();
                         let now = SystemTime::now();
                         let stats_update = self.stats.all().map(|(id, stats)| {
-                            (id.into_u64(), stats.to_proto(now))
+                            (id.into_u64(), stats.to_proto())
                         }).collect();
                         // Send the initial state --- if this fails, the subscription is
                         // already dead.
@@ -143,7 +137,7 @@ impl Aggregator {
                             }),
                             new_tasks,
                             stats_update,
-                            ..Default::default()
+                            now: Some(now.into()),
                         }) {
                             self.watchers.push(subscription)
                         }
@@ -205,13 +199,12 @@ impl Aggregator {
         let stats_update = self
             .stats
             .since_last_update()
-            .map(|(id, stats)| (id.into_u64(), stats.to_proto(now)))
+            .map(|(id, stats)| (id.into_u64(), stats.to_proto()))
             .collect();
         let update = proto::tasks::TaskUpdate {
             new_metadata,
             new_tasks,
             stats_update,
-            completed: mem::replace(&mut self.completed_spans, Vec::new()),
             now: Some(now.into()),
         };
         self.watchers.retain(|watch: &Watch| watch.update(&update));
@@ -271,8 +264,7 @@ impl Aggregator {
             }
 
             Event::Close { id, at } => {
-                self.stats.update_or_default(id.clone()).closed_at = Some(at);
-                self.completed_spans.push(id.into());
+                self.stats.update_or_default(id).closed_at = Some(at);
             }
         }
     }
@@ -361,20 +353,21 @@ impl Watch {
 }
 
 impl Stats {
-    fn total_time(&self, now: SystemTime) -> Option<Duration> {
-        let now = self.closed_at.unwrap_or(now);
-        self.created_at
-            .and_then(|then| now.duration_since(then).ok())
+    fn total_time(&self) -> Option<Duration> {
+        self.closed_at.and_then(|end| {
+            self.created_at
+                .and_then(|start| end.duration_since(start).ok())
+        })
     }
 
-    fn to_proto(&self, now: SystemTime) -> proto::tasks::Stats {
+    fn to_proto(&self) -> proto::tasks::Stats {
         proto::tasks::Stats {
             polls: self.polls,
             created_at: self.created_at.map(Into::into),
             first_poll: self.first_poll.map(Into::into),
             last_poll: self.last_poll.map(Into::into),
             busy_time: Some(self.busy_time.into()),
-            total_time: self.total_time(now).map(Into::into),
+            total_time: self.total_time().map(Into::into),
         }
     }
 }

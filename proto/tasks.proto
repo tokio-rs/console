@@ -37,22 +37,11 @@ message TaskUpdate {
     // *is* included in this map, the corresponding value represents a complete
     // snapshot of that task's stats at in the current time window.
     map<uint64, Stats> stats_update = 3;
-    // The IDs of any tasks which have *completed* since the last update.
-    //
-    // If a task's ID is present in this list, that task has terminated. The
-    // client is free to delete any data it has stored for that task if it is no
-    // longer relevant. Task IDs *may* be reused when new tasks are spawned; if
-    // a new task is spawned for the same ID, it will appear in the `new_tasks`
-    // list in a future `TaskUpdate`.
-    //
-    // When a task ID is present in this list, the `stats_update` field of this
-    // `TaskUpdate` will contain the final statistics recorded for that task.
-    repeated common.SpanId completed = 4;
     // The system time when this update was recorded.
     //
     // This is the timestamp any durations in the included `Stats` were
     // calculated relative to.
-    google.protobuf.Timestamp now = 5;
+    google.protobuf.Timestamp now = 4;
 }
 
 // Data recorded when a new task is spawned.
