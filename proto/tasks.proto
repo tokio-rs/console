@@ -74,6 +74,7 @@ message Task {
     // The category of task this task belongs to.
     Kind kind = 3;
 
+    // A list of `Field` objects attached to this task.
     repeated common.Field fields = 4;
 
     // An ordered list of span IDs corresponding to the `tracing` span context

@@ -35,9 +35,9 @@ pub struct Server {
     client_buffer: usize,
 }
 
-#[derive(Default)]
-struct FieldsCollector {
+struct FieldVisitor {
     fields: Vec<proto::Field>,
+    meta_id: proto::MetaId,
 }
 
 struct Watch(mpsc::Sender<Result<proto::tasks::TaskUpdate, tonic::Status>>);
@@ -191,7 +191,10 @@ where
         let metadata = attrs.metadata();
         if self.is_spawn(metadata) {
             let at = SystemTime::now();
-            let mut fields_collector = FieldsCollector::default();
+            let mut fields_collector = FieldVisitor {
+                fields: Vec::default(),
+                meta_id: metadata.into(),
+            };
             attrs.record(&mut fields_collector);
 
             self.send(Event::Spawn {
@@ -288,11 +291,12 @@ impl proto::tasks::tasks_server::Tasks for Server {
     }
 }
 
-impl Visit for FieldsCollector {
+impl Visit for FieldVisitor {
     fn record_debug(&mut self, field: &field::Field, value: &dyn std::fmt::Debug) {
         self.fields.push(proto::Field {
             name: Some(field.name().into()),
             value: Some(value.into()),
+            metadata_id: Some(self.meta_id.clone()),
         });
     }
 
@@ -300,24 +304,31 @@ impl Visit for FieldsCollector {
         self.fields.push(proto::Field {
             name: Some(field.name().into()),
             value: Some(value.into()),
+            metadata_id: Some(self.meta_id.clone()),
         });
     }
+
     fn record_u64(&mut self, field: &tracing_core::Field, value: u64) {
         self.fields.push(proto::Field {
             name: Some(field.name().into()),
             value: Some(value.into()),
+            metadata_id: Some(self.meta_id.clone()),
         });
     }
+
     fn record_bool(&mut self, field: &tracing_core::Field, value: bool) {
         self.fields.push(proto::Field {
             name: Some(field.name().into()),
             value: Some(value.into()),
+            metadata_id: Some(self.meta_id.clone()),
         });
     }
+
     fn record_str(&mut self, field: &tracing_core::Field, value: &str) {
         self.fields.push(proto::Field {
             name: Some(field.name().into()),
             value: Some(value.into()),
+            metadata_id: Some(self.meta_id.clone()),
         });
     }
 }

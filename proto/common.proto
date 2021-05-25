@@ -24,9 +24,12 @@ message SpanId {
     uint64 id = 1;
 }
 
+// A message representing a key-value pair of data associated with a `Span`
 message Field {
     oneof name {
+        // The string representation of the name.
         string str_name = 1;
+        // An index position into the `Metadata.field_names`.
         uint64 name_idx = 2;
     }
     oneof value {
@@ -36,6 +39,7 @@ message Field {
         sint64 i64_val = 6;
         bool bool_val = 7;
     }
+    MetaId metadata_id = 8;
 }
 
 message Span {
@@ -61,6 +65,10 @@ message Metadata {
     Location location = 4;
     Kind kind = 5;
     Level level = 6;
+
+    // The names of the key-value fields attached to the
+    // span or event this metadata is associated with.
+    repeated string field_names = 7;
 
     enum Kind {
         SPAN = 0;

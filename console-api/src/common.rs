@@ -45,6 +45,7 @@ impl<'a> From<&'a tracing_core::Metadata<'a>> for Metadata {
             location: Some(location),
             kind: kind as i32,
             level: metadata::Level::from(*meta.level()) as i32,
+            field_names: Vec::new(),
             ..Default::default()
         }
     }
@@ -64,11 +65,11 @@ impl<'a> From<&'a std::panic::Location<'a>> for Location {
 impl fmt::Display for field::Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            field::Value::BoolVal(v) => write!(f, "{}", v)?,
-            field::Value::StrVal(v) => write!(f, "{}", v)?,
-            field::Value::U64Val(v) => write!(f, "{}", v)?,
-            field::Value::DebugVal(v) => write!(f, "{}", v)?,
-            field::Value::I64Val(v) => write!(f, "{}", v)?,
+            field::Value::BoolVal(v) => fmt::Display::fmt(v, f)?,
+            field::Value::StrVal(v) => fmt::Display::fmt(v, f)?,
+            field::Value::U64Val(v) => fmt::Display::fmt(v, f)?,
+            field::Value::DebugVal(v) => fmt::Display::fmt(v, f)?,
+            field::Value::I64Val(v) => fmt::Display::fmt(v, f)?,
         }
 
         Ok(())
