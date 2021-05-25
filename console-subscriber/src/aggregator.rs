@@ -22,7 +22,7 @@ pub(crate) struct Aggregator {
     rpcs: mpsc::Receiver<Watch>,
 
     /// The interval at which new data updates are pushed to clients.
-    flush_interval: Duration,
+    publish_interval: Duration,
 
     /// Triggers a flush when the event buffer is approaching capacity.
     flush_capacity: Arc<Flush>,
@@ -78,7 +78,7 @@ impl Aggregator {
     pub(crate) fn new(
         events: mpsc::Receiver<Event>,
         rpcs: mpsc::Receiver<Watch>,
-        flush_interval: Duration,
+        publish_interval: Duration,
     ) -> Self {
         Self {
             flush_capacity: Arc::new(Flush {
@@ -86,7 +86,7 @@ impl Aggregator {
                 triggered: AtomicBool::new(false),
             }),
             rpcs,
-            flush_interval,
+            publish_interval,
             events,
             watchers: Vec::new(),
             all_metadata: Vec::new(),
@@ -103,11 +103,11 @@ impl Aggregator {
     }
 
     pub(crate) async fn run(mut self) {
-        let mut flush = tokio::time::interval(self.flush_interval);
+        let mut publish = tokio::time::interval(self.publish_interval);
         loop {
             let should_send = tokio::select! {
                 // if the flush interval elapses, flush data to the client
-                _ = flush.tick() => {
+                _ = publish.tick() => {
                     true
                 }
 
