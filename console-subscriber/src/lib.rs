@@ -79,7 +79,7 @@ impl TasksLayer {
         Builder::default()
     }
 
-    fn build(builder: Builder) -> (Self, Server) {
+    fn build(config: Builder) -> (Self, Server) {
         // The `cfg` value *appears* to be a constant to clippy, but it changes
         // depending on the build-time configuration...
         #![allow(clippy::assertions_on_constants)]
@@ -87,17 +87,25 @@ impl TasksLayer {
             cfg!(tokio_unstable),
             "task tracing requires Tokio to be built with RUSTFLAGS=\"--cfg tokio_unstable\"!"
         );
+        tracing::debug!(
+            config.event_buffer_capacity,
+            config.client_buffer_capacity,
+            ?config.publish_interval,
+            ?config.retention,
+            ?config.server_addr,
+            "configured console subscriber"
+        );
 
-        let (tx, events) = mpsc::channel(builder.event_buffer_capacity);
+        let (tx, events) = mpsc::channel(config.event_buffer_capacity);
         let (subscribe, rpcs) = mpsc::channel(256);
 
-        let aggregator = Aggregator::new(events, rpcs, builder.publish_interval);
+        let aggregator = Aggregator::new(events, rpcs, &config);
         let flush = aggregator.flush().clone();
         let server = Server {
             aggregator: Some(aggregator),
-            addr: builder.server_addr,
+            addr: config.server_addr,
             subscribe,
-            client_buffer: builder.client_buffer_capacity,
+            client_buffer: config.client_buffer_capacity,
         };
         let layer = Self {
             tx,

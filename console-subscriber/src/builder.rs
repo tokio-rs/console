@@ -13,10 +13,10 @@ pub struct Builder {
     pub(super) client_buffer_capacity: usize,
 
     /// The interval between publishing updates to clients.
-    pub(super) publish_interval: Duration,
+    pub(crate) publish_interval: Duration,
 
     /// How long to retain data for completed events.
-    pub(super) retention: Duration,
+    pub(crate) retention: Duration,
 
     /// The address on which to serve the RPC server.
     pub(super) server_addr: SocketAddr,

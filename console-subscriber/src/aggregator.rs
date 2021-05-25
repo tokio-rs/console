@@ -24,6 +24,9 @@ pub(crate) struct Aggregator {
     /// The interval at which new data updates are pushed to clients.
     publish_interval: Duration,
 
+    /// How long to keep task data after a task has completed.
+    retention: Duration,
+
     /// Triggers a flush when the event buffer is approaching capacity.
     flush_capacity: Arc<Flush>,
 
@@ -78,7 +81,7 @@ impl Aggregator {
     pub(crate) fn new(
         events: mpsc::Receiver<Event>,
         rpcs: mpsc::Receiver<Watch>,
-        publish_interval: Duration,
+        builder: &crate::Builder,
     ) -> Self {
         Self {
             flush_capacity: Arc::new(Flush {
@@ -86,7 +89,8 @@ impl Aggregator {
                 triggered: AtomicBool::new(false),
             }),
             rpcs,
-            publish_interval,
+            publish_interval: builder.publish_interval,
+            retention: builder.retention,
             events,
             watchers: Vec::new(),
             all_metadata: Vec::new(),
@@ -277,33 +281,60 @@ impl Aggregator {
     fn drop_closed_tasks(&mut self) {
         let tasks = &mut self.tasks;
         let stats = &mut self.stats;
+        let has_watchers = !self.watchers.is_empty();
+        let now = SystemTime::now();
+        let stats_len_0 = stats.data.len();
+        let retention = self.retention;
 
         // drop stats for closed tasks if they have been updated
-        let stats_len_0 = stats.data.len();
+        tracing::trace!(
+            ?self.retention,
+            self.has_watchers = has_watchers,
+            "dropping closed tasks..."
+        );
+
         stats.data.retain(|id, (stats, dirty)| {
-            tracing::trace!(
-                stats.id = ?id,
-                stats.closed = stats.closed_at.is_some(),
-                stats.dirty = *dirty,
-            );
-            *dirty || stats.closed_at.is_none()
+            if let Some(closed) = stats.closed_at {
+                let closed_for = now.duration_since(closed).unwrap_or_default();
+                let should_drop =
+                    // if there are any clients watching, retain all dirty tasks regardless of age
+                    (*dirty && has_watchers)
+                    || closed_for > retention;
+                tracing::trace!(
+                    stats.id = ?id,
+                    stats.closed_at = ?closed,
+                    stats.closed_for = ?closed_for,
+                    stats.dirty = *dirty,
+                    should_drop,
+                );
+                return !should_drop;
+            }
+
+            true
         });
         let stats_len_1 = stats.data.len();
 
-        // drop closed tasks whose final stats update has been sent
+        // drop closed tasks which no longer have stats.
         let tasks_len_0 = tasks.data.len();
-        tasks
-            .data
-            .retain(|id, (_, dirty)| *dirty || stats.data.contains_key(id));
+        tasks.data.retain(|id, (_, _)| stats.data.contains_key(id));
         let tasks_len_1 = tasks.data.len();
+        let dropped_stats = stats_len_0 - stats_len_1;
 
-        tracing::debug!(
-            tasks.dropped = tasks_len_0 - tasks_len_1,
-            tasks.len = tasks_len_1,
-            stats.dropped = stats_len_0 - stats_len_1,
-            stats.tasks = stats_len_1,
-            "dropped closed tasks"
-        );
+        if dropped_stats > 0 {
+            tracing::debug!(
+                tasks.dropped = tasks_len_0 - tasks_len_1,
+                tasks.len = tasks_len_1,
+                stats.dropped = dropped_stats,
+                stats.tasks = stats_len_1,
+                "dropped closed tasks"
+            );
+        } else {
+            tracing::trace!(
+                tasks.len = tasks_len_1,
+                stats.len = stats_len_1,
+                "no closed tasks were droppable"
+            );
+        }
     }
 }
 
