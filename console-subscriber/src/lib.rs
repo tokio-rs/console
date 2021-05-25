@@ -11,29 +11,21 @@ use std::{
     time::{Duration, SystemTime},
 };
 use tracing_core::{
+    field::{self, Visit},
     span,
     subscriber::{self, Subscriber},
     Metadata,
 };
-use tracing_subscriber::{
-    fmt::{
-        format::{DefaultFields, FormatFields},
-        FormattedFields,
-    },
-    layer::Context,
-    registry::LookupSpan,
-    Layer,
-};
+use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
 mod aggregator;
 use aggregator::Aggregator;
 
-pub struct TasksLayer<F = DefaultFields> {
+pub struct TasksLayer {
     task_meta: AtomicPtr<Metadata<'static>>,
     blocking_meta: AtomicPtr<Metadata<'static>>,
     tx: mpsc::Sender<Event>,
     flush: Arc<aggregator::Flush>,
-    format: F,
 }
 
 pub struct Server {
@@ -41,6 +33,11 @@ pub struct Server {
     addr: SocketAddr,
     aggregator: Option<Aggregator>,
     client_buffer: usize,
+}
+
+struct FieldVisitor {
+    fields: Vec<proto::Field>,
+    meta_id: proto::MetaId,
 }
 
 struct Watch(mpsc::Sender<Result<proto::tasks::TaskUpdate, tonic::Status>>);
@@ -51,7 +48,7 @@ enum Event {
         id: span::Id,
         metadata: &'static Metadata<'static>,
         at: SystemTime,
-        fields: String,
+        fields: Vec<proto::Field>,
     },
     Enter {
         id: span::Id,
@@ -94,13 +91,12 @@ impl TasksLayer {
             flush,
             task_meta: AtomicPtr::new(ptr::null_mut()),
             blocking_meta: AtomicPtr::new(ptr::null_mut()),
-            format: Default::default(),
         };
         (layer, server)
     }
 }
 
-impl<F> TasksLayer<F> {
+impl TasksLayer {
     pub const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 1024 * 10;
     pub const DEFAULT_CLIENT_BUFFER_CAPACITY: usize = 1024 * 4;
     pub const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_secs(1);
@@ -163,10 +159,9 @@ impl<F> TasksLayer<F> {
     }
 }
 
-impl<S, F> Layer<S> for TasksLayer<F>
+impl<S> Layer<S> for TasksLayer
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
-    F: for<'writer> FormatFields<'writer> + 'static,
 {
     fn register_callsite(&self, meta: &'static Metadata<'static>) -> subscriber::Interest {
         if meta.target() == "tokio::task" && meta.name() == "task" {
@@ -192,30 +187,21 @@ where
         subscriber::Interest::always()
     }
 
-    fn new_span(&self, attrs: &span::Attributes<'_>, id: &span::Id, cx: Context<'_, S>) {
+    fn new_span(&self, attrs: &span::Attributes<'_>, id: &span::Id, _: Context<'_, S>) {
         let metadata = attrs.metadata();
         if self.is_spawn(metadata) {
             let at = SystemTime::now();
-            let span = cx.span(id).expect("newly-created span should exist");
-            let mut exts = span.extensions_mut();
-            let fields = match exts.get_mut::<FormattedFields<F>>() {
-                Some(fields) => fields.fields.clone(),
-                None => {
-                    let mut fields = String::new();
-                    match self.format.format_fields(&mut fields, attrs) {
-                        Ok(()) => exts.insert(FormattedFields::<F>::new(fields.clone())),
-                        Err(_) => {
-                            tracing::warn!(span.id = ?id, span.attrs = ?attrs, "error formatting fields for span")
-                        }
-                    }
-                    fields
-                }
+            let mut fields_collector = FieldVisitor {
+                fields: Vec::default(),
+                meta_id: metadata.into(),
             };
+            attrs.record(&mut fields_collector);
+
             self.send(Event::Spawn {
                 id: id.clone(),
                 at,
                 metadata,
-                fields,
+                fields: fields_collector.fields,
             });
         }
     }
@@ -302,5 +288,47 @@ impl proto::tasks::tasks_server::Tasks for Server {
         tracing::debug!("watch started");
         let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
         Ok(tonic::Response::new(stream))
+    }
+}
+
+impl Visit for FieldVisitor {
+    fn record_debug(&mut self, field: &field::Field, value: &dyn std::fmt::Debug) {
+        self.fields.push(proto::Field {
+            name: Some(field.name().into()),
+            value: Some(value.into()),
+            metadata_id: Some(self.meta_id.clone()),
+        });
+    }
+
+    fn record_i64(&mut self, field: &tracing_core::Field, value: i64) {
+        self.fields.push(proto::Field {
+            name: Some(field.name().into()),
+            value: Some(value.into()),
+            metadata_id: Some(self.meta_id.clone()),
+        });
+    }
+
+    fn record_u64(&mut self, field: &tracing_core::Field, value: u64) {
+        self.fields.push(proto::Field {
+            name: Some(field.name().into()),
+            value: Some(value.into()),
+            metadata_id: Some(self.meta_id.clone()),
+        });
+    }
+
+    fn record_bool(&mut self, field: &tracing_core::Field, value: bool) {
+        self.fields.push(proto::Field {
+            name: Some(field.name().into()),
+            value: Some(value.into()),
+            metadata_id: Some(self.meta_id.clone()),
+        });
+    }
+
+    fn record_str(&mut self, field: &tracing_core::Field, value: &str) {
+        self.fields.push(proto::Field {
+            name: Some(field.name().into()),
+            value: Some(value.into()),
+            metadata_id: Some(self.meta_id.clone()),
+        });
     }
 }

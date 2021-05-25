@@ -24,16 +24,28 @@ message SpanId {
     uint64 id = 1;
 }
 
+// A message representing a key-value pair of data associated with a `Span`
 message Field {
-    oneof field {
-        string debug = 1;
+    oneof name {
+        // The string representation of the name.
+        string str_name = 1;
+        // An index position into the `Metadata.field_names`.
+        uint64 name_idx = 2;
     }
+    oneof value {
+        string debug_val = 3;
+        string str_val = 4;
+        uint64 u64_val = 5;
+        sint64 i64_val = 6;
+        bool bool_val = 7;
+    }
+    MetaId metadata_id = 8;
 }
 
 message Span {
     SpanId id = 1;
     MetaId metadata_id = 2;
-    map<string, Field> fields = 3;
+    repeated Field fields = 3;
     google.protobuf.Timestamp at = 4;
 }
 
@@ -53,6 +65,10 @@ message Metadata {
     Location location = 4;
     Kind kind = 5;
     Level level = 6;
+
+    // The names of the key-value fields attached to the
+    // span or event this metadata is associated with.
+    repeated string field_names = 7;
 
     enum Kind {
         SPAN = 0;
