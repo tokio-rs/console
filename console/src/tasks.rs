@@ -4,6 +4,7 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     convert::TryFrom,
+    fmt::Write,
     rc::{Rc, Weak},
     time::{Duration, SystemTime},
 };
@@ -123,13 +124,21 @@ impl State {
                 proto::tasks::task::Kind::Spawn => "T",
                 proto::tasks::task::Kind::Blocking => "B",
             };
-
+            let fields = task
+                .fields
+                .iter()
+                .fold(String::new(), |mut res, f| {
+                    write!(&mut res, "{} ", f).unwrap();
+                    res
+                })
+                .trim_end()
+                .into();
             let id = task.id?.id;
             let stats = stats_update.remove(&id)?.into();
             let mut task = Task {
                 id,
                 id_hex: format!("{:x}", id),
-                fields: task.string_fields,
+                fields,
                 kind,
                 stats,
                 completed_for: 0,

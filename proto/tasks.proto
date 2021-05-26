@@ -52,7 +52,7 @@ message Task {
     // When the task's stats change, or when the task completes, it will be
     // identified by this ID; if the client requires additional information
     // included in the `Task` message, it should store that data and access it
-    // by ID. 
+    // by ID.
     common.SpanId id = 1;
     // The numeric ID of the task's `Metadata`.
     //
@@ -63,11 +63,8 @@ message Task {
     // The category of task this task belongs to.
     Kind kind = 3;
 
-    // A string representation of any fields recorded about this task.
-    //
-    // NOTE: eventually, it would be nice to support structured fields in tasks;
-    // we can deprecate this when we add that.
-    string string_fields = 4;
+    // A list of `Field` objects attached to this task.
+    repeated common.Field fields = 4;
 
     // An ordered list of span IDs corresponding to the `tracing` span context
     // in which this task was spawned.

@@ -45,6 +45,7 @@ impl<'a> From<&'a tracing_core::Metadata<'a>> for Metadata {
             location: Some(location),
             kind: kind as i32,
             level: metadata::Level::from(*meta.level()) as i32,
+            field_names: Vec::new(),
             ..Default::default()
         }
     }
@@ -58,6 +59,31 @@ impl<'a> From<&'a std::panic::Location<'a>> for Location {
             column: Some(loc.column()),
             ..Default::default()
         }
+    }
+}
+
+impl fmt::Display for field::Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            field::Value::BoolVal(v) => fmt::Display::fmt(v, f)?,
+            field::Value::StrVal(v) => fmt::Display::fmt(v, f)?,
+            field::Value::U64Val(v) => fmt::Display::fmt(v, f)?,
+            field::Value::DebugVal(v) => fmt::Display::fmt(v, f)?,
+            field::Value::I64Val(v) => fmt::Display::fmt(v, f)?,
+        }
+
+        Ok(())
+    }
+}
+
+impl fmt::Display for Field {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name_val = (self.name.as_ref(), self.value.as_ref());
+        if let (Some(field::Name::StrName(name)), Some(val)) = name_val {
+            write!(f, "{}={}", name, val)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -107,5 +133,41 @@ impl From<&'static tracing_core::Metadata<'static>> for register_metadata::NewMe
             id: Some(meta.into()),
             metadata: Some(meta.into()),
         }
+    }
+}
+
+impl From<i64> for field::Value {
+    fn from(val: i64) -> Self {
+        field::Value::I64Val(val)
+    }
+}
+
+impl From<u64> for field::Value {
+    fn from(val: u64) -> Self {
+        field::Value::U64Val(val)
+    }
+}
+
+impl From<bool> for field::Value {
+    fn from(val: bool) -> Self {
+        field::Value::BoolVal(val)
+    }
+}
+
+impl From<&str> for field::Value {
+    fn from(val: &str) -> Self {
+        field::Value::StrVal(val.into())
+    }
+}
+
+impl From<&str> for field::Name {
+    fn from(val: &str) -> Self {
+        field::Name::StrName(val.into())
+    }
+}
+
+impl From<&dyn std::fmt::Debug> for field::Value {
+    fn from(val: &dyn std::fmt::Debug) -> Self {
+        field::Value::DebugVal(format!("{:?}", val))
     }
 }
