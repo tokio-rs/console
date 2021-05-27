@@ -1,4 +1,4 @@
-use super::{DefaultFields, Server, TasksLayer};
+use super::{Server, TasksLayer};
 use std::{net::SocketAddr, time::Duration};
 
 /// Builder for configuring [`TasksLayer`]s.
@@ -25,10 +25,10 @@ pub struct Builder {
 impl Default for Builder {
     fn default() -> Self {
         Self {
-            event_buffer_capacity: TasksLayer::<DefaultFields>::DEFAULT_EVENT_BUFFER_CAPACITY,
-            client_buffer_capacity: TasksLayer::<DefaultFields>::DEFAULT_CLIENT_BUFFER_CAPACITY,
-            publish_interval: TasksLayer::<DefaultFields>::DEFAULT_PUBLISH_INTERVAL,
-            retention: TasksLayer::<DefaultFields>::DEFAULT_RETENTION,
+            event_buffer_capacity: TasksLayer::DEFAULT_EVENT_BUFFER_CAPACITY,
+            client_buffer_capacity: TasksLayer::DEFAULT_CLIENT_BUFFER_CAPACITY,
+            publish_interval: TasksLayer::DEFAULT_PUBLISH_INTERVAL,
+            retention: TasksLayer::DEFAULT_RETENTION,
             server_addr: SocketAddr::new(Server::DEFAULT_IP, Server::DEFAULT_PORT),
         }
     }
