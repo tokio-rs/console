@@ -4,19 +4,20 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     convert::TryFrom,
-    fmt::Write,
+    fmt,
     rc::{Rc, Weak},
     time::{Duration, SystemTime},
 };
 use tui::{
     layout,
-    style::{self, Style},
-    text,
+    style::{self, Modifier, Style},
+    text::{self, Span, Spans},
     widgets::{Block, Cell, Row, Table, TableState},
 };
 #[derive(Debug)]
 pub(crate) struct State {
     tasks: HashMap<u64, Rc<RefCell<Task>>>,
+    metas: HashMap<u64, Metadata>,
     sorted_tasks: Vec<Weak<RefCell<Task>>>,
     sort_by: SortBy,
     table_state: TableState,
@@ -39,10 +40,16 @@ enum SortBy {
 pub(crate) struct Task {
     id: u64,
     id_hex: String,
-    fields: String,
+    fields: Vec<Field>,
     kind: &'static str,
     stats: Stats,
     completed_for: usize,
+}
+
+#[derive(Debug)]
+pub(crate) struct Metadata {
+    field_names: Vec<String>,
+    //TODO: add more metadata as needed
 }
 
 #[derive(Debug)]
@@ -52,6 +59,21 @@ struct Stats {
     busy: Duration,
     idle: Option<Duration>,
     total: Option<Duration>,
+}
+
+#[derive(Debug)]
+pub(crate) struct Field {
+    pub(crate) name: String,
+    pub(crate) value: FieldValue,
+}
+
+#[derive(Debug)]
+pub(crate) enum FieldValue {
+    Bool(bool),
+    Str(String),
+    U64(u64),
+    I64(i64),
+    Debug(String),
 }
 
 impl State {
@@ -114,8 +136,23 @@ impl State {
         if let Some(now) = update.now {
             self.last_updated_at = Some(now.into());
         }
+
+        if let Some(new_metada) = update.new_metadata {
+            let metas: HashMap<_, Metadata> = new_metada
+                .metadata
+                .into_iter()
+                .map(|meta| {
+                    let id = meta.id.expect("no id").id;
+                    let metadata = meta.metadata.expect("no metadata");
+                    (id, metadata.into())
+                })
+                .collect();
+            self.metas.extend(metas);
+        }
+
         let mut stats_update = update.stats_update;
         let sorted = &mut self.sorted_tasks;
+        let metas = &mut self.metas;
         let new_tasks = update.new_tasks.into_iter().filter_map(|task| {
             if task.id.is_none() {
                 tracing::warn!(?task, "skipping task with no id");
@@ -127,12 +164,23 @@ impl State {
             let fields = task
                 .fields
                 .iter()
-                .fold(String::new(), |mut res, f| {
-                    write!(&mut res, "{} ", f).unwrap();
-                    res
+                .filter_map(|f| {
+                    let field_name = f.name.as_ref().expect("no name");
+                    let name = match field_name {
+                        proto::field::Name::StrName(n) => Some(n.clone()),
+                        proto::field::Name::NameIdx(idx) => {
+                            let meta_id = f.metadata_id.as_ref().expect("no id");
+                            metas
+                                .get(&meta_id.id)
+                                .and_then(|meta| meta.field_names.get(*idx as usize))
+                                .cloned()
+                        }
+                    };
+                    let value = f.value.as_ref().expect("no value").clone().into();
+                    name.map(|name| Field { name, value })
                 })
-                .trim_end()
-                .into();
+                .collect();
+
             let id = task.id?.id;
             let stats = stats_update.remove(&id)?.into();
             let mut task = Task {
@@ -182,6 +230,19 @@ impl State {
         let rows = self.sorted_tasks.iter().filter_map(|task| {
             let task = task.upgrade()?;
             let task = task.borrow();
+
+            let fields = Spans::from(task.fields().iter().fold(Vec::default(), |mut acc, f| {
+                acc.extend(vec![
+                    Span::styled(
+                        f.name.clone(),
+                        Style::default().add_modifier(Modifier::BOLD),
+                    ),
+                    Span::from("="),
+                    Span::from(format!("{} ", f.value)),
+                ]);
+                acc
+            }));
+
             let mut row = Row::new(vec![
                 Cell::from(task.id_hex.to_string()),
                 // TODO(eliza): is there a way to write a `fmt::Debug` impl
@@ -206,7 +267,7 @@ impl State {
                     prec = DUR_PRECISION,
                 )),
                 Cell::from(format!("{:>width$}", task.stats.polls, width = POLLS_LEN)),
-                Cell::from(task.fields.to_string()),
+                Cell::from(fields),
             ]);
             if task.completed_for > 0 {
                 row = row.style(Style::default().add_modifier(style::Modifier::DIM));
@@ -330,6 +391,7 @@ impl Default for State {
     fn default() -> Self {
         Self {
             tasks: Default::default(),
+            metas: Default::default(),
             sorted_tasks: Default::default(),
             sort_by: Default::default(),
             selected_column: SortBy::default() as usize,
@@ -345,7 +407,7 @@ impl Task {
         &self.id_hex
     }
 
-    pub(crate) fn fields(&self) -> &str {
+    pub(crate) fn fields(&self) -> &Vec<Field> {
         &self.fields
     }
 
@@ -397,6 +459,26 @@ impl From<proto::tasks::Stats> for Stats {
     }
 }
 
+impl From<proto::Metadata> for Metadata {
+    fn from(pb: proto::Metadata) -> Self {
+        Self {
+            field_names: pb.field_names,
+        }
+    }
+}
+
+impl From<proto::field::Value> for FieldValue {
+    fn from(pb: proto::field::Value) -> Self {
+        match pb {
+            proto::field::Value::BoolVal(v) => Self::Bool(v),
+            proto::field::Value::StrVal(v) => Self::Str(v),
+            proto::field::Value::I64Val(v) => Self::I64(v),
+            proto::field::Value::U64Val(v) => Self::U64(v),
+            proto::field::Value::DebugVal(v) => Self::Debug(v),
+        }
+    }
+}
+
 impl Default for SortBy {
     fn default() -> Self {
         Self::Total
@@ -435,5 +517,19 @@ impl TryFrom<usize> for SortBy {
             idx if idx == Self::Polls as usize => Ok(Self::Polls),
             _ => Err(()),
         }
+    }
+}
+
+impl fmt::Display for FieldValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FieldValue::Bool(v) => fmt::Display::fmt(v, f)?,
+            FieldValue::Str(v) => fmt::Display::fmt(v, f)?,
+            FieldValue::U64(v) => fmt::Display::fmt(v, f)?,
+            FieldValue::Debug(v) => fmt::Display::fmt(v, f)?,
+            FieldValue::I64(v) => fmt::Display::fmt(v, f)?,
+        }
+
+        Ok(())
     }
 }

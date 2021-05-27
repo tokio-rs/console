@@ -1,5 +1,5 @@
 use crate::{input, tasks::Task};
-use std::{cell::RefCell, rc::Rc, time::SystemTime};
+use std::{cell::RefCell, fmt::Write, rc::Rc, time::SystemTime};
 use tui::{
     layout,
     style::{self, Style},
@@ -35,6 +35,16 @@ impl TaskView {
         let task = &*self.task.borrow();
         const DUR_PRECISION: usize = 4;
 
+        let fields: String = task
+            .fields()
+            .iter()
+            .fold(String::new(), |mut res, f| {
+                write!(&mut res, "{}={} ", f.name, f.value).unwrap();
+                res
+            })
+            .trim_end()
+            .into();
+
         let attrs = Spans::from(vec![
             Span::styled("ID: ", Style::default().add_modifier(style::Modifier::BOLD)),
             Span::raw(task.id_hex()),
@@ -43,7 +53,7 @@ impl TaskView {
                 "Fields: ",
                 Style::default().add_modifier(style::Modifier::BOLD),
             ),
-            Span::raw(task.fields()),
+            Span::raw(fields),
         ]);
 
         let metrics = Spans::from(vec![
