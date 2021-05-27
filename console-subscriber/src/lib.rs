@@ -2,7 +2,7 @@ use console_api as proto;
 use tokio::sync::mpsc;
 
 use std::{
-    net::SocketAddr,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     ptr,
     sync::{
         atomic::{AtomicPtr, Ordering::*},
@@ -20,6 +20,8 @@ use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
 mod aggregator;
 use aggregator::Aggregator;
+mod builder;
+pub use builder::Builder;
 
 pub struct TasksLayer {
     task_meta: AtomicPtr<Metadata<'static>>,
@@ -66,6 +68,15 @@ enum Event {
 
 impl TasksLayer {
     pub fn new() -> (Self, Server) {
+        Self::builder().build()
+    }
+
+    /// Returns a [`Builder`] for configuring a `TasksLayer`.
+    pub fn builder() -> Builder {
+        Builder::default()
+    }
+
+    fn build(config: Builder) -> (Self, Server) {
         // The `cfg` value *appears* to be a constant to clippy, but it changes
         // depending on the build-time configuration...
         #![allow(clippy::assertions_on_constants)]
@@ -73,18 +84,25 @@ impl TasksLayer {
             cfg!(tokio_unstable),
             "task tracing requires Tokio to be built with RUSTFLAGS=\"--cfg tokio_unstable\"!"
         );
-        // TODO(eliza): builder
-        let (tx, events) = mpsc::channel(Self::DEFAULT_EVENT_BUFFER_CAPACITY);
+        tracing::debug!(
+            config.event_buffer_capacity,
+            config.client_buffer_capacity,
+            ?config.publish_interval,
+            ?config.retention,
+            ?config.server_addr,
+            "configured console subscriber"
+        );
+
+        let (tx, events) = mpsc::channel(config.event_buffer_capacity);
         let (subscribe, rpcs) = mpsc::channel(256);
 
-        let aggregator = Aggregator::new(events, rpcs, Self::DEFAULT_FLUSH_INTERVAL);
+        let aggregator = Aggregator::new(events, rpcs, &config);
         let flush = aggregator.flush().clone();
-        let addr = SocketAddr::from(([127, 0, 0, 1], 6669));
         let server = Server {
             aggregator: Some(aggregator),
-            addr,
+            addr: config.server_addr,
             subscribe,
-            client_buffer: Self::DEFAULT_CLIENT_BUFFER_CAPACITY,
+            client_buffer: config.client_buffer_capacity,
         };
         let layer = Self {
             tx,
@@ -99,8 +117,10 @@ impl TasksLayer {
 impl TasksLayer {
     pub const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 1024 * 10;
     pub const DEFAULT_CLIENT_BUFFER_CAPACITY: usize = 1024 * 4;
-    pub const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_secs(1);
+    pub const DEFAULT_PUBLISH_INTERVAL: Duration = Duration::from_secs(1);
 
+    /// By default, completed spans are retained for one hour.
+    pub const DEFAULT_RETENTION: Duration = Duration::from_secs(60 * 60);
     // how much capacity should remain in the buffer before triggering a
     // flush on capacity?
     //
@@ -238,12 +258,9 @@ where
 }
 
 impl Server {
-    pub fn with_addr(self, addr: impl Into<SocketAddr>) -> Self {
-        Self {
-            addr: addr.into(),
-            ..self
-        }
-    }
+    // XXX(eliza): why is `SocketAddr::new` not `const`???
+    pub const DEFAULT_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+    pub const DEFAULT_PORT: u16 = 6669;
 
     pub async fn serve(self) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         self.serve_with(tonic::transport::Server::default()).await

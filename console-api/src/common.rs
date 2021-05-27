@@ -39,13 +39,15 @@ impl<'a> From<&'a tracing_core::Metadata<'a>> for Metadata {
             column: None, // tracing doesn't support columns yet
         };
 
+        let field_names = meta.fields().iter().map(|f| f.name().to_string()).collect();
+
         Metadata {
             name: meta.name().to_string(),
             target: meta.target().to_string(),
             location: Some(location),
             kind: kind as i32,
             level: metadata::Level::from(*meta.level()) as i32,
-            field_names: Vec::new(),
+            field_names,
             ..Default::default()
         }
     }

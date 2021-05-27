@@ -3,7 +3,9 @@ use tracing_subscriber::prelude::*;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (layer, server) = console_subscriber::TasksLayer::new();
+    let (layer, server) = console_subscriber::TasksLayer::builder()
+        .retention(Duration::from_secs(60))
+        .build();
     let filter =
         tracing_subscriber::EnvFilter::from_default_env().add_directive("tokio=trace".parse()?);
     tracing_subscriber::registry()
