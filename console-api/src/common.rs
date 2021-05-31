@@ -64,6 +64,31 @@ impl<'a> From<&'a std::panic::Location<'a>> for Location {
     }
 }
 
+impl fmt::Display for field::Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            field::Value::BoolVal(v) => fmt::Display::fmt(v, f)?,
+            field::Value::StrVal(v) => fmt::Display::fmt(v, f)?,
+            field::Value::U64Val(v) => fmt::Display::fmt(v, f)?,
+            field::Value::DebugVal(v) => fmt::Display::fmt(v, f)?,
+            field::Value::I64Val(v) => fmt::Display::fmt(v, f)?,
+        }
+
+        Ok(())
+    }
+}
+
+impl fmt::Display for Field {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name_val = (self.name.as_ref(), self.value.as_ref());
+        if let (Some(field::Name::StrName(name)), Some(val)) = name_val {
+            write!(f, "{}={}", name, val)?;
+        }
+
+        Ok(())
+    }
+}
+
 impl fmt::Display for Location {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match (self.module_path.as_ref(), self.file.as_ref()) {

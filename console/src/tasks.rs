@@ -6,6 +6,7 @@ use std::{
     convert::TryFrom,
     fmt,
     rc::{Rc, Weak},
+    sync::Arc,
     time::{Duration, SystemTime},
 };
 use tui::{
@@ -41,6 +42,7 @@ pub(crate) struct Task {
     id: u64,
     id_hex: String,
     fields: Vec<Field>,
+    formatted_fields: Vec<Span<'static>>,
     kind: &'static str,
     stats: Stats,
     completed_for: usize,
@@ -48,7 +50,7 @@ pub(crate) struct Task {
 
 #[derive(Debug)]
 pub(crate) struct Metadata {
-    field_names: Vec<String>,
+    field_names: Vec<Arc<str>>,
     //TODO: add more metadata as needed
 }
 
@@ -63,7 +65,7 @@ struct Stats {
 
 #[derive(Debug)]
 pub(crate) struct Field {
-    pub(crate) name: String,
+    pub(crate) name: Arc<str>,
     pub(crate) value: FieldValue,
 }
 
@@ -137,23 +139,19 @@ impl State {
             self.last_updated_at = Some(now.into());
         }
 
-        if let Some(new_metada) = update.new_metadata {
-            let metas: HashMap<_, Metadata> = new_metada
-                .metadata
-                .into_iter()
-                .map(|meta| {
-                    let id = meta.id.expect("no id").id;
-                    let metadata = meta.metadata.expect("no metadata");
-                    (id, metadata.into())
-                })
-                .collect();
+        if let Some(new_metadata) = update.new_metadata {
+            let metas = new_metadata.metadata.into_iter().map(|meta| {
+                let id = meta.id.expect("no id").id;
+                let metadata = meta.metadata.expect("no metadata");
+                (id, metadata.into())
+            });
             self.metas.extend(metas);
         }
 
         let mut stats_update = update.stats_update;
         let sorted = &mut self.sorted_tasks;
         let metas = &mut self.metas;
-        let new_tasks = update.new_tasks.into_iter().filter_map(|task| {
+        let new_tasks = update.new_tasks.into_iter().filter_map(|mut task| {
             if task.id.is_none() {
                 tracing::warn!(?task, "skipping task with no id");
             }
@@ -161,13 +159,14 @@ impl State {
                 proto::tasks::task::Kind::Spawn => "T",
                 proto::tasks::task::Kind::Blocking => "B",
             };
-            let fields = task
+
+            let fields: Vec<Field> = task
                 .fields
-                .iter()
+                .drain(..)
                 .filter_map(|f| {
                     let field_name = f.name.as_ref().expect("no name");
-                    let name = match field_name {
-                        proto::field::Name::StrName(n) => Some(n.clone()),
+                    let name: Option<Arc<str>> = match field_name {
+                        proto::field::Name::StrName(n) => Some(n.clone().into()),
                         proto::field::Name::NameIdx(idx) => {
                             let meta_id = f.metadata_id.as_ref().expect("no id");
                             metas
@@ -181,12 +180,25 @@ impl State {
                 })
                 .collect();
 
+            let formatted_fields = fields.iter().fold(Vec::default(), |mut acc, f| {
+                acc.extend(vec![
+                    Span::styled(
+                        f.name.to_string(),
+                        Style::default().add_modifier(Modifier::BOLD),
+                    ),
+                    Span::from("="),
+                    Span::from(format!("{} ", f.value)),
+                ]);
+                acc
+            });
+
             let id = task.id?.id;
             let stats = stats_update.remove(&id)?.into();
             let mut task = Task {
                 id,
                 id_hex: format!("{:x}", id),
                 fields,
+                formatted_fields,
                 kind,
                 stats,
                 completed_for: 0,
@@ -231,18 +243,6 @@ impl State {
             let task = task.upgrade()?;
             let task = task.borrow();
 
-            let fields = Spans::from(task.fields().iter().fold(Vec::default(), |mut acc, f| {
-                acc.extend(vec![
-                    Span::styled(
-                        f.name.clone(),
-                        Style::default().add_modifier(Modifier::BOLD),
-                    ),
-                    Span::from("="),
-                    Span::from(format!("{} ", f.value)),
-                ]);
-                acc
-            }));
-
             let mut row = Row::new(vec![
                 Cell::from(task.id_hex.to_string()),
                 // TODO(eliza): is there a way to write a `fmt::Debug` impl
@@ -267,7 +267,7 @@ impl State {
                     prec = DUR_PRECISION,
                 )),
                 Cell::from(format!("{:>width$}", task.stats.polls, width = POLLS_LEN)),
-                Cell::from(fields),
+                Cell::from(Spans::from(task.formatted_fields.clone())),
             ]);
             if task.completed_for > 0 {
                 row = row.style(Style::default().add_modifier(style::Modifier::DIM));
@@ -407,8 +407,8 @@ impl Task {
         &self.id_hex
     }
 
-    pub(crate) fn fields(&self) -> &Vec<Field> {
-        &self.fields
+    pub(crate) fn formatted_fields(&self) -> &Vec<Span<'static>> {
+        &self.formatted_fields
     }
 
     pub(crate) fn total(&self, since: SystemTime) -> Duration {
@@ -462,7 +462,7 @@ impl From<proto::tasks::Stats> for Stats {
 impl From<proto::Metadata> for Metadata {
     fn from(pb: proto::Metadata) -> Self {
         Self {
-            field_names: pb.field_names,
+            field_names: pb.field_names.into_iter().map(|n| n.into()).collect(),
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::{input, tasks::Task};
-use std::{cell::RefCell, fmt::Write, rc::Rc, time::SystemTime};
+use std::{cell::RefCell, rc::Rc, time::SystemTime};
 use tui::{
     layout,
     style::{self, Style},
@@ -35,17 +35,7 @@ impl TaskView {
         let task = &*self.task.borrow();
         const DUR_PRECISION: usize = 4;
 
-        let fields: String = task
-            .fields()
-            .iter()
-            .fold(String::new(), |mut res, f| {
-                write!(&mut res, "{}={} ", f.name, f.value).unwrap();
-                res
-            })
-            .trim_end()
-            .into();
-
-        let attrs = Spans::from(vec![
+        let mut attrs = vec![
             Span::styled("ID: ", Style::default().add_modifier(style::Modifier::BOLD)),
             Span::raw(task.id_hex()),
             Span::raw(", "),
@@ -53,8 +43,10 @@ impl TaskView {
                 "Fields: ",
                 Style::default().add_modifier(style::Modifier::BOLD),
             ),
-            Span::raw(fields),
-        ]);
+        ];
+
+        attrs.extend(task.formatted_fields().clone());
+        let atributes = Spans::from(attrs);
 
         let metrics = Spans::from(vec![
             Span::styled(
@@ -76,7 +68,7 @@ impl TaskView {
             Span::from(format!("{:.prec$?}", task.idle(now), prec = DUR_PRECISION,)),
         ]);
 
-        let lines = vec![attrs, metrics];
+        let lines = vec![atributes, metrics];
         let block = Block::default().borders(Borders::ALL).title("Task");
         let paragraph = Paragraph::new(lines).block(block);
         frame.render_widget(paragraph, area);
