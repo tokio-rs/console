@@ -135,14 +135,21 @@ impl Aggregator {
                         }).collect();
                         // Send the initial state --- if this fails, the subscription is
                         // already dead.
-                        if subscription.update(&proto::tasks::TaskUpdate {
-                            new_metadata: Some(proto::RegisterMetadata {
-                                metadata: self.all_metadata.clone(),
-                            }),
-                            new_tasks,
-                            stats_update,
-                            now: Some(now.into()),
-                        }) {
+                        if subscription.update(
+                            &proto::instrument::InstrumentUpdate {
+                                task_update: Some(proto::tasks::TaskUpdate {
+                                    new_tasks,
+                                    stats_update,
+                                }),
+                                resource_update: None,
+                                now: Some(now.into()),
+                                new_metadata: Some(proto::RegisterMetadata {
+                                    metadata: self.all_metadata.clone(),
+                                }),
+                            }
+
+
+                        ) {
                             self.watchers.push(subscription)
                         }
                     } else {
@@ -210,11 +217,15 @@ impl Aggregator {
             .since_last_update()
             .map(|(id, stats)| (id.into_u64(), stats.to_proto()))
             .collect();
-        let update = proto::tasks::TaskUpdate {
-            new_metadata,
-            new_tasks,
-            stats_update,
+
+        let update = proto::instrument::InstrumentUpdate {
+            task_update: Some(proto::tasks::TaskUpdate {
+                new_tasks,
+                stats_update,
+            }),
+            resource_update: None,
             now: Some(now.into()),
+            new_metadata,
         };
         self.watchers.retain(|watch: &Watch| watch.update(&update));
     }
@@ -406,7 +417,7 @@ impl<'a, T> Drop for Updating<'a, T> {
 }
 
 impl Watch {
-    fn update(&self, update: &proto::tasks::TaskUpdate) -> bool {
+    fn update(&self, update: &proto::instrument::InstrumentUpdate) -> bool {
         if let Ok(reserve) = self.0.try_reserve() {
             reserve.send(Ok(update.clone()));
             true

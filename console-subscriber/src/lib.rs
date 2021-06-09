@@ -42,7 +42,7 @@ struct FieldVisitor {
     meta_id: proto::MetaId,
 }
 
-struct Watch(mpsc::Sender<Result<proto::tasks::TaskUpdate, tonic::Status>>);
+struct Watch(mpsc::Sender<Result<proto::instrument::InstrumentUpdate, tonic::Status>>);
 
 enum Event {
     Metadata(&'static Metadata<'static>),
@@ -277,7 +277,9 @@ impl Server {
         let aggregate = tokio::spawn(aggregate.run());
         let addr = self.addr;
         let res = builder
-            .add_service(proto::tasks::tasks_server::TasksServer::new(self))
+            .add_service(proto::instrument::instrument_server::InstrumentServer::new(
+                self,
+            ))
             .serve(addr)
             .await;
         aggregate.abort();
@@ -286,13 +288,14 @@ impl Server {
 }
 
 #[tonic::async_trait]
-impl proto::tasks::tasks_server::Tasks for Server {
-    type WatchTasksStream =
-        tokio_stream::wrappers::ReceiverStream<Result<proto::tasks::TaskUpdate, tonic::Status>>;
-    async fn watch_tasks(
+impl proto::instrument::instrument_server::Instrument for Server {
+    type WatchUpdatesStream = tokio_stream::wrappers::ReceiverStream<
+        Result<proto::instrument::InstrumentUpdate, tonic::Status>,
+    >;
+    async fn watch_updates(
         &self,
-        req: tonic::Request<proto::tasks::TasksRequest>,
-    ) -> Result<tonic::Response<Self::WatchTasksStream>, tonic::Status> {
+        req: tonic::Request<proto::instrument::InstrumentRequest>,
+    ) -> Result<tonic::Response<Self::WatchUpdatesStream>, tonic::Status> {
         match req.remote_addr() {
             Some(addr) => tracing::debug!(client.addr = %addr, "starting a new watch"),
             None => tracing::debug!(client.addr = %"<unknown>", "starting a new watch"),

@@ -6,13 +6,6 @@ import "google/protobuf/timestamp/timestamp.proto";
 import "google/protobuf/duration.proto";
 import "common.proto";
 
-service Tasks {
-    rpc WatchTasks(TasksRequest) returns (stream TaskUpdate) {}
-}
-
-message TasksRequest {
-}
-
 // A task state update.
 //
 // Each `TaskUpdate` contains any task data that has changed since the last
@@ -27,8 +20,7 @@ message TaskUpdate {
     //
     // If this is empty, no new tasks were spawned.
     repeated Task new_tasks = 1;
-    // Any new span metadata that was registered since the last update.
-    common.RegisterMetadata new_metadata = 2;
+
     // Any task stats that have changed since the last update.
     //
     // This is a map of task IDs (64-bit unsigned integers) to task stats. If a
@@ -36,12 +28,7 @@ message TaskUpdate {
     // since the last `TaskUpdate` in which they were present. If a task's ID
     // *is* included in this map, the corresponding value represents a complete
     // snapshot of that task's stats at in the current time window.
-    map<uint64, Stats> stats_update = 3;
-    // The system time when this update was recorded.
-    //
-    // This is the timestamp any durations in the included `Stats` were
-    // calculated relative to.
-    google.protobuf.Timestamp now = 4;
+    map<uint64, Stats> stats_update = 2;
 }
 
 // Data recorded when a new task is spawned.

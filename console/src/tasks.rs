@@ -110,8 +110,12 @@ impl State {
         }
     }
 
-    pub(crate) fn update_tasks(&mut self, update: proto::tasks::TaskUpdate) {
-        if let Some(now) = update.now {
+    pub(crate) fn update_tasks(
+        &mut self,
+        update: proto::tasks::TaskUpdate,
+        now: Option<prost_types::Timestamp>,
+    ) {
+        if let Some(now) = now {
             self.last_updated_at = Some(now.into());
         }
         let mut stats_update = update.stats_update;

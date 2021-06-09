@@ -5,6 +5,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         "../proto/trace.proto",
         "../proto/common.proto",
         "../proto/tasks.proto",
+        "../proto/instrument.proto",
+        "../proto/resources.proto",
     ];
     let dirs = &["../proto"];
 

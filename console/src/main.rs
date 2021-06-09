@@ -1,5 +1,5 @@
 use color_eyre::{eyre::eyre, Help, SectionExt};
-use console_api::tasks::{tasks_client::TasksClient, TasksRequest};
+use console_api::instrument::{instrument_client::InstrumentClient, InstrumentRequest};
 use futures::stream::StreamExt;
 
 use tui::{
@@ -28,9 +28,9 @@ async fn main() -> color_eyre::Result<()> {
     let (mut terminal, _cleanup) = term::init_crossterm()?;
     terminal.clear()?;
 
-    let mut client = TasksClient::connect(target.clone()).await?;
-    let request = tonic::Request::new(TasksRequest {});
-    let mut stream = client.watch_tasks(request).await?.into_inner();
+    let mut client = InstrumentClient::connect(target.clone()).await?;
+    let request = tonic::Request::new(InstrumentRequest {});
+    let mut stream = client.watch_updates(request).await?.into_inner();
     let mut tasks = tasks::State::default();
     let mut input = input::EventStream::new();
     let mut view = view::View::default();
@@ -45,11 +45,15 @@ async fn main() -> color_eyre::Result<()> {
                 }
                 view.update_input(input, &mut tasks);
             },
-            task_update = stream.next() => {
-                let update = task_update
+            instrument_update = stream.next() => {
+                let update = instrument_update
                     .ok_or_else(|| eyre!("data stream closed by server"))
-                    .with_section(|| "in the future, this should be reconnected automatically...".header("Note:"))?;
-                tasks.update_tasks(update?);
+                    .with_section(|| "in the future, this should be reconnected automatically...".header("Note:"))??;
+
+
+                if let Some(task_update) = update.task_update {
+                    tasks.update_tasks(task_update,update.now );
+                }
             }
         }
         terminal.draw(|f| {

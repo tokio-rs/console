@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package rs.tokio.console.resources;
+
+import "google/protobuf/timestamp/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "common.proto";
+
+// A resource state update.
+message ResourceUpdate {
+    // A list of new resources that were created since the last `ResourceUpdate` was
+    // sent.
+    repeated Resource new_resources = 1;
+
+    // Any resource stats that have changed since the last update.
+    map<uint64, Stats> stats_update = 2;
+
+    // Any resource operation updates that have been registered.
+    repeated ResourceOp resource_ops = 3;
+}
+
+// Static data recorded when a new resource is created.
+message Resource {
+    // The resources's ID.
+    //
+    // This uniquely identifies this resource across all *currently live*
+    // resources. This is also the primary way `ResourceOp` messages are
+    // associated with resources.
+    common.SpanId id = 1;
+    // The resources's concrete rust type.
+    string concrete_type= 3;
+    // The kind of resource (e.g timer, mutex)
+    Kind kind = 4;
+    enum Kind {
+        TIMER = 0;
+    }
+}
+
+// Task runtime statistics.
+message Stats {
+    // Timestamp of when the task was created.
+    google.protobuf.Timestamp created_at = 1;
+    // Timestamp of when the task was dropped.
+    google.protobuf.Timestamp closed_at = 2;
+}
+
+// A resource operation message
+//
+// Each `ResourceOp` message identifies an update to the state of
+// an operation that a task is performing on a resource.
+message ResourceOp {
+    // The id of the resource operation update
+    common.SpanId id = 1;
+    // The id of the resource this operation is performed on
+    common.SpanId resource_id = 2;
+    // The id of the task that this operation is associated with
+    common.SpanId task_id = 3;
+    // The timestamp, representing the point in time this operation update
+    // has been registered
+    google.protobuf.Timestamp timestamp = 4;
+
+    oneof state {
+        Invoked invoked = 5;
+        Done done = 6;
+    }
+
+    // Indicates that an operation has been started
+    // This can be for example emitted in the beginning
+    // of a poll method invocation
+    message Invoked {}
+    // Indicates that this operation has completed and
+    // the result that the operation returns.
+    message Done {
+        Value result = 1;
+
+        enum Value {
+            // The operation has returned an error
+            ERROR = 0;
+            // The operation is redy. //TODO: add the result
+            READY = 1;
+            // The operation has returned pending and will be
+            // called again
+            PENDING = 2;
+        }
+    }
+}
