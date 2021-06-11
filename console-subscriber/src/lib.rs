@@ -259,7 +259,7 @@ where
                     self.send(Event::Waker { id, op, at });
                 }
                 _ => {
-                    tracing::warn!("unknown waker event?");
+                    tracing::warn!("unknown waker event: {:?}", event);
                 }
             }
         }
@@ -399,6 +399,7 @@ impl Visit for WakerVisitor {
             self.id = Some(span::Id::from_u64(value));
         }
     }
+
     fn record_str(&mut self, field: &tracing_core::Field, value: &str) {
         if field.name() == "op" {
             self.op = Some(match value {
