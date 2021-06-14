@@ -1,8 +1,7 @@
-use crate::{input, tasks::Task};
+use crate::{input, tasks::Task, view::bold};
 use std::{cell::RefCell, rc::Rc, time::SystemTime};
 use tui::{
     layout::{self, Layout},
-    style::{self, Style},
     text::{Span, Spans, Text},
     widgets::{Block, Borders, Paragraph},
 };
@@ -59,61 +58,36 @@ impl TaskView {
 
         let fields_area = chunks[1];
 
-        let attrs = Spans::from(vec![
-            Span::styled("ID: ", Style::default().add_modifier(style::Modifier::BOLD)),
-            Span::raw(task.id_hex()),
-        ]);
+        let attrs = Spans::from(vec![bold("ID: "), Span::raw(task.id_hex())]);
 
         let metrics = Spans::from(vec![
-            Span::styled(
-                "Total Time: ",
-                Style::default().add_modifier(style::Modifier::BOLD),
-            ),
+            bold("Total Time: "),
             Span::from(format!("{:.prec$?}", task.total(now), prec = DUR_PRECISION,)),
             Span::raw(", "),
-            Span::styled(
-                "Busy: ",
-                Style::default().add_modifier(style::Modifier::BOLD),
-            ),
+            bold("Busy: "),
             Span::from(format!("{:.prec$?}", task.busy(), prec = DUR_PRECISION,)),
             Span::raw(", "),
-            Span::styled(
-                "Idle: ",
-                Style::default().add_modifier(style::Modifier::BOLD),
-            ),
+            bold("Idle: "),
             Span::from(format!("{:.prec$?}", task.idle(now), prec = DUR_PRECISION,)),
         ]);
 
         let wakers = Spans::from(vec![
-            Span::styled(
-                "Current wakers: ",
-                Style::default().add_modifier(style::Modifier::BOLD),
-            ),
+            bold("Current wakers: "),
             Span::from(format!("{} (", task.waker_count())),
-            Span::styled(
-                "clones: ",
-                Style::default().add_modifier(style::Modifier::BOLD),
-            ),
+            bold("clones: "),
             Span::from(format!("{}, ", task.waker_clones())),
-            Span::styled(
-                "drops: ",
-                Style::default().add_modifier(style::Modifier::BOLD),
-            ),
-            Span::from(format!("{})", task.waker_drops())),
+            bold("drops: "),
         ]);
 
         let mut wakeups = vec![
-            Span::styled(
-                "Woken: ",
-                Style::default().add_modifier(style::Modifier::BOLD),
-            ),
+            bold("Woken: "),
             Span::from(format!("{} times", task.wakes())),
         ];
 
         // If the task has been woken, add the time since wake to its stats as well.
         if let Some(since) = task.since_wake(now) {
             wakeups.push(Span::raw(", "));
-            wakeups.push(Span::styled("last woken:", bold()));
+            wakeups.push(bold("last woken:"));
             wakeups.push(Span::from(format!(" {:?} ago", since)));
         }
 
@@ -121,10 +95,6 @@ impl TaskView {
 
         fn block_for(title: &str) -> Block {
             Block::default().borders(Borders::ALL).title(title)
-        }
-
-        fn bold() -> Style {
-            Style::default().add_modifier(style::Modifier::BOLD)
         }
 
         let mut fields = Text::default();
