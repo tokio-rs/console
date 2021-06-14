@@ -1,4 +1,4 @@
-use super::{Event, Watch};
+use super::{Event, WakeOp, Watch};
 use console_api as proto;
 use tokio::sync::{mpsc, Notify};
 
@@ -58,6 +58,7 @@ pub(crate) struct Flush {
 
 #[derive(Default)]
 struct Stats {
+    // task stats
     polls: u64,
     current_polls: u64,
     created_at: Option<SystemTime>,
@@ -65,6 +66,12 @@ struct Stats {
     last_poll: Option<SystemTime>,
     busy_time: Duration,
     closed_at: Option<SystemTime>,
+
+    // waker stats
+    wakes: u64,
+    waker_clones: u64,
+    waker_drops: u64,
+    last_wake: Option<SystemTime>,
 }
 
 #[derive(Default)]
@@ -275,6 +282,29 @@ impl Aggregator {
             Event::Close { id, at } => {
                 self.stats.update_or_default(id).closed_at = Some(at);
             }
+
+            Event::Waker { id, op, at } => {
+                // It's possible for wakers to exist long after a task has
+                // finished. We don't want those cases to create a "new"
+                // task that isn't closed, just to insert some waker stats.
+                //
+                // It may be useful to eventually be able to report about
+                // "wasted" waker ops, but we'll leave that for another time.
+                if let Some(mut stats) = self.stats.update(&id) {
+                    match op {
+                        WakeOp::Wake | WakeOp::WakeByRef => {
+                            stats.wakes += 1;
+                            stats.last_wake = Some(at);
+                        }
+                        WakeOp::Clone => {
+                            stats.waker_clones += 1;
+                        }
+                        WakeOp::Drop => {
+                            stats.waker_drops += 1;
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -364,6 +394,10 @@ impl<T> TaskData<T> {
         Updating(self.data.entry(id).or_default())
     }
 
+    fn update(&mut self, id: &span::Id) -> Option<Updating<'_, T>> {
+        self.data.get_mut(id).map(Updating)
+    }
+
     fn insert(&mut self, id: span::Id, data: T) {
         self.data.insert(id, (data, true));
     }
@@ -432,6 +466,10 @@ impl Stats {
             last_poll: self.last_poll.map(Into::into),
             busy_time: Some(self.busy_time.into()),
             total_time: self.total_time().map(Into::into),
+            wakes: self.wakes,
+            waker_clones: self.waker_clones,
+            waker_drops: self.waker_drops,
+            last_wake: self.last_wake.map(Into::into),
         }
     }
 }
