@@ -117,4 +117,14 @@ message Stats {
     // Subtracting `busy_time` from `total_time` calculates the task's idle
     // time, the amount of time it has spent *waiting* to be polled.
     google.protobuf.Duration total_time = 6;
+    // The total number of times this task's waker has been woken.
+    uint64 wakes = 7;
+    // The total number of times this task's waker has been cloned.
+    uint64 waker_clones = 8;
+    // The total number of times this task's waker has been dropped.
+    uint64 waker_drops = 9;
+    // The timestamp of the most recent time this task has been woken.
+    //
+    // If this is `None`, the task has not yet been woken.
+    optional google.protobuf.Timestamp last_wake = 10;
 }

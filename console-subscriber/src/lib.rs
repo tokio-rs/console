@@ -42,6 +42,11 @@ struct FieldVisitor {
     meta_id: proto::MetaId,
 }
 
+struct WakerVisitor {
+    id: Option<span::Id>,
+    op: Option<WakeOp>,
+}
+
 struct Watch(mpsc::Sender<Result<proto::tasks::TaskUpdate, tonic::Status>>);
 
 enum Event {
@@ -64,6 +69,18 @@ enum Event {
         id: span::Id,
         at: SystemTime,
     },
+    Waker {
+        id: span::Id,
+        op: WakeOp,
+        at: SystemTime,
+    },
+}
+
+enum WakeOp {
+    Wake,
+    WakeByRef,
+    Clone,
+    Drop,
 }
 
 impl TasksLayer {
@@ -226,6 +243,28 @@ where
         }
     }
 
+    fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
+        let meta = event.metadata();
+        // make faster like spawn metadata pointer check?
+        if meta.target() == "tokio::task::waker" {
+            let at = SystemTime::now();
+            let mut visitor = WakerVisitor { id: None, op: None };
+            event.record(&mut visitor);
+
+            match visitor {
+                WakerVisitor {
+                    id: Some(id),
+                    op: Some(op),
+                } => {
+                    self.send(Event::Waker { id, op, at });
+                }
+                _ => {
+                    tracing::warn!("unknown waker event: {:?}", event);
+                }
+            }
+        }
+    }
+
     fn on_enter(&self, id: &span::Id, cx: Context<'_, S>) {
         if !self.is_id_spawned(id, &cx) {
             return;
@@ -347,5 +386,29 @@ impl Visit for FieldVisitor {
             value: Some(value.into()),
             metadata_id: Some(self.meta_id.clone()),
         });
+    }
+}
+
+impl Visit for WakerVisitor {
+    fn record_debug(&mut self, _: &field::Field, _: &dyn std::fmt::Debug) {
+        // don't care (yet?)
+    }
+
+    fn record_u64(&mut self, field: &tracing_core::Field, value: u64) {
+        if field.name() == "task.id" {
+            self.id = Some(span::Id::from_u64(value));
+        }
+    }
+
+    fn record_str(&mut self, field: &tracing_core::Field, value: &str) {
+        if field.name() == "op" {
+            self.op = Some(match value {
+                "waker.wake" => WakeOp::Wake,
+                "waker.wake_by_ref" => WakeOp::WakeByRef,
+                "waker.clone" => WakeOp::Clone,
+                "waker.drop" => WakeOp::Drop,
+                _ => return,
+            });
+        }
     }
 }
