@@ -295,6 +295,18 @@ impl Aggregator {
                         WakeOp::Wake | WakeOp::WakeByRef => {
                             stats.wakes += 1;
                             stats.last_wake = Some(at);
+
+                            // Note: `Waker::wake` does *not* call the `drop`
+                            // implementation, so waking by value doesn't
+                            // trigger a drop event. so, count this as a `drop`
+                            // to ensure the task's number of wakers can be
+                            // calculated as `clones` - `drops`.
+                            //
+                            // see
+                            // https://github.com/rust-lang/rust/blob/673d0db5e393e9c64897005b470bfeb6d5aec61b/library/core/src/task/wake.rs#L211-L212
+                            if let WakeOp::Wake = op {
+                                stats.waker_drops += 1;
+                            }
                         }
                         WakeOp::Clone => {
                             stats.waker_clones += 1;
