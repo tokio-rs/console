@@ -5,3 +5,12 @@ members = [
     "console-api"
 ]
 resolver = "2"
+
+# Patch the dependency on tokio to get waker instrumentation while developing.
+# This can be un-patched when the following commits are released:
+# - https://github.com/tokio-rs/tokio/commit/e7d74b3119178b9b86f7b547774b6b121de2239a
+# - https://github.com/tokio-rs/tokio/commit/f55b77aaddaed8e48a8c0d81c66da82f12433087
+[patch.crates-io.tokio]
+git = "https://github.com/tokio-rs/tokio"
+rev = "f55b77aaddaed8e48a8c0d81c66da82f12433087"
+features = ["full", "rt-multi-thread"]
