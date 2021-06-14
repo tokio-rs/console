@@ -140,10 +140,10 @@ impl State {
         }
 
         if let Some(new_metadata) = update.new_metadata {
-            let metas = new_metadata.metadata.into_iter().map(|meta| {
-                let id = meta.id.expect("no id").id;
-                let metadata = meta.metadata.expect("no metadata");
-                (id, metadata.into())
+            let metas = new_metadata.metadata.into_iter().filter_map(|meta| {
+                let id = meta.id?.id;
+                let metadata = meta.metadata?;
+                Some((id, metadata.into()))
             });
             self.metas.extend(metas);
         }
@@ -164,11 +164,11 @@ impl State {
                 .fields
                 .drain(..)
                 .filter_map(|f| {
-                    let field_name = f.name.as_ref().expect("no name");
+                    let field_name = f.name.as_ref()?;
                     let name: Option<Arc<str>> = match field_name {
                         proto::field::Name::StrName(n) => Some(n.clone().into()),
                         proto::field::Name::NameIdx(idx) => {
-                            let meta_id = f.metadata_id.as_ref().expect("no id");
+                            let meta_id = f.metadata_id.as_ref()?;
                             metas
                                 .get(&meta_id.id)
                                 .and_then(|meta| meta.field_names.get(*idx as usize))
