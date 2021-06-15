@@ -42,7 +42,7 @@ pub(crate) struct Task {
     id: u64,
     id_hex: String,
     fields: Vec<Field>,
-    formatted_fields: Vec<Span<'static>>,
+    formatted_fields: Vec<Vec<Span<'static>>>,
     kind: &'static str,
     stats: Stats,
     completed_for: usize,
@@ -61,6 +61,18 @@ struct Stats {
     busy: Duration,
     idle: Option<Duration>,
     total: Option<Duration>,
+
+    // === waker stats ===
+    /// Total number of times the task has been woken over its lifetime.
+    wakes: u64,
+    /// Total number of times the task's waker has been cloned
+    waker_clones: u64,
+
+    /// Total number of times the task's waker has been dropped.
+    waker_drops: u64,
+
+    /// The timestamp of when the task was last woken.
+    last_wake: Option<SystemTime>,
 }
 
 #[derive(Debug)]
@@ -181,7 +193,7 @@ impl State {
                 .collect();
 
             let formatted_fields = fields.iter().fold(Vec::default(), |mut acc, f| {
-                acc.extend(vec![
+                acc.push(vec![
                     Span::styled(
                         f.name.to_string(),
                         Style::default().add_modifier(Modifier::BOLD),
@@ -267,7 +279,13 @@ impl State {
                     prec = DUR_PRECISION,
                 )),
                 Cell::from(format!("{:>width$}", task.stats.polls, width = POLLS_LEN)),
-                Cell::from(Spans::from(task.formatted_fields.clone())),
+                Cell::from(Spans::from(
+                    task.formatted_fields
+                        .iter()
+                        .flatten()
+                        .cloned()
+                        .collect::<Vec<_>>(),
+                )),
             ]);
             if task.completed_for > 0 {
                 row = row.style(Style::default().add_modifier(style::Modifier::DIM));
@@ -407,7 +425,7 @@ impl Task {
         &self.id_hex
     }
 
-    pub(crate) fn formatted_fields(&self) -> &Vec<Span<'static>> {
+    pub(crate) fn formatted_fields(&self) -> &Vec<Vec<Span<'static>>> {
         &self.formatted_fields
     }
 
@@ -425,6 +443,40 @@ impl Task {
         self.stats
             .idle
             .unwrap_or_else(|| self.total(since) - self.busy())
+    }
+
+    /// Returns the elapsed time since the task was last woken, relative to
+    /// given `now` timestamp.
+    ///
+    /// Returns `None` if the task has never been woken, or if it was last woken
+    /// more recently than `now` (which *shouldn't* happen as long as `now` is the
+    /// timestamp of the last stats update...)
+    pub(crate) fn since_wake(&self, now: SystemTime) -> Option<Duration> {
+        now.duration_since(self.last_wake()?).ok()
+    }
+
+    pub(crate) fn last_wake(&self) -> Option<SystemTime> {
+        self.stats.last_wake
+    }
+
+    /// Returns the current number of wakers for this task.
+    pub(crate) fn waker_count(&self) -> u64 {
+        self.waker_clones().saturating_sub(self.waker_drops())
+    }
+
+    /// Returns the total number of times this task's waker has been cloned.
+    pub(crate) fn waker_clones(&self) -> u64 {
+        self.stats.waker_clones
+    }
+
+    /// Returns the total number of times this task's waker has been dropped.
+    pub(crate) fn waker_drops(&self) -> u64 {
+        self.stats.waker_drops
+    }
+
+    /// Returns the total number of times this task has been woken.
+    pub(crate) fn wakes(&self) -> u64 {
+        self.stats.wakes
     }
 
     fn update(&mut self) {
@@ -455,6 +507,10 @@ impl From<proto::tasks::Stats> for Stats {
             busy,
             polls: pb.polls,
             created_at: pb.created_at.expect("task span was never created").into(),
+            wakes: pb.wakes,
+            waker_clones: pb.waker_clones,
+            waker_drops: pb.waker_drops,
+            last_wake: pb.last_wake.map(Into::into),
         }
     }
 }

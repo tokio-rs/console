@@ -1,5 +1,10 @@
 use crate::input;
-use tui::layout;
+use std::borrow::Cow;
+use tui::{
+    layout,
+    style::{self, Style},
+    text::Span,
+};
 
 mod task;
 
@@ -79,4 +84,8 @@ impl Default for View {
     fn default() -> Self {
         View::TasksList
     }
+}
+
+pub(crate) fn bold<'a>(text: impl Into<Cow<'a, str>>) -> Span<'a> {
+    Span::styled(text, Style::default().add_modifier(style::Modifier::BOLD))
 }
