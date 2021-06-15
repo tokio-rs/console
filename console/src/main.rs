@@ -43,7 +43,7 @@ async fn main() -> color_eyre::Result<()> {
                 if input::should_quit(&input) {
                     return Ok(());
                 }
-                view.update_input(input, &mut tasks);
+                view.update_input(input);
             },
             task_update = stream.next() => {
                 let update = task_update
