@@ -209,6 +209,10 @@ impl Task {
         &self.formatted_fields
     }
 
+    pub(crate) fn is_completed(&self) -> bool {
+        self.stats.total.is_some()
+    }
+
     pub(crate) fn total(&self, since: SystemTime) -> Duration {
         self.stats
             .total
