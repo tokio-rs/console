@@ -5,6 +5,7 @@ use tokio::sync::{mpsc, Notify};
 use futures::FutureExt;
 use std::{
     collections::HashMap,
+    convert::TryInto,
     mem,
     ops::{Deref, DerefMut},
     sync::{
@@ -14,6 +15,12 @@ use std::{
     time::{Duration, SystemTime},
 };
 use tracing_core::{span, Metadata};
+
+use hdrhistogram::{
+    serialization::{Serializer, V2DeflateSerializeError, V2DeflateSerializer},
+    Histogram,
+};
+
 pub(crate) struct Aggregator {
     /// Channel of incoming events emitted by `TaskLayer`s.
     events: mpsc::Receiver<Event>,
@@ -56,7 +63,6 @@ pub(crate) struct Flush {
     pub(crate) triggered: AtomicBool,
 }
 
-#[derive(Default)]
 struct Stats {
     // task stats
     polls: u64,
@@ -72,6 +78,8 @@ struct Stats {
     waker_clones: u64,
     waker_drops: u64,
     last_wake: Option<SystemTime>,
+
+    poll_times_histogram: Histogram<u64>,
 }
 
 #[derive(Default)]
@@ -82,6 +90,25 @@ struct TaskData<T> {
 struct Task {
     metadata: &'static Metadata<'static>,
     fields: Vec<proto::Field>,
+}
+
+impl Default for Stats {
+    fn default() -> Self {
+        Stats {
+            polls: 0,
+            current_polls: 0,
+            created_at: None,
+            first_poll: None,
+            last_poll: None,
+            busy_time: Default::default(),
+            closed_at: None,
+            wakes: 0,
+            waker_clones: 0,
+            waker_drops: 0,
+            last_wake: None,
+            poll_times_histogram: Histogram::<u64>::new(1).unwrap(),
+        }
+    }
 }
 
 impl Aggregator {
@@ -274,7 +301,12 @@ impl Aggregator {
                 stats.current_polls -= 1;
                 if stats.current_polls == 0 {
                     if let Some(last_poll) = stats.last_poll {
-                        stats.busy_time += at.duration_since(last_poll).unwrap();
+                        let elapsed = at.duration_since(last_poll).unwrap();
+                        stats.busy_time += elapsed;
+                        stats
+                            .poll_times_histogram
+                            .record(elapsed.as_nanos().try_into().unwrap_or(u64::MAX))
+                            .unwrap();
                     }
                 }
             }
@@ -482,6 +514,7 @@ impl Stats {
             waker_clones: self.waker_clones,
             waker_drops: self.waker_drops,
             last_wake: self.last_wake.map(Into::into),
+            poll_times_histogram: serialize_histogram(&self.poll_times_histogram).ok(),
         }
     }
 }
@@ -497,4 +530,11 @@ impl Task {
             fields: self.fields.clone(),
         }
     }
+}
+
+fn serialize_histogram(histogram: &Histogram<u64>) -> Result<Vec<u8>, V2DeflateSerializeError> {
+    let mut serializer = V2DeflateSerializer::new();
+    let mut buf = Vec::new();
+    serializer.serialize(histogram, &mut buf)?;
+    Ok(buf)
 }

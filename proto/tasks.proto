@@ -127,4 +127,7 @@ message Stats {
     //
     // If this is `None`, the task has not yet been woken.
     optional google.protobuf.Timestamp last_wake = 10;
+
+    // HdrHistogram.rs `Histogram` serialized to binary in the V2 + DEFLATE format
+    optional bytes poll_times_histogram = 11;
 }
