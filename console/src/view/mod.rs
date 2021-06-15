@@ -7,8 +7,20 @@ use tui::{
 };
 
 mod task;
+mod tasks;
 
-pub(crate) enum View {
+pub struct View {
+    /// The tasks list is stored separately from the currently selected state,
+    /// because it serves as the console's "home screen".
+    ///
+    /// When we return to the tasks list view (such as by exiting the task
+    /// details view), we want to leave the task list's state the way we left it
+    /// --- e.g., if the user previously selected a particular sorting, we want
+    /// it to remain sorted that way when we return to it.
+    list: tasks::List,
+    state: ViewState,
+}
+enum ViewState {
     /// The table list of all tasks.
     TasksList,
     /// Inspecting a single task instance.
@@ -25,29 +37,30 @@ macro_rules! key {
 }
 
 impl View {
-    pub(crate) fn update_input(&mut self, event: input::Event, tasks: &mut crate::tasks::State) {
-        match self {
-            View::TasksList => {
+    pub(crate) fn update_input(&mut self, event: input::Event) {
+        use ViewState::*;
+        match self.state {
+            TasksList => {
                 // The enter key changes views, so handle here since we can
                 // mutate the currently selected view.
                 match event {
                     key!(Enter) => {
-                        if let Some(task) = tasks.selected_task().upgrade() {
-                            *self = View::TaskInstance(self::task::TaskView::new(task));
+                        if let Some(task) = self.list.selected_task().upgrade() {
+                            self.state = TaskInstance(self::task::TaskView::new(task));
                         }
                     }
                     _ => {
                         // otherwise pass on to view
-                        tasks.update_input(event);
+                        self.list.update_input(event);
                     }
                 }
             }
-            View::TaskInstance(view) => {
+            TaskInstance(ref mut view) => {
                 // The escape key changes views, so handle here since we can
                 // mutate the currently selected view.
                 match event {
                     key!(Esc) => {
-                        *self = View::TasksList;
+                        self.state = TasksList;
                     }
                     _ => {
                         // otherwise pass on to view
@@ -64,11 +77,11 @@ impl View {
         area: layout::Rect,
         tasks: &mut crate::tasks::State,
     ) {
-        match self {
-            View::TasksList => {
-                tasks.render(frame, area);
+        match self.state {
+            ViewState::TasksList => {
+                self.list.render(frame, area, tasks);
             }
-            View::TaskInstance(view) => {
+            ViewState::TaskInstance(ref mut view) => {
                 let now = tasks
                     .last_updated_at()
                     .expect("task view implies we've received an update");
@@ -82,7 +95,10 @@ impl View {
 
 impl Default for View {
     fn default() -> Self {
-        View::TasksList
+        Self {
+            state: ViewState::TasksList,
+            list: tasks::List::default(),
+        }
     }
 }
 
