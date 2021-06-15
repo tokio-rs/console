@@ -1,4 +1,4 @@
-use crate::input;
+use crate::{input, view};
 use console_api as proto;
 use std::{
     cell::RefCell,
@@ -11,7 +11,7 @@ use std::{
 };
 use tui::{
     layout,
-    style::{self, Modifier, Style},
+    style::{self, Style},
     text::{self, Span, Spans},
     widgets::{Block, Cell, Row, Table, TableState},
 };
@@ -194,10 +194,7 @@ impl State {
 
             let formatted_fields = fields.iter().fold(Vec::default(), |mut acc, f| {
                 acc.push(vec![
-                    Span::styled(
-                        f.name.to_string(),
-                        Style::default().add_modifier(Modifier::BOLD),
-                    ),
+                    view::bold(f.name.to_string()),
                     Span::from("="),
                     Span::from(format!("{} ", f.value)),
                 ]);
@@ -295,24 +292,15 @@ impl State {
 
         let block = Block::default().title(vec![
             text::Span::raw("controls: "),
-            text::Span::styled(
-                "\u{2190}\u{2192}",
-                Style::default().add_modifier(style::Modifier::BOLD),
-            ),
+            view::bold("\u{2190}\u{2192}"),
             text::Span::raw(" = select column (sort), "),
-            text::Span::styled(
-                "\u{2191}\u{2193}",
-                Style::default().add_modifier(style::Modifier::BOLD),
-            ),
+            view::bold("\u{2191}\u{2193}"),
             text::Span::raw(" = scroll, "),
-            text::Span::styled(
-                "enter",
-                Style::default().add_modifier(style::Modifier::BOLD),
-            ),
+            view::bold("enter"),
             text::Span::raw(" = task details, "),
-            text::Span::styled("i", Style::default().add_modifier(style::Modifier::BOLD)),
+            view::bold("i"),
             text::Span::raw(" = invert sort (highest/lowest), "),
-            text::Span::styled("q", Style::default().add_modifier(style::Modifier::BOLD)),
+            view::bold("q"),
             text::Span::raw(" = quit"),
         ]);
 
