@@ -1,4 +1,4 @@
-use crate::input;
+use crate::view;
 use console_api as proto;
 use std::{
     cell::RefCell,
@@ -9,33 +9,27 @@ use std::{
     sync::Arc,
     time::{Duration, SystemTime},
 };
-use tui::{
-    layout,
-    style::{self, Modifier, Style},
-    text::{self, Span, Spans},
-    widgets::{Block, Cell, Row, Table, TableState},
-};
-#[derive(Debug)]
+use tui::text::Span;
+
+#[derive(Default, Debug)]
 pub(crate) struct State {
     tasks: HashMap<u64, Rc<RefCell<Task>>>,
     metas: HashMap<u64, Metadata>,
-    sorted_tasks: Vec<Weak<RefCell<Task>>>,
-    sort_by: SortBy,
-    table_state: TableState,
-    selected_column: usize,
-    sort_descending: bool,
     last_updated_at: Option<SystemTime>,
+    new_tasks: Vec<TaskRef>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 #[repr(usize)]
-enum SortBy {
+pub(crate) enum SortBy {
     Tid = 0,
     Total = 2,
     Busy = 3,
     Idle = 4,
     Polls = 5,
 }
+
+pub(crate) type TaskRef = Weak<RefCell<Task>>;
 
 #[derive(Debug)]
 pub(crate) struct Task {
@@ -91,11 +85,7 @@ pub(crate) enum FieldValue {
 }
 
 impl State {
-    // How many updates to retain completed tasks for
     const RETAIN_COMPLETED_FOR: usize = 6;
-
-    const HEADER: &'static [&'static str] =
-        &["TID", "KIND", "TOTAL", "BUSY", "IDLE", "POLLS", "FIELDS"];
 
     pub(crate) fn len(&self) -> usize {
         self.tasks.len()
@@ -105,45 +95,9 @@ impl State {
         self.last_updated_at
     }
 
-    pub(crate) fn update_input(&mut self, event: input::Event) {
-        // Clippy likes to remind us that we could use an `if let` here, since
-        // the match only has one arm...but this is a `match` because I
-        // anticipate adding more cases later...
-        #[allow(clippy::single_match)]
-        match event {
-            input::Event::Key(event) => self.key_input(event),
-            _ => {
-                // do nothing for now
-                // TODO(eliza): mouse input would be cool...
-            }
-        }
-    }
-
-    fn key_input(&mut self, input::KeyEvent { code, .. }: input::KeyEvent) {
-        use input::KeyCode::*;
-        match code {
-            Left => {
-                if self.selected_column == 0 {
-                    self.selected_column = Self::HEADER.len() - 1;
-                } else {
-                    self.selected_column -= 1;
-                }
-            }
-            Right => {
-                if self.selected_column == Self::HEADER.len() - 1 {
-                    self.selected_column = 0;
-                } else {
-                    self.selected_column += 1;
-                }
-            }
-            Char('i') => self.sort_descending = !self.sort_descending,
-            Down => self.scroll_next(),
-            Up => self.scroll_prev(),
-            _ => {} // do nothing for now...
-        }
-        if let Ok(sort_by) = SortBy::try_from(self.selected_column) {
-            self.sort_by = sort_by;
-        }
+    /// Returns any new tasks that were added since the last task update.
+    pub(crate) fn take_new_tasks(&mut self) -> impl Iterator<Item = TaskRef> + '_ {
+        self.new_tasks.drain(..)
     }
 
     pub(crate) fn update_tasks(&mut self, update: proto::tasks::TaskUpdate) {
@@ -161,7 +115,9 @@ impl State {
         }
 
         let mut stats_update = update.stats_update;
-        let sorted = &mut self.sorted_tasks;
+        let new_list = &mut self.new_tasks;
+        new_list.clear();
+
         let metas = &mut self.metas;
         let new_tasks = update.new_tasks.into_iter().filter_map(|mut task| {
             if task.id.is_none() {
@@ -194,10 +150,7 @@ impl State {
 
             let formatted_fields = fields.iter().fold(Vec::default(), |mut acc, f| {
                 acc.push(vec![
-                    Span::styled(
-                        f.name.to_string(),
-                        Style::default().add_modifier(Modifier::BOLD),
-                    ),
+                    view::bold(f.name.to_string()),
                     Span::from("="),
                     Span::from(format!("{} ", f.value)),
                 ]);
@@ -217,7 +170,7 @@ impl State {
             };
             task.update();
             let task = Rc::new(RefCell::new(task));
-            sorted.push(Rc::downgrade(&task));
+            new_list.push(Rc::downgrade(&task));
             Some((id, task))
         });
         self.tasks.extend(new_tasks);
@@ -231,126 +184,6 @@ impl State {
         }
     }
 
-    pub(crate) fn render<B: tui::backend::Backend>(
-        &mut self,
-        frame: &mut tui::terminal::Frame<B>,
-        area: layout::Rect,
-    ) {
-        let now = if let Some(now) = self.last_updated_at {
-            now
-        } else {
-            // If we have never gotten an update yet, skip...
-            return;
-        };
-
-        const DUR_LEN: usize = 10;
-        // This data is only updated every second, so it doesn't make a ton of
-        // sense to have a lot of precision in timestamps (and this makes sure
-        // there's room for the unit!)
-        const DUR_PRECISION: usize = 4;
-        const POLLS_LEN: usize = 5;
-        self.sort_by.sort(now, &mut self.sorted_tasks);
-
-        let rows = self.sorted_tasks.iter().filter_map(|task| {
-            let task = task.upgrade()?;
-            let task = task.borrow();
-
-            let mut row = Row::new(vec![
-                Cell::from(task.id_hex.to_string()),
-                // TODO(eliza): is there a way to write a `fmt::Debug` impl
-                // directly to tui without doing an allocation?
-                Cell::from(task.kind),
-                Cell::from(format!(
-                    "{:>width$.prec$?}",
-                    task.total(now),
-                    width = DUR_LEN,
-                    prec = DUR_PRECISION,
-                )),
-                Cell::from(format!(
-                    "{:>width$.prec$?}",
-                    task.busy(),
-                    width = DUR_LEN,
-                    prec = DUR_PRECISION,
-                )),
-                Cell::from(format!(
-                    "{:>width$.prec$?}",
-                    task.idle(now),
-                    width = DUR_LEN,
-                    prec = DUR_PRECISION,
-                )),
-                Cell::from(format!("{:>width$}", task.stats.polls, width = POLLS_LEN)),
-                Cell::from(Spans::from(
-                    task.formatted_fields
-                        .iter()
-                        .flatten()
-                        .cloned()
-                        .collect::<Vec<_>>(),
-                )),
-            ]);
-            if task.completed_for > 0 {
-                row = row.style(Style::default().add_modifier(style::Modifier::DIM));
-            }
-            Some(row)
-        });
-
-        let block = Block::default().title(vec![
-            text::Span::raw("controls: "),
-            text::Span::styled(
-                "\u{2190}\u{2192}",
-                Style::default().add_modifier(style::Modifier::BOLD),
-            ),
-            text::Span::raw(" = select column (sort), "),
-            text::Span::styled(
-                "\u{2191}\u{2193}",
-                Style::default().add_modifier(style::Modifier::BOLD),
-            ),
-            text::Span::raw(" = scroll, "),
-            text::Span::styled(
-                "enter",
-                Style::default().add_modifier(style::Modifier::BOLD),
-            ),
-            text::Span::raw(" = task details, "),
-            text::Span::styled("i", Style::default().add_modifier(style::Modifier::BOLD)),
-            text::Span::raw(" = invert sort (highest/lowest), "),
-            text::Span::styled("q", Style::default().add_modifier(style::Modifier::BOLD)),
-            text::Span::raw(" = quit"),
-        ]);
-
-        let header = Row::new(Self::HEADER.iter().enumerate().map(|(idx, &value)| {
-            let cell = Cell::from(value);
-            if idx == self.selected_column {
-                cell.style(Style::default().remove_modifier(style::Modifier::REVERSED))
-            } else {
-                cell
-            }
-        }))
-        .height(1)
-        .style(Style::default().add_modifier(style::Modifier::REVERSED));
-
-        let t = if self.sort_descending {
-            Table::new(rows)
-        } else {
-            Table::new(rows.rev())
-        };
-        let t = t
-            .header(header)
-            .block(block)
-            .widths(&[
-                layout::Constraint::Min(20),
-                layout::Constraint::Length(4),
-                layout::Constraint::Min(DUR_LEN as u16),
-                layout::Constraint::Min(DUR_LEN as u16),
-                layout::Constraint::Min(DUR_LEN as u16),
-                layout::Constraint::Min(POLLS_LEN as u16),
-                layout::Constraint::Min(10),
-            ])
-            .highlight_symbol(">> ")
-            .highlight_style(Style::default().add_modifier(style::Modifier::BOLD));
-
-        frame.render_stateful_widget(t, area, &mut self.table_state);
-        self.sorted_tasks.retain(|t| t.upgrade().is_some());
-    }
-
     pub(crate) fn retain_active(&mut self) {
         self.tasks.retain(|_, task| {
             let mut task = task.borrow_mut();
@@ -361,71 +194,18 @@ impl State {
             task.completed_for <= Self::RETAIN_COMPLETED_FOR
         })
     }
-
-    fn scroll_next(&mut self) {
-        let i = match self.table_state.selected() {
-            Some(i) => {
-                if i >= self.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.table_state.select(Some(i));
-    }
-
-    pub fn scroll_prev(&mut self) {
-        let i = match self.table_state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.table_state.select(Some(i));
-    }
-
-    pub(crate) fn selected_task(&self) -> Weak<RefCell<Task>> {
-        self.table_state
-            .selected()
-            .map(|i| {
-                let selected = if self.sort_descending {
-                    i
-                } else {
-                    self.sorted_tasks.len() - i - 1
-                };
-                self.sorted_tasks[selected].clone()
-            })
-            .unwrap_or_default()
-    }
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            tasks: Default::default(),
-            metas: Default::default(),
-            sorted_tasks: Default::default(),
-            sort_by: Default::default(),
-            selected_column: SortBy::default() as usize,
-            table_state: Default::default(),
-            sort_descending: false,
-            last_updated_at: None,
-        }
-    }
 }
 
 impl Task {
+    pub(crate) fn kind(&self) -> &str {
+        &self.kind
+    }
+
     pub(crate) fn id_hex(&self) -> &str {
         &self.id_hex
     }
 
-    pub(crate) fn formatted_fields(&self) -> &Vec<Vec<Span<'static>>> {
+    pub(crate) fn formatted_fields(&self) -> &[Vec<Span<'static>>] {
         &self.formatted_fields
     }
 
@@ -443,6 +223,16 @@ impl Task {
         self.stats
             .idle
             .unwrap_or_else(|| self.total(since) - self.busy())
+    }
+
+    /// Returns the total number of times the task has been polled.
+    pub(crate) fn total_polls(&self) -> u64 {
+        self.stats.polls
+    }
+
+    /// Returns the number of updates since the task completed
+    pub(crate) fn completed_for(&self) -> usize {
+        self.completed_for
     }
 
     /// Returns the elapsed time since the task was last woken, relative to
@@ -542,7 +332,7 @@ impl Default for SortBy {
 }
 
 impl SortBy {
-    fn sort(&self, now: SystemTime, tasks: &mut Vec<Weak<RefCell<Task>>>) {
+    pub fn sort(&self, now: SystemTime, tasks: &mut Vec<Weak<RefCell<Task>>>) {
         // tasks.retain(|t| t.upgrade().is_some());
         match self {
             Self::Tid => tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().id)),
