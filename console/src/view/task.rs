@@ -99,6 +99,7 @@ impl TaskView {
             bold("clones: "),
             Span::from(format!("{}, ", task.waker_clones())),
             bold("drops: "),
+            Span::from(format!("{})", task.waker_drops())),
         ]);
 
         let mut wakeups = vec![
