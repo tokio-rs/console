@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 
-tokio = { version = "^1.5", features = ["sync", "time", "macros", "tracing"]}
+tokio = { version = "^1.7", features = ["sync", "time", "macros", "tracing"]}
 tokio-stream = "0.1"
 tonic = { version = "0.4", features = ["transport"] }
 console-api = { path = "../console-api", features = ["transport"]}
@@ -19,8 +19,7 @@ futures = { version = "0.3", default-features = false }
 
 [dev-dependencies]
 
-tokio = { version = "^1.5", features = ["full", "rt-multi-thread"]}
+tokio = { version = "^1.7", features = ["full", "rt-multi-thread"]}
 futures = "0.3"
 
 tracing-subscriber = { version = "0.2.17", features = ["fmt", "registry", "env-filter"] }
-
