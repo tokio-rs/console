@@ -18,11 +18,11 @@ type ConsoleSubscriberLayer =
 /// use cases. If you need to tune these parameters, several environmental
 /// configuration variables are available:
 ///
-/// * `TOKIO_CONSOLE_RETENTION`: The number of seconds to accumulate
+/// * `TOKIO_CONSOLE_RETENTION_SECS`: The number of seconds to accumulate
 ///   completed tracing data. Default: 60s.
 /// * `TOKIO_CONSOLE_BIND`: a HOST:PORT description, such as
 ///   localhost:1234 or similar. Default: 127.0.0.1:6669
-/// * `TOKIO_CONSOLE_PUBLISH_INTERVAL`: The number of milliseconds to wait
+/// * `TOKIO_CONSOLE_PUBLISH_INTERVAL_MS`: The number of milliseconds to wait
 ///   between sending updates to the console. Default: 1000ms (1s)
 /// * `RUST_LOG`: configure the tracing filter. Default: `tokio=trace`,
 ///   and any additional filtering directives will be appended to this
