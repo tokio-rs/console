@@ -25,9 +25,9 @@ type ConsoleSubscriberLayer =
 /// | **Environment Variable**            | **Purpose**                                                               | **Default Value** |
 /// |-------------------------------------|---------------------------------------------------------------------------|-------------------|
 /// | `TOKIO_CONSOLE_RETENTION_SECS`      | The number of seconds to accumulate completed tracing data                | 3600s (1h)        |
-/// | `TOKIO_CONSOLE_BIND`                | a HOST:PORT description, such as localhost:1234                           | 127.0.0.1:6669    |
+/// | `TOKIO_CONSOLE_BIND`                | A HOST:PORT description, such as localhost:1234                           | 127.0.0.1:6669    |
 /// | `TOKIO_CONSOLE_PUBLISH_INTERVAL_MS` | The number of milliseconds to wait between sending updates to the console | 1000ms (1s)       |
-/// | `RUST_LOG`                          | configure the tracing filter. See [`EnvFilter`] for further information   | `tokio=trace`     |
+/// | `RUST_LOG`                          | Configure the tracing filter. See [`EnvFilter`] for further information   | `tokio=trace`     |
 ///
 pub fn init() {
     init_inner(|console_subscriber| console_subscriber)
