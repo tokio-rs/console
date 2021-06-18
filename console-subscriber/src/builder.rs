@@ -108,7 +108,7 @@ impl Builder {
     /// Configures this builder from a standard set of environment variables:
     ///
     /// * `TOKIO_CONSOLE_RETENTION`: The number of seconds to accumulate
-    ///   completed tracing data. Default: 60s.
+    ///   completed tracing data. Default: 3600s (1h).
     /// * `TOKIO_CONSOLE_BIND`: a HOST:PORT description, such as
     ///   localhost:1234 or similar. Default: 127.0.0.1:6669
     /// * `TOKIO_CONSOLE_PUBLISH_INTERVAL`: The number of milliseconds to wait
