@@ -1,6 +1,4 @@
 use console_api as proto;
-use tokio::sync::mpsc;
-
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     ptr,
@@ -10,74 +8,22 @@ use std::{
     },
     time::{Duration, SystemTime},
 };
+use tokio::sync::mpsc;
 use tracing_core::{
     field::{self, Visit},
     span,
     subscriber::{self, Subscriber},
     Metadata,
 };
-use tracing_subscriber::{fmt, layer::Context, registry::LookupSpan, EnvFilter, Layer};
+use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
 mod aggregator;
 use aggregator::Aggregator;
 mod builder;
 pub use builder::Builder;
 
-/**
-Starts the console subscriber server on its own thread
-
-This function represents the easiest way to get started using
-tokio-console.
-
-## Configuration
-
-Tokio console subscriber is configured with sensible defaults for most
-use cases. If you need to tune these parameters, several environmental
-configuration variables are available:
-
-* `TOKIO_CONSOLE_RETENTION`: The number of seconds to accumulate
-  completed tracing data. Default: 60s.
-* `TOKIO_CONSOLE_BIND`: a HOST:PORT description, such as
-  localhost:1234 or similar. Default: 127.0.0.1:6669
-* `TOKIO_CONSOLE_PUBLISH_INTERVAL`: The number of milliseconds to wait
-  between sending updates to the console. Default: 1000ms (1s)
-* `RUST_LOG`: configure the tracing filter. Default: `tokio=trace`,
-  and any additional filtering directives will be appended to this
-  default. See [`EnvFilter`] for further information on the format
-  for this variable.
-*/
-pub fn init() {
-    std::thread::Builder::new()
-        .name("console_subscriber".into())
-        .spawn(|| {
-            use tracing_subscriber::prelude::*;
-
-            let (layer, server) = TasksLayer::builder().from_default_env().build();
-
-            let filter =
-                EnvFilter::from_default_env().add_directive("tokio=trace".parse().unwrap());
-
-            tracing_subscriber::registry()
-                .with(fmt::layer())
-                .with(filter)
-                .with(layer)
-                .init();
-
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_io()
-                .enable_time()
-                .build()
-                .expect("console subscriber runtime initialization failed");
-
-            runtime.block_on(async move {
-                server
-                    .serve()
-                    .await
-                    .expect("console subscriber server failed")
-            });
-        })
-        .expect("console subscriber could not spawn thread");
-}
+mod init;
+pub use init::{init, init_with_layer};
 
 pub struct TasksLayer {
     task_meta: AtomicPtr<Metadata<'static>>,
