@@ -1,4 +1,6 @@
 use console_api as proto;
+use tokio::sync::mpsc;
+
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     ptr,
@@ -8,7 +10,6 @@ use std::{
     },
     time::{Duration, SystemTime},
 };
-use tokio::sync::mpsc;
 use tracing_core::{
     field::{self, Visit},
     span,
