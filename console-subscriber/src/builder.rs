@@ -113,7 +113,6 @@ impl Builder {
     ///   localhost:1234 or similar. Default: 127.0.0.1:6669
     /// * `TOKIO_CONSOLE_PUBLISH_INTERVAL`: The number of milliseconds to wait
     ///   between sending updates to the console. Default: 1000ms (1s)
-
     pub fn from_default_env(mut self) -> Self {
         if let Ok(retention) = std::env::var("TOKIO_CONSOLE_RETENTION") {
             self.retention = Duration::from_secs(
