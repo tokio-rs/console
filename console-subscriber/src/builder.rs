@@ -114,11 +114,11 @@ impl Builder {
     /// * `TOKIO_CONSOLE_PUBLISH_INTERVAL`: The number of milliseconds to wait
     ///   between sending updates to the console. Default: 1000ms (1s)
     pub fn from_default_env(mut self) -> Self {
-        if let Ok(retention) = std::env::var("TOKIO_CONSOLE_RETENTION") {
+        if let Ok(retention) = std::env::var("TOKIO_CONSOLE_RETENTION_SECS") {
             self.retention = Duration::from_secs(
                 retention
                     .parse()
-                    .expect("TOKIO_CONSOLE_RETENTION must be an integer"),
+                    .expect("TOKIO_CONSOLE_RETENTION_SECS must be an integer"),
             );
         }
 
@@ -130,11 +130,11 @@ impl Builder {
                 .expect("tokio console could not resolve TOKIO_CONSOLE_BIND");
         }
 
-        if let Ok(interval) = std::env::var("TOKIO_CONSOLE_PUBLISH_INTERVAL") {
+        if let Ok(interval) = std::env::var("TOKIO_CONSOLE_PUBLISH_INTERVAL_MS") {
             self.publish_interval = Duration::from_millis(
                 interval
                     .parse()
-                    .expect("TOKIO_CONSOLE_PUBLISH_INTERVAL must be an integer"),
+                    .expect("TOKIO_CONSOLE_PUBLISH_INTERVAL_MS must be an integer"),
             );
         }
 
