@@ -14,12 +14,10 @@ tonic = { version = "0.4", features = ["transport"] }
 console-api = { path = "../console-api", features = ["transport"]}
 tracing-core = "0.1.18"
 tracing = "0.1.26"
-tracing-subscriber = { version = "0.2.17", default-features = false, features = ["fmt", "registry"] }
+tracing-subscriber = { version = "0.2.17", default-features = false, features = ["fmt", "registry", "env-filter"] }
 futures = { version = "0.3", default-features = false }
 
 [dev-dependencies]
 
 tokio = { version = "^1.7", features = ["full", "rt-multi-thread"]}
 futures = "0.3"
-
-tracing-subscriber = { version = "0.2.17", features = ["fmt", "registry", "env-filter"] }
