@@ -1,4 +1,4 @@
-use super::{Event, WakeOp, Watch};
+use super::{Event, WakeOp, Watch, WatchKind};
 use console_api as proto;
 use tokio::sync::{mpsc, Notify};
 
@@ -17,7 +17,7 @@ use std::{
 use tracing_core::{span, Metadata};
 
 use hdrhistogram::{
-    serialization::{Serializer, V2DeflateSerializeError, V2DeflateSerializer},
+    serialization::{Serializer, V2SerializeError, V2Serializer},
     Histogram,
 };
 
@@ -25,8 +25,8 @@ pub(crate) struct Aggregator {
     /// Channel of incoming events emitted by `TaskLayer`s.
     events: mpsc::Receiver<Event>,
 
-    /// New incoming `WatchTasks` RPCs.
-    rpcs: mpsc::Receiver<Watch>,
+    /// New incoming RPCs.
+    rpcs: mpsc::Receiver<WatchKind>,
 
     /// The interval at which new data updates are pushed to clients.
     publish_interval: Duration,
@@ -37,8 +37,11 @@ pub(crate) struct Aggregator {
     /// Triggers a flush when the event buffer is approaching capacity.
     flush_capacity: Arc<Flush>,
 
-    // Currently active RPCs streaming task events.
-    watchers: Vec<Watch>,
+    /// Currently active RPCs streaming task events.
+    watchers: Vec<Watch<proto::tasks::TaskUpdate>>,
+
+    /// Currently active RPCs streaming task details events, by task ID.
+    details_watchers: HashMap<span::Id, Vec<Watch<proto::tasks::TaskDetails>>>,
 
     /// *All* metadata for task spans and user-defined spans that we care about.
     ///
@@ -114,7 +117,7 @@ impl Default for Stats {
 impl Aggregator {
     pub(crate) fn new(
         events: mpsc::Receiver<Event>,
-        rpcs: mpsc::Receiver<Watch>,
+        rpcs: mpsc::Receiver<WatchKind>,
         builder: &crate::Builder,
     ) -> Self {
         Self {
@@ -127,6 +130,7 @@ impl Aggregator {
             retention: builder.retention,
             events,
             watchers: Vec::new(),
+            details_watchers: HashMap::new(),
             all_metadata: Vec::new(),
             new_metadata: Vec::new(),
             tasks: TaskData {
@@ -159,26 +163,55 @@ impl Aggregator {
                 // a new client has started watching!
                 subscription = self.rpcs.recv() => {
                     if let Some(subscription) = subscription {
-                        tracing::debug!("new subscription");
-                        let new_tasks = self.tasks.all().map(|(id, task)| {
-                            task.to_proto(id.clone())
-                        }).collect();
-                        let now = SystemTime::now();
-                        let stats_update = self.stats.all().map(|(id, stats)| {
-                            (id.into_u64(), stats.to_proto())
-                        }).collect();
-                        // Send the initial state --- if this fails, the subscription is
-                        // already dead.
-                        if subscription.update(&proto::tasks::TaskUpdate {
-                            new_metadata: Some(proto::RegisterMetadata {
-                                metadata: self.all_metadata.clone(),
-                            }),
-                            new_tasks,
-                            stats_update,
-                            now: Some(now.into()),
-                        }) {
-                            self.watchers.push(subscription)
-                        }
+                        match subscription {
+                            WatchKind::TaskUpdate(subscription) => {
+                                tracing::debug!("new tasks subscription");
+                                let new_tasks = self.tasks.all().map(|(id, task)| {
+                                    task.to_proto(id.clone())
+                                }).collect();
+                                let now = SystemTime::now();
+                                let stats_update = self.stats.all().map(|(id, stats)| {
+                                    (id.into_u64(), stats.to_proto())
+                                }).collect();
+                                // Send the initial state --- if this fails, the subscription is
+                                // already dead.
+                                if subscription.update(&proto::tasks::TaskUpdate {
+                                    new_metadata: Some(proto::RegisterMetadata {
+                                        metadata: self.all_metadata.clone(),
+                                    }),
+                                    new_tasks,
+                                    stats_update,
+                                    now: Some(now.into()),
+                                }) {
+                                    self.watchers.push(subscription)
+                                }
+                            },
+                            WatchKind::TaskDetailUpdate(task_id, subscription) => {
+                                tracing::debug!(id = ?task_id, "new task details subscription");
+                                let task_id: span::Id = task_id.into();
+                                if let Some(stats) = self.stats.find(&task_id) {
+                                    let now = SystemTime::now();
+                                    // Send the initial state --- if this fails, the subscription is
+                                    // already dead.
+                                    if subscription.update(&proto::tasks::TaskDetails {
+                                        task_id: Some(task_id.clone().into()),
+                                        now: Some(now.into()),
+                                        details: Some(proto::tasks::Details {
+                                            poll_times_histogram: serialize_histogram(&stats.poll_times_histogram).ok()
+                                        })
+                                    }) {
+                                        self
+                                            .details_watchers
+                                            .entry(task_id)
+                                            .or_insert_with(Vec::new)
+                                            .push(subscription);
+                                    }
+
+                                }
+                                // If task is not found, drop the subscription
+                            },
+                        };
+
                     } else {
                         tracing::debug!("rpc channel closed, terminating");
                         return;
@@ -244,13 +277,35 @@ impl Aggregator {
             .since_last_update()
             .map(|(id, stats)| (id.into_u64(), stats.to_proto()))
             .collect();
+
         let update = proto::tasks::TaskUpdate {
             new_metadata,
             new_tasks,
             stats_update,
             now: Some(now.into()),
         };
-        self.watchers.retain(|watch: &Watch| watch.update(&update));
+        self.watchers
+            .retain(|watch: &Watch<proto::tasks::TaskUpdate>| watch.update(&update));
+
+        let stats = &self.stats;
+        // Assuming there are much fewer task details subscribers than there are
+        // stats updates, iterate over `details_watchers` and compact the map.
+        self.details_watchers.retain(|id, watchers| {
+            if let Some(task_stats) = stats.find(id) {
+                let details = proto::tasks::TaskDetails {
+                    task_id: Some(id.clone().into()),
+                    now: Some(now.into()),
+                    details: Some(proto::tasks::Details {
+                        poll_times_histogram: serialize_histogram(&task_stats.poll_times_histogram)
+                            .ok(),
+                    }),
+                };
+                watchers.retain(|watch| watch.update(&details));
+                !watchers.is_empty()
+            } else {
+                false
+            }
+        });
     }
 
     /// Update the current state with data from a single event.
@@ -460,6 +515,10 @@ impl<T> TaskData<T> {
     fn all(&self) -> impl Iterator<Item = (&span::Id, &T)> {
         self.data.iter().map(|(id, (data, _))| (id, data))
     }
+
+    fn find(&self, id: &span::Id) -> Option<&T> {
+        self.data.get(id).map(|(data, _)| data)
+    }
 }
 
 struct Updating<'a, T>(&'a mut (T, bool));
@@ -483,8 +542,8 @@ impl<'a, T> Drop for Updating<'a, T> {
     }
 }
 
-impl Watch {
-    fn update(&self, update: &proto::tasks::TaskUpdate) -> bool {
+impl<T: Clone> Watch<T> {
+    fn update(&self, update: &T) -> bool {
         if let Ok(reserve) = self.0.try_reserve() {
             reserve.send(Ok(update.clone()));
             true
@@ -514,7 +573,6 @@ impl Stats {
             waker_clones: self.waker_clones,
             waker_drops: self.waker_drops,
             last_wake: self.last_wake.map(Into::into),
-            poll_times_histogram: serialize_histogram(&self.poll_times_histogram).ok(),
         }
     }
 }
@@ -532,8 +590,8 @@ impl Task {
     }
 }
 
-fn serialize_histogram(histogram: &Histogram<u64>) -> Result<Vec<u8>, V2DeflateSerializeError> {
-    let mut serializer = V2DeflateSerializer::new();
+fn serialize_histogram(histogram: &Histogram<u64>) -> Result<Vec<u8>, V2SerializeError> {
+    let mut serializer = V2Serializer::new();
     let mut buf = Vec::new();
     serializer.serialize(histogram, &mut buf)?;
     Ok(buf)
