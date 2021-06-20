@@ -12,9 +12,11 @@ type ConsoleSubscriberLayer =
 /// This function represents the easiest way to get started using
 /// tokio-console.
 ///
-/// Please note that this registers the exclusive tracing subscriber
+/// **Note**: this function sets the [default `tracing` subscriber][default]
 /// for your application. If you need to add additional layers to this
 /// subscriber, see [`init_with_layer`].
+///
+/// [default]: https://docs.rs/tracing/0.1.26/tracing/dispatcher/index.html#setting-the-default-subscriber
 ///
 /// ## Configuration
 ///
