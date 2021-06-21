@@ -5,7 +5,7 @@ use tracing_subscriber::{fmt, layer::Layered, prelude::*, EnvFilter, Registry};
 
 type ConsoleSubscriberLayer = Layered<TasksLayer, Layered<EnvFilter, Registry>>;
 
-/// Starts the console subscriber server on its own thread
+/// Starts the console subscriber server on its own thread.
 ///
 /// This function represents the easiest way to get started using
 /// tokio-console.
