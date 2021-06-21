@@ -112,7 +112,7 @@ impl Builder {
     /// | `TOKIO_CONSOLE_RETENTION_SECS`      | The number of seconds to accumulate completed tracing data                | 3600s (1h)        |
     /// | `TOKIO_CONSOLE_BIND`                | a HOST:PORT description, such as `localhost:1234`                         | `127.0.0.1:6669`  |
     /// | `TOKIO_CONSOLE_PUBLISH_INTERVAL_MS` | The number of milliseconds to wait between sending updates to the console | 1000ms (1s)       |
-    pub fn from_default_env(mut self) -> Self {
+    pub fn with_default_env(mut self) -> Self {
         if let Ok(retention) = std::env::var("TOKIO_CONSOLE_RETENTION_SECS") {
             self.retention = Duration::from_secs(
                 retention

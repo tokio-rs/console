@@ -74,7 +74,7 @@ pub fn init() {
 
 #[must_use = "build() without init() will not attach a tracing subscriber"]
 pub fn build() -> ConsoleSubscriberLayer {
-    let (layer, server) = TasksLayer::builder().from_default_env().build();
+    let (layer, server) = TasksLayer::builder().with_default_env().build();
 
     let filter = EnvFilter::from_default_env().add_directive("tokio=trace".parse().unwrap());
 
