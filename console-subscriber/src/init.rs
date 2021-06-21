@@ -12,9 +12,9 @@ type ConsoleSubscriberLayer = Layered<TasksLayer, Layered<EnvFilter, Registry>>;
 ///
 /// **Note**: this function sets the [default `tracing` subscriber][default]
 /// for your application. If you need to add additional layers to this
-/// subscriber, see [`init_with_layer`].
+/// subscriber, see [`build`].
 ///
-/// [default]: https://docs.rs/tracing/0.1.26/tracing/dispatcher/index.html#setting-the-default-subscriber
+/// [default]: https://docs.rs/tracing/latest/tracing/dispatcher/index.html#setting-the-default-subscriber
 ///
 /// ## Configuration
 ///
@@ -31,7 +31,8 @@ type ConsoleSubscriberLayer = Layered<TasksLayer, Layered<EnvFilter, Registry>>;
 ///
 /// ## Further customization
 ///
-/// To add additional layers or replace the format layer, replace `console_subscriber::init` with:
+/// To add additional layers or replace the format layer, replace
+/// `console_subscriber::init` with:
 ///
 /// ```rust
 /// use tracing_subscriber::prelude::*;
@@ -51,16 +52,17 @@ pub fn init() {
 ///
 /// ## Configuration
 ///
-/// console_subscriber::build supports all of the environmental
-/// configuration described at [`init`]
+/// `console_subscriber::build` supports all of the environmental
+/// configuration described at [`console_subscriber::init`][init]
 ///
 /// ## Differences from `init`
 ///
-/// **note**: in order to support customizing the format `build` does
-/// not attach a [`tracing_subscriber::fmt::layer`], whereas init does.
+/// **Note**: In order to support customizing the format `build` does
+/// not attach a [`tracing_subscriber::fmt::layer`], unlike [`init`].
 ///
-/// Additionally, you must call [`init`][tracing_subscriber::util::SubscriberInitExt::init] on the final layer in order to
-/// register the subscriber.
+/// Additionally, you must call
+/// [`init`][tracing_subscriber::util::SubscriberInitExt::init] on the
+/// final layer in order to register the subscriber.
 ///
 /// ## Examples
 ///
