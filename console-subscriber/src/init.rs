@@ -1,11 +1,9 @@
 use crate::TasksLayer;
 use std::thread;
 use tokio::runtime;
-use tracing_core::{subscriber::Subscriber, Dispatch};
-use tracing_subscriber::{fmt, layer::Layered, prelude::*, EnvFilter, Layer, Registry};
+use tracing_subscriber::{fmt, layer::Layered, prelude::*, EnvFilter, Registry};
 
-type ConsoleSubscriberLayer =
-    Layered<TasksLayer, Layered<EnvFilter, Layered<fmt::Layer<Registry>, Registry>>>;
+type ConsoleSubscriberLayer = Layered<TasksLayer, Layered<EnvFilter, Registry>>;
 
 /// Starts the console subscriber server on its own thread
 ///
@@ -31,37 +29,56 @@ type ConsoleSubscriberLayer =
 /// | `TOKIO_CONSOLE_PUBLISH_INTERVAL_MS` | The number of milliseconds to wait between sending updates to the console | 1000ms (1s)       |
 /// | `RUST_LOG`                          | Configure the tracing filter. See [`EnvFilter`] for further information   | `tokio=trace`     |
 ///
-pub fn init() {
-    init_inner(|console_subscriber| console_subscriber)
-}
-
-/// Starts the console subscriber server with an additional layer
+/// ## Further customization
 ///
-/// This interface can be combined with any of the environment
-/// configuration documented at [`init`]. An example use case might be
-/// composing a log subscriber with the console subscriber.
-pub fn init_with_layer<AdditionalLayer>(additional_layer: AdditionalLayer)
-where
-    AdditionalLayer: Layer<ConsoleSubscriberLayer> + Send + Sync + 'static,
-{
-    init_inner(move |console_subscriber| additional_layer.with_subscriber(console_subscriber))
+/// To add additional layers or replace the format layer, replace `console_subscriber::init` with:
+///
+/// ```rust
+/// use tracing_subscriber::prelude::*;
+/// console_subscriber::build()
+///     .with(tracing_subscriber::fmt::layer())
+/// //  .with(..potential additional layer..)
+///     .init();
+/// ```
+
+pub fn init() {
+    build().with(fmt::layer()).init()
 }
 
-fn init_inner<F, OutputLayer>(maybe_add_additional_layer: F)
-where
-    F: FnOnce(ConsoleSubscriberLayer) -> OutputLayer + Send + 'static,
-    OutputLayer: Subscriber + Into<Dispatch>,
-{
+/// Builds a new tracing subscriber, but does not yet initialize the
+/// subscriber, allowing for customization by adding additional
+/// layers.
+///
+/// ## Configuration
+///
+/// console_subscriber::build supports all of the environmental
+/// configuration described at [`init`]
+///
+/// ## Differences from `init`
+///
+/// **note**: in order to support customizing the format `build` does
+/// not attach a [`tracing_subscriber::fmt::layer`], whereas init does.
+///
+/// Additionally, you must call [`init`][tracing_subscriber::util::SubscriberInitExt::init] on the final layer in order to
+/// register the subscriber.
+///
+/// ## Examples
+///
+/// ```rust
+/// use tracing_subscriber::prelude::*;
+/// console_subscriber::build()
+///     .with(tracing_subscriber::fmt::layer())
+/// //  .with(...)
+///     .init();
+/// ```
+
+#[must_use = "build() without init() will not attach a tracing subscriber"]
+pub fn build() -> ConsoleSubscriberLayer {
     let (layer, server) = TasksLayer::builder().from_default_env().build();
 
     let filter = EnvFilter::from_default_env().add_directive("tokio=trace".parse().unwrap());
 
-    let console_subscriber = tracing_subscriber::registry()
-        .with(fmt::layer())
-        .with(filter)
-        .with(layer);
-
-    maybe_add_additional_layer(console_subscriber).init();
+    let console_subscriber = tracing_subscriber::registry().with(filter).with(layer);
 
     thread::Builder::new()
         .name("console_subscriber".into())
@@ -80,4 +97,6 @@ where
             });
         })
         .expect("console subscriber could not spawn thread");
+
+    console_subscriber
 }

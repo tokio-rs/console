@@ -24,7 +24,7 @@ mod builder;
 pub use builder::Builder;
 
 mod init;
-pub use init::{init, init_with_layer};
+pub use init::{build, init};
 
 pub struct TasksLayer {
     task_meta: AtomicPtr<Metadata<'static>>,
