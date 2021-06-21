@@ -17,3 +17,4 @@ tracing = "0.1"
 prost-types = "0.7"
 crossterm = { version = "0.19", features = ["event-stream"] }
 color-eyre = "0.5"
+hdrhistogram = { version = "7.3.0", default-features = false, features = ["serialization"] }

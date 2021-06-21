@@ -1,10 +1,12 @@
 use crate::view;
 use console_api as proto;
+use hdrhistogram::Histogram;
 use std::{
     cell::RefCell,
     collections::HashMap,
     convert::TryFrom,
     fmt,
+    io::Cursor,
     rc::{Rc, Weak},
     sync::Arc,
     time::{Duration, SystemTime},
@@ -17,6 +19,7 @@ pub(crate) struct State {
     metas: HashMap<u64, Metadata>,
     last_updated_at: Option<SystemTime>,
     new_tasks: Vec<TaskRef>,
+    current_task_details: DetailsRef,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -30,6 +33,7 @@ pub(crate) enum SortBy {
 }
 
 pub(crate) type TaskRef = Weak<RefCell<Task>>;
+pub(crate) type DetailsRef = Rc<RefCell<Option<Details>>>;
 
 #[derive(Debug)]
 pub(crate) struct Task {
@@ -40,6 +44,13 @@ pub(crate) struct Task {
     kind: &'static str,
     stats: Stats,
     completed_for: usize,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct Details {
+    task_id: u64,
+    poll_times_histogram: Option<Histogram<u64>>,
+    last_updated_at: Option<SystemTime>,
 }
 
 #[derive(Debug)]
@@ -184,6 +195,33 @@ impl State {
         }
     }
 
+    pub(crate) fn get_task_details_ref(&self) -> DetailsRef {
+        self.current_task_details.clone()
+    }
+
+    pub(crate) fn update_task_details(&mut self, update: proto::tasks::TaskDetails) {
+        if let Some(id) = update.task_id {
+            let details = Details {
+                task_id: id.id,
+                poll_times_histogram: update
+                    .details
+                    .and_then(|details| details.poll_times_histogram)
+                    .and_then(|data| {
+                        hdrhistogram::serialization::Deserializer::new()
+                            .deserialize(&mut Cursor::new(&data))
+                            .ok()
+                    }),
+                last_updated_at: update.now.map(|now| now.into()),
+            };
+
+            *self.current_task_details.borrow_mut() = Some(details);
+        }
+    }
+
+    pub(crate) fn unset_task_details(&mut self) {
+        *self.current_task_details.borrow_mut() = None;
+    }
+
     pub(crate) fn retain_active(&mut self) {
         self.tasks.retain(|_, task| {
             let mut task = task.borrow_mut();
@@ -199,6 +237,10 @@ impl State {
 impl Task {
     pub(crate) fn kind(&self) -> &str {
         &self.kind
+    }
+
+    pub(crate) fn id(&self) -> u64 {
+        self.id
     }
 
     pub(crate) fn id_hex(&self) -> &str {
@@ -279,6 +321,20 @@ impl Task {
             self.kind = "!";
             self.completed_for = 1;
         }
+    }
+}
+
+impl Details {
+    pub(crate) fn task_id(&self) -> u64 {
+        self.task_id
+    }
+
+    pub(crate) fn poll_times_histogram(&self) -> Option<&Histogram<u64>> {
+        self.poll_times_histogram.as_ref()
+    }
+
+    pub(crate) fn last_updated_at(&self) -> Option<SystemTime> {
+        self.last_updated_at
     }
 }
 

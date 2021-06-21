@@ -1,4 +1,4 @@
-use crate::input;
+use crate::{input, tasks::State};
 use std::borrow::Cow;
 use tui::{
     layout,
@@ -27,6 +27,13 @@ enum ViewState {
     TaskInstance(self::task::TaskView),
 }
 
+/// The outcome of the
+pub(crate) enum UpdateKind {
+    SelectTask(crate::tasks::TaskRef),
+    ExitTaskView,
+    Other,
+}
+
 macro_rules! key {
     ($code:ident) => {
         input::Event::Key(input::KeyEvent {
@@ -37,8 +44,9 @@ macro_rules! key {
 }
 
 impl View {
-    pub(crate) fn update_input(&mut self, event: input::Event) {
+    pub(crate) fn update_input(&mut self, event: input::Event, tasks: &State) -> UpdateKind {
         use ViewState::*;
+        let mut update_kind = UpdateKind::Other;
         match self.state {
             TasksList => {
                 // The enter key changes views, so handle here since we can
@@ -46,7 +54,11 @@ impl View {
                 match event {
                     key!(Enter) => {
                         if let Some(task) = self.list.selected_task().upgrade() {
-                            self.state = TaskInstance(self::task::TaskView::new(task));
+                            update_kind = UpdateKind::SelectTask(self.list.selected_task());
+                            self.state = TaskInstance(self::task::TaskView::new(
+                                task,
+                                tasks.get_task_details_ref(),
+                            ));
                         }
                     }
                     _ => {
@@ -61,6 +73,7 @@ impl View {
                 match event {
                     key!(Esc) => {
                         self.state = TasksList;
+                        update_kind = UpdateKind::ExitTaskView;
                     }
                     _ => {
                         // otherwise pass on to view
@@ -69,6 +82,7 @@ impl View {
                 }
             }
         }
+        update_kind
     }
 
     pub(crate) fn render<B: tui::backend::Backend>(

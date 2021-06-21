@@ -1,6 +1,6 @@
 use color_eyre::{eyre::eyre, Help, SectionExt};
-use console_api::tasks::{tasks_client::TasksClient, TasksRequest};
-use futures::stream::StreamExt;
+use console_api::tasks::{tasks_client::TasksClient, DetailsRequest, TaskDetails, TasksRequest};
+use futures::{future::OptionFuture, stream::StreamExt};
 
 use tui::{
     layout::{Constraint, Direction, Layout},
@@ -8,6 +8,8 @@ use tui::{
     text::{Span, Spans},
     widgets::{Block, Paragraph, Wrap},
 };
+
+use crate::view::UpdateKind;
 
 mod input;
 mod tasks;
@@ -30,11 +32,15 @@ async fn main() -> color_eyre::Result<()> {
 
     let mut client = TasksClient::connect(target.clone()).await?;
     let request = tonic::Request::new(TasksRequest {});
-    let mut stream = client.watch_tasks(request).await?.into_inner();
+    let mut tasks_stream = client.watch_tasks(request).await?.into_inner();
+    let mut details_stream: Option<tonic::Streaming<TaskDetails>> = None;
     let mut tasks = tasks::State::default();
     let mut input = input::EventStream::new();
     let mut view = view::View::default();
     loop {
+        let details_stream_next: OptionFuture<_> =
+            details_stream.as_mut().map(|stream| stream.next()).into();
+
         tokio::select! { biased;
             input = input.next() => {
                 let input = input
@@ -43,13 +49,52 @@ async fn main() -> color_eyre::Result<()> {
                 if input::should_quit(&input) {
                     return Ok(());
                 }
-                view.update_input(input);
+                match view.update_input(input, &tasks) {
+                    UpdateKind::SelectTask(task) => {
+                        if let Some(task) = task.upgrade() {
+                            let task_id = task.borrow().id();
+                            let request = tonic::Request::new(DetailsRequest {
+                                id: Some(task_id.into()),
+                            });
+                            match client.watch_task_details(request).await {
+                                Ok(stream) => {
+                                    details_stream = Some(stream.into_inner());
+                                },
+                                Err(_) => {
+                                    // TODO: handle the error somehow
+                                    details_stream = None;
+                                }
+                            }
+                        }
+                    },
+                    UpdateKind::ExitTaskView => {
+                        details_stream = None;
+                        tasks.unset_task_details();
+                    },
+                    _ => {}
+                }
             },
-            task_update = stream.next() => {
+            task_update = tasks_stream.next() => {
                 let update = task_update
                     .ok_or_else(|| eyre!("data stream closed by server"))
                     .with_section(|| "in the future, this should be reconnected automatically...".header("Note:"))?;
                 tasks.update_tasks(update?);
+            },
+            details_update = details_stream_next => {
+                if let Some(details_update) = details_update {
+                    match details_update {
+                        Some(Ok(update)) => {
+                            tasks.update_task_details(update);
+                        },
+                        Some(Err(_)) => {
+                            // TODO: handle the error somehow
+                            details_stream = None;
+                        },
+                        None => {
+                            details_stream = None;
+                        },
+                    }
+                }
             }
         }
         terminal.draw(|f| {

@@ -135,6 +135,12 @@ impl From<SpanId> for tracing_core::span::Id {
     }
 }
 
+impl From<u64> for SpanId {
+    fn from(id: u64) -> Self {
+        SpanId { id }
+    }
+}
+
 impl From<&'static tracing_core::Metadata<'static>> for register_metadata::NewMetadata {
     fn from(meta: &'static tracing_core::Metadata) -> Self {
         register_metadata::NewMetadata {

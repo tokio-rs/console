@@ -1,4 +1,8 @@
-use crate::{input, tasks::Task, view::bold};
+use crate::{
+    input,
+    tasks::{DetailsRef, Task},
+    view::bold,
+};
 use std::{cell::RefCell, rc::Rc, time::SystemTime};
 use tui::{
     layout::{self, Layout},
@@ -8,11 +12,12 @@ use tui::{
 
 pub(crate) struct TaskView {
     task: Rc<RefCell<Task>>,
+    details: DetailsRef,
 }
 
 impl TaskView {
-    pub(super) fn new(task: Rc<RefCell<Task>>) -> Self {
-        TaskView { task }
+    pub(super) fn new(task: Rc<RefCell<Task>>, details: DetailsRef) -> Self {
+        TaskView { task, details }
     }
 
     pub(crate) fn update_input(&mut self, _event: input::Event) {
@@ -122,6 +127,30 @@ impl TaskView {
 
         let mut fields = Text::default();
         fields.extend(task.formatted_fields().iter().cloned().map(Spans::from));
+
+        let has_details = self
+            .details
+            .borrow()
+            .as_ref()
+            .map(|details| details.task_id() == task.id())
+            .unwrap_or(false);
+        let details_last_updated = self
+            .details
+            .borrow()
+            .as_ref()
+            .and_then(|details| details.last_updated_at())
+            .map(|time| {
+                let datetime: chrono::DateTime<chrono::offset::Local> = time.into();
+                datetime.format("%c").to_string()
+            })
+            .unwrap_or_else(|| "never".to_owned());
+        let l = vec![
+            bold("Has details?"),
+            Span::from(format!("{:?}", has_details)),
+            bold("Details last updated:"),
+            Span::from(details_last_updated),
+        ];
+        fields.extend(l.into_iter().map(Spans::from));
 
         let task_widget = Paragraph::new(metrics).block(block_for("Task"));
         let wakers_widget = Paragraph::new(vec![wakers, wakeups]).block(block_for("Waker"));
