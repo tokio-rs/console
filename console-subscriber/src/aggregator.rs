@@ -207,7 +207,7 @@ impl Aggregator {
                                     }
 
                                 }
-                                // If task is not found, drop the subscription
+                                // If task is not found, drop the subscription which should close the stream
                             },
                         };
 

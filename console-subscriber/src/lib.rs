@@ -371,6 +371,9 @@ impl proto::tasks::tasks_server::Tasks for Server {
         let (tx, rx) = mpsc::channel(self.client_buffer);
         permit.send(WatchKind::TaskDetailUpdate(task_id, Watch(tx)));
         tracing::debug!("task details watch started");
+        // At this point we don't know if the task with the given ID exists or not.
+        // But the only Watch sender will be dropped if the task doesn't exist
+        // so that should close the stream.
         let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
         Ok(tonic::Response::new(stream))
     }

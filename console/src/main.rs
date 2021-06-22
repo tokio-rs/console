@@ -38,8 +38,8 @@ async fn main() -> color_eyre::Result<()> {
 
     // A channel to send the outcome of `View::update_input` to the watch_details_stream task.
     let (update_tx, update_rx) = watch::channel(UpdateKind::Other);
-    // A channel to send the task details update stream
-    let (details_tx, mut details_rx) = mpsc::channel::<TaskDetails>(8);
+    // A channel to send the task details update stream (no need to keep outdated details in the memory)
+    let (details_tx, mut details_rx) = mpsc::channel::<TaskDetails>(2);
 
     let mut tasks = tasks::State::default();
     let mut input = input::EventStream::new();
@@ -160,6 +160,6 @@ async fn watch_details_stream(
             }
         }
     } else {
-        // TODO: handle connection error, print details?
+        // TODO: handle connection error, print details somewhere? Related to Issue #30
     }
 }
