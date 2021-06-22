@@ -27,10 +27,14 @@ enum ViewState {
     TaskInstance(self::task::TaskView),
 }
 
-/// The outcome of the
+/// The outcome of the update_input method
+#[derive(Debug, Copy, Clone)]
 pub(crate) enum UpdateKind {
-    SelectTask(crate::tasks::TaskRef),
+    /// A new task is selected
+    SelectTask(u64),
+    /// The TaskView is exited
     ExitTaskView,
+    /// No significant change
     Other,
 }
 
@@ -54,7 +58,7 @@ impl View {
                 match event {
                     key!(Enter) => {
                         if let Some(task) = self.list.selected_task().upgrade() {
-                            update_kind = UpdateKind::SelectTask(self.list.selected_task());
+                            update_kind = UpdateKind::SelectTask(task.borrow().id());
                             self.state = TaskInstance(self::task::TaskView::new(
                                 task,
                                 tasks.get_task_details_ref(),
