@@ -198,7 +198,7 @@ impl State {
 
 impl Task {
     pub(crate) fn kind(&self) -> &str {
-        &self.kind
+        self.kind
     }
 
     pub(crate) fn id_hex(&self) -> &str {

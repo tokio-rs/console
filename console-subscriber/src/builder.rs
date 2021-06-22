@@ -1,5 +1,8 @@
 use super::{Server, TasksLayer};
-use std::{net::SocketAddr, time::Duration};
+use std::{
+    net::{SocketAddr, ToSocketAddrs},
+    time::Duration,
+};
 
 /// Builder for configuring [`TasksLayer`]s.
 #[derive(Clone, Debug)]
@@ -100,5 +103,40 @@ impl Builder {
     /// Completes the builder, returning a [`TasksLayer`] and [`Server`] task.
     pub fn build(self) -> (TasksLayer, Server) {
         TasksLayer::build(self)
+    }
+
+    /// Configures this builder from a standard set of environment variables:
+    ///
+    /// | **Environment Variable**            | **Purpose**                                                               | **Default Value** |
+    /// |-------------------------------------|---------------------------------------------------------------------------|-------------------|
+    /// | `TOKIO_CONSOLE_RETENTION_SECS`      | The number of seconds to accumulate completed tracing data                | 3600s (1h)        |
+    /// | `TOKIO_CONSOLE_BIND`                | a HOST:PORT description, such as `localhost:1234`                         | `127.0.0.1:6669`  |
+    /// | `TOKIO_CONSOLE_PUBLISH_INTERVAL_MS` | The number of milliseconds to wait between sending updates to the console | 1000ms (1s)       |
+    pub fn with_default_env(mut self) -> Self {
+        if let Ok(retention) = std::env::var("TOKIO_CONSOLE_RETENTION_SECS") {
+            self.retention = Duration::from_secs(
+                retention
+                    .parse()
+                    .expect("TOKIO_CONSOLE_RETENTION_SECS must be an integer"),
+            );
+        }
+
+        if let Ok(bind) = std::env::var("TOKIO_CONSOLE_BIND") {
+            self.server_addr = bind
+                .to_socket_addrs()
+                .expect("TOKIO_CONSOLE_BIND must be formatted as HOST:PORT, such as localhost:4321")
+                .next()
+                .expect("tokio console could not resolve TOKIO_CONSOLE_BIND");
+        }
+
+        if let Ok(interval) = std::env::var("TOKIO_CONSOLE_PUBLISH_INTERVAL_MS") {
+            self.publish_interval = Duration::from_millis(
+                interval
+                    .parse()
+                    .expect("TOKIO_CONSOLE_PUBLISH_INTERVAL_MS must be an integer"),
+            );
+        }
+
+        self
     }
 }

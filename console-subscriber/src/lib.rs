@@ -23,6 +23,9 @@ use aggregator::Aggregator;
 mod builder;
 pub use builder::Builder;
 
+mod init;
+pub use init::{build, init};
+
 pub struct TasksLayer {
     task_meta: AtomicPtr<Metadata<'static>>,
     blocking_meta: AtomicPtr<Metadata<'static>>,
