@@ -332,10 +332,6 @@ impl Details {
     pub(crate) fn poll_times_histogram(&self) -> Option<&Histogram<u64>> {
         self.poll_times_histogram.as_ref()
     }
-
-    pub(crate) fn last_updated_at(&self) -> Option<SystemTime> {
-        self.last_updated_at
-    }
 }
 
 impl From<proto::tasks::Stats> for Stats {
