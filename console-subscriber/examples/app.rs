@@ -1,26 +1,14 @@
 use std::time::Duration;
-use tracing_subscriber::prelude::*;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (layer, server) = console_subscriber::TasksLayer::builder()
-        .retention(Duration::from_secs(60))
-        .build();
-    let filter =
-        tracing_subscriber::EnvFilter::from_default_env().add_directive("tokio=trace".parse()?);
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
-        .with(filter)
-        .with(layer)
-        .init();
+    console_subscriber::init();
 
-    let serve = tokio::spawn(async move { server.serve().await.expect("server failed") });
     let task1 = tokio::spawn(spawn_tasks(1, 10));
     let task2 = tokio::spawn(spawn_tasks(10, 100));
     let result = tokio::try_join! {
         task1,
         task2,
-        serve
     };
     result?;
 

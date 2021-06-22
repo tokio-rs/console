@@ -6,7 +6,6 @@ use futures::FutureExt;
 use std::{
     collections::HashMap,
     convert::TryInto,
-    mem,
     ops::{Deref, DerefMut},
     sync::{
         atomic::{AtomicBool, Ordering::*},
@@ -261,7 +260,7 @@ impl Aggregator {
     fn publish(&mut self) {
         let new_metadata = if !self.new_metadata.is_empty() {
             Some(proto::RegisterMetadata {
-                metadata: mem::replace(&mut self.new_metadata, Vec::new()),
+                metadata: std::mem::take(&mut self.new_metadata),
             })
         } else {
             None
