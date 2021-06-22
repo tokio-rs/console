@@ -46,9 +46,14 @@ pub fn init() {
     build().with(fmt::layer()).init()
 }
 
-/// Builds a new tracing subscriber, but does not yet initialize the
-/// subscriber, allowing for customization by adding additional
-/// layers.
+/// Returns a new `tracing` [subscriber] configured with a [`TasksLayer`]
+/// and a [filter] that enables the spans and events required by the console.
+///
+/// Unlike [`init`], this function does not set the default subscriber, allowing
+/// additional [`Layer`s] to be added.
+///
+/// [subscriber]: https://docs.rs/tracing/latest/tracing/subscriber/trait.Subscriber.html
+/// [filter]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
 ///
 /// ## Configuration
 ///
@@ -74,7 +79,7 @@ pub fn init() {
 ///     .init();
 /// ```
 
-#[must_use = "build() without init() will not attach a tracing subscriber"]
+#[must_use = "build() without init() will not set the default tracing subscriber"]
 pub fn build() -> ConsoleSubscriberLayer {
     let (layer, server) = TasksLayer::builder().with_default_env().build();
 
