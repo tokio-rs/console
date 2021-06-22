@@ -7,7 +7,7 @@ use std::{cell::RefCell, rc::Rc, time::SystemTime};
 use tui::{
     layout::{self, Layout},
     text::{Span, Spans, Text},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Paragraph, Sparkline},
 };
 
 pub(crate) struct TaskView {
@@ -45,6 +45,7 @@ impl TaskView {
                 [
                     layout::Constraint::Length(1),
                     layout::Constraint::Length(6),
+                    layout::Constraint::Length(9),
                     layout::Constraint::Percentage(60),
                 ]
                 .as_ref(),
@@ -63,7 +64,20 @@ impl TaskView {
             )
             .split(chunks[1]);
 
-        let fields_area = chunks[2];
+        let histogram_area = Layout::default()
+            .direction(layout::Direction::Horizontal)
+            .constraints(
+                [
+                    layout::Constraint::Percentage(50),
+                    layout::Constraint::Percentage(50),
+                ]
+                .as_ref(),
+            )
+            .split(chunks[2]);
+
+        let fields_area = chunks[3];
+        let percentiles_area = histogram_area[0];
+        let sparkline_area = histogram_area[1];
 
         let controls = Spans::from(vec![
             Span::raw("controls: "),
@@ -128,37 +142,72 @@ impl TaskView {
         let mut fields = Text::default();
         fields.extend(task.formatted_fields().iter().cloned().map(Spans::from));
 
-        let has_details = self
+        let percentiles_iter = self
             .details
             .borrow()
             .as_ref()
-            .map(|details| details.task_id() == task.id())
-            .unwrap_or(false);
-        let details_last_updated = self
-            .details
-            .borrow()
-            .as_ref()
-            .and_then(|details| details.last_updated_at())
-            .map(|time| {
-                let datetime: chrono::DateTime<chrono::offset::Local> = time.into();
-                datetime.format("%c").to_string()
+            .and_then(|details| details.poll_times_histogram())
+            .map(|histogram| {
+                vec![
+                    (10, histogram.value_at_percentile(10.0)),
+                    (25, histogram.value_at_percentile(25.0)),
+                    (50, histogram.value_at_percentile(50.0)),
+                    (75, histogram.value_at_percentile(75.0)),
+                    (90, histogram.value_at_percentile(90.0)),
+                    (95, histogram.value_at_percentile(95.0)),
+                    (99, histogram.value_at_percentile(99.0)),
+                ]
             })
-            .unwrap_or_else(|| "never".to_owned());
-        let l = vec![
-            bold("Has details?"),
-            Span::from(format!("{:?}", has_details)),
-            bold("Details last updated:"),
-            Span::from(details_last_updated),
-        ];
-        fields.extend(l.into_iter().map(Spans::from));
+            .map(|pairs| {
+                pairs
+                    .into_iter()
+                    .map(|pair| format!("p{}: {}ms", pair.0, (pair.1 as f64 / 1000f64)))
+            });
+
+        let mut percentiles = Text::default();
+        if let Some(percentiles_iter) = percentiles_iter {
+            percentiles.extend(percentiles_iter.map(Spans::from));
+        }
+
+        let buckets = frame.size().width / 2;
+
+        let chart_data = self
+            .details
+            .borrow()
+            .as_ref()
+            .and_then(|details| details.poll_times_histogram())
+            .map(|histogram| {
+                // This is probably very buggy
+                let steps =
+                    ((histogram.max() - histogram.min()) as f64 / buckets as f64).ceil() as u64;
+                if steps > 0 {
+                    let data: Vec<u64> = histogram
+                        .iter_linear(steps)
+                        .map(|it| {
+                            // format!("{}", (it.value_iterated_to() / 1000)),
+                            it.count_since_last_iteration()
+                        })
+                        .collect();
+                    data
+                } else {
+                    Vec::new()
+                }
+            })
+            .unwrap_or_default();
+        let histogram_sparkline = Sparkline::default()
+            .block(Block::default().title("Poll Times").borders(Borders::ALL))
+            .data(&chart_data);
 
         let task_widget = Paragraph::new(metrics).block(block_for("Task"));
         let wakers_widget = Paragraph::new(vec![wakers, wakeups]).block(block_for("Waker"));
         let fields_widget = Paragraph::new(fields).block(block_for("Fields"));
+        let percentiles_widget = Paragraph::new(percentiles).block(block_for("Poll Times Stats"));
 
         frame.render_widget(Block::default().title(controls), controls_area);
         frame.render_widget(task_widget, stats_area[0]);
         frame.render_widget(wakers_widget, stats_area[1]);
         frame.render_widget(fields_widget, fields_area);
+        frame.render_widget(percentiles_widget, percentiles_area);
+        frame.render_widget(histogram_sparkline, sparkline_area);
     }
 }
