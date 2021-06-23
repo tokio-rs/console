@@ -3,7 +3,11 @@ use crate::{
     tasks::{Details, DetailsRef, Task},
     view::bold,
 };
-use std::{cell::RefCell, rc::Rc, time::SystemTime};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    time::{Duration, SystemTime},
+};
 use tui::{
     layout::{self, Layout},
     text::{Span, Spans, Text},
@@ -14,6 +18,8 @@ pub(crate) struct TaskView {
     task: Rc<RefCell<Task>>,
     details: DetailsRef,
 }
+
+const DUR_PRECISION: usize = 4;
 
 impl TaskView {
     pub(super) fn new(task: Rc<RefCell<Task>>, details: DetailsRef) -> Self {
@@ -37,7 +43,6 @@ impl TaskView {
         // - logs?
 
         let task = &*self.task.borrow();
-        const DUR_PRECISION: usize = 4;
 
         let chunks = Layout::default()
             .direction(layout::Direction::Vertical)
@@ -221,9 +226,14 @@ fn make_percentiles_widgets(details: DetailsRef, task_id: u64) -> (Text<'static>
             ]
         })
         .map(|pairs| {
-            pairs
-                .into_iter()
-                .map(|pair| format!("p{}: {}ms", pair.0, (pair.1 as f64 / 1000f64)))
+            pairs.into_iter().map(|pair| {
+                format!(
+                    "p{}: {:.prec$?}",
+                    pair.0,
+                    Duration::from_nanos(pair.1),
+                    prec = DUR_PRECISION,
+                )
+            })
         });
 
     let mut percentiles_1 = Text::default();
