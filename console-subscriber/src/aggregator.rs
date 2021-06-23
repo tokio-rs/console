@@ -163,7 +163,7 @@ impl Aggregator {
                 subscription = self.rpcs.recv() => {
                     if let Some(subscription) = subscription {
                         match subscription {
-                            WatchKind::TaskUpdate(subscription) => {
+                            WatchKind::Task(subscription) => {
                                 tracing::debug!("new tasks subscription");
                                 let new_tasks = self.tasks.all().map(|(id, task)| {
                                     task.to_proto(id.clone())
@@ -185,7 +185,7 @@ impl Aggregator {
                                     self.watchers.push(subscription)
                                 }
                             },
-                            WatchKind::TaskDetailUpdate(task_id, subscription) => {
+                            WatchKind::TaskDetail(task_id, subscription) => {
                                 tracing::debug!(id = ?task_id, "new task details subscription");
                                 let task_id: span::Id = task_id.into();
                                 if let Some(stats) = self.stats.find(&task_id) {
