@@ -146,10 +146,8 @@ async fn watch_details_stream(
                             UpdateKind::ExitTaskView => {
                                 break;
                             },
-                            UpdateKind::SelectTask(new_id) => {
-                                if new_id != task_id {
-                                    break;
-                                }
+                            UpdateKind::SelectTask(new_id) if new_id != task_id => {
+                                break;
                             },
                             _ => {}
                         }
