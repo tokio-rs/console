@@ -71,6 +71,7 @@ struct Stats {
     waker_clones: u64,
     waker_drops: u64,
     last_wake: Option<SystemTime>,
+    self_wakes: u64,
 }
 
 #[derive(Default)]
@@ -295,6 +296,12 @@ impl Aggregator {
                             stats.wakes += 1;
                             stats.last_wake = Some(at);
 
+                            // If currently "inside" this task's poll, then the
+                            // task has woken itself.
+                            if stats.current_polls > 0 {
+                                stats.self_wakes += 1;
+                            }
+
                             // Note: `Waker::wake` does *not* call the `drop`
                             // implementation, so waking by value doesn't
                             // trigger a drop event. so, count this as a `drop`
@@ -481,6 +488,7 @@ impl Stats {
             waker_clones: self.waker_clones,
             waker_drops: self.waker_drops,
             last_wake: self.last_wake.map(Into::into),
+            self_wakes: self.self_wakes,
         }
     }
 }
