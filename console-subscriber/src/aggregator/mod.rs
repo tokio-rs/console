@@ -184,6 +184,7 @@ struct TaskStats {
     wakes: u64,
     waker_clones: u64,
     waker_drops: u64,
+    self_wakes: u64,
     last_wake: Option<SystemTime>,
 
     poll_times_histogram: Histogram<u64>,
@@ -666,6 +667,12 @@ impl Aggregator {
                         WakeOp::Wake | WakeOp::WakeByRef => {
                             task_stats.wakes += 1;
                             task_stats.last_wake = Some(at);
+
+                            // If currently "inside" this task's poll, then the
+                            // task has woken itself.
+                            if task_stats.poll_stats.current_polls > 0 {
+                                task_stats.self_wakes += 1;
+                            }
 
                             // Note: `Waker::wake` does *not* call the `drop`
                             // implementation, so waking by value doesn't
