@@ -101,6 +101,8 @@ struct Stats {
 
     /// The timestamp of when the task was last woken.
     last_wake: Option<SystemTime>,
+    /// Total number of times the task has woken itself.
+    self_wakes: u64,
 }
 
 #[derive(Debug)]
@@ -372,6 +374,11 @@ impl Task {
         self.stats.wakes
     }
 
+    /// Returns the total number of times this task has woken itself.
+    pub(crate) fn self_wakes(&self) -> u64 {
+        self.stats.self_wakes
+    }
+
     fn update(&mut self) {
         let completed = self.stats.total.is_some() && self.completed_for == 0;
         if completed {
@@ -420,6 +427,7 @@ impl From<proto::tasks::Stats> for Stats {
             waker_clones: pb.waker_clones,
             waker_drops: pb.waker_drops,
             last_wake: pb.last_wake.map(|v| v.try_into().unwrap()),
+            self_wakes: pb.self_wakes,
         }
     }
 }
