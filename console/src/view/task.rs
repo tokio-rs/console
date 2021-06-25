@@ -107,6 +107,12 @@ impl TaskView {
             Span::from(format!("{} times", task.wakes())),
         ];
 
+        if task.self_wakes() > 0 {
+            wakeups.push(Span::raw(", "));
+            wakeups.push(bold("Self Wakes: "));
+            wakeups.push(Span::from(format!("{} times", task.self_wakes())));
+        }
+
         // If the task has been woken, add the time since wake to its stats as well.
         if let Some(since) = task.since_wake(now) {
             wakeups.push(Span::raw(", "));
