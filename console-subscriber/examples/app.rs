@@ -1,12 +1,21 @@
 use std::time::Duration;
 
+static HELP: &'static str = r#"
+Example console-instrumented app
+
+USAGE:
+    app [OPTIONS]
+
+OPTIONS:
+    -h, help    prints this message
+    blocks      Includes a (misbehaving) blocking task
+    burn        Includes a (misbehaving) task that spins CPU with self-wakes
+    coma        Includes a (misbehaving) task that forgets to register a waker
+"#;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     console_subscriber::init();
-
-    let task1 = tokio::spawn(spawn_tasks(1, 10));
-    let task2 = tokio::spawn(spawn_tasks(10, 30));
-
     // spawn optional extras from CLI args
     // skip first which is command name
     for opt in std::env::args().skip(1) {
@@ -20,9 +29,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             "burn" => {
                 tokio::spawn(burn(1, 10));
             }
-            wat => return Err(format!("unknown option: {:?}", wat).into()),
+            "help" | "-h" => {
+                eprintln!("{}", HELP);
+                return Ok(());
+            }
+            wat => {
+                return Err(
+                    format!("unknown option: {:?}, run with '-h' to see options", wat).into(),
+                )
+            }
         }
     }
+
+    let task1 = tokio::spawn(spawn_tasks(1, 10));
+    let task2 = tokio::spawn(spawn_tasks(10, 30));
 
     let result = tokio::try_join! {
         task1,
