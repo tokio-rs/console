@@ -388,9 +388,6 @@ impl proto::tasks::tasks_server::Tasks for Server {
             .map_err(|_| tonic::Status::not_found("task not found"))?;
 
         tracing::debug!(id = ?task_id, "task details watch started");
-        // At this point we don't know if the task with the given ID exists or not.
-        // But the only Watch sender will be dropped if the task doesn't exist
-        // so that should close the stream.
         let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
         Ok(tonic::Response::new(stream))
     }
