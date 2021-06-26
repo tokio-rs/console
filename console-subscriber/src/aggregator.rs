@@ -1,3 +1,5 @@
+use crate::WatchRequest;
+
 use super::{Event, WakeOp, Watch, WatchKind};
 use console_api as proto;
 use tokio::sync::{mpsc, Notify};
@@ -166,8 +168,8 @@ impl Aggregator {
                             WatchKind::Task(subscription) => {
                                 self.add_task_subscription(subscription);
                             },
-                            WatchKind::TaskDetail(task_id, subscription) => {
-                                self.add_task_detail_subscription(task_id, subscription);
+                            WatchKind::TaskDetail(watch_request) => {
+                                self.add_task_detail_subscription(watch_request);
                             },
                         };
                     } else {
@@ -243,28 +245,37 @@ impl Aggregator {
     /// if the task is found.
     fn add_task_detail_subscription(
         &mut self,
-        task_id: proto::SpanId,
-        subscription: Watch<proto::tasks::TaskDetails>,
+        watch_request: WatchRequest<proto::tasks::TaskDetails>,
     ) {
-        tracing::debug!(id = ?task_id, "new task details subscription");
-        let task_id: span::Id = task_id.into();
+        let WatchRequest {
+            id,
+            stream_sender,
+            buffer,
+        } = watch_request;
+        tracing::debug!(id = ?id, "new task details subscription");
+        let task_id: span::Id = id.into();
         if let Some(stats) = self.stats.find(&task_id) {
+            let (tx, rx) = mpsc::channel(buffer);
+            let subscription = Watch(tx);
             let now = SystemTime::now();
-            // Send the initial state --- if this fails, the subscription is already dead.
-            if subscription.update(&proto::tasks::TaskDetails {
-                task_id: Some(task_id.clone().into()),
-                now: Some(now.into()),
-                details: Some(proto::tasks::Details {
-                    poll_times_histogram: serialize_histogram(&stats.poll_times_histogram).ok(),
-                }),
-            }) {
+            // Send back the stream receiver.
+            // Then send the initial state --- if this fails, the subscription is already dead.
+            if stream_sender.send(rx).is_ok()
+                && subscription.update(&proto::tasks::TaskDetails {
+                    task_id: Some(task_id.clone().into()),
+                    now: Some(now.into()),
+                    details: Some(proto::tasks::Details {
+                        poll_times_histogram: serialize_histogram(&stats.poll_times_histogram).ok(),
+                    }),
+                })
+            {
                 self.details_watchers
                     .entry(task_id)
                     .or_insert_with(Vec::new)
                     .push(subscription);
             }
         }
-        // If the task is not found, drop the subscription which should close the stream.
+        // If the task is not found, drop `stream_sender` which will result in a not found error
     }
 
     /// Publish the current state to all active watchers.

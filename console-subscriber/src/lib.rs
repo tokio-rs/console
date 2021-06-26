@@ -1,6 +1,6 @@
 use console_api as proto;
 use proto::SpanId;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -55,7 +55,13 @@ struct Watch<T>(mpsc::Sender<Result<T, tonic::Status>>);
 
 enum WatchKind {
     Task(Watch<proto::tasks::TaskUpdate>),
-    TaskDetail(SpanId, Watch<proto::tasks::TaskDetails>),
+    TaskDetail(WatchRequest<proto::tasks::TaskDetails>),
+}
+
+struct WatchRequest<T> {
+    id: SpanId,
+    stream_sender: oneshot::Sender<mpsc::Receiver<Result<T, tonic::Status>>>,
+    buffer: usize,
 }
 
 enum Event {
@@ -368,9 +374,20 @@ impl proto::tasks::tasks_server::Tasks for Server {
         let permit = self.subscribe.reserve().await.map_err(|_| {
             tonic::Status::internal("cannot start new watch, aggregation task is not running")
         })?;
-        let (tx, rx) = mpsc::channel(self.client_buffer);
-        permit.send(WatchKind::TaskDetail(task_id, Watch(tx)));
-        tracing::debug!("task details watch started");
+
+        // Check with the aggregator task to request a stream if the task exists.
+        let (stream_sender, stream_recv) = oneshot::channel();
+        permit.send(WatchKind::TaskDetail(WatchRequest {
+            id: task_id.clone(),
+            stream_sender,
+            buffer: self.client_buffer,
+        }));
+        // If the aggregator drops the sender, the task doesn't exist.
+        let rx = stream_recv
+            .await
+            .map_err(|_| tonic::Status::not_found("task not found"))?;
+
+        tracing::debug!(id = ?task_id, "task details watch started");
         // At this point we don't know if the task with the given ID exists or not.
         // But the only Watch sender will be dropped if the task doesn't exist
         // so that should close the stream.
