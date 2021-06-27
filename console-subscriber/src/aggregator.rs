@@ -110,7 +110,7 @@ impl Default for Stats {
             waker_clones: 0,
             waker_drops: 0,
             last_wake: None,
-            poll_times_histogram: Histogram::<u64>::new(1).unwrap(),
+            poll_times_histogram: Histogram::<u64>::new(2).unwrap(),
         }
     }
 }

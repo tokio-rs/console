@@ -1,7 +1,10 @@
 use crate::{
     input,
     tasks::{Details, DetailsRef, Task},
-    view::bold,
+    view::{
+        bold,
+        mini_histogram::{HistogramMetadata, MiniHistogram},
+    },
 };
 use std::{
     cell::RefCell,
@@ -11,7 +14,7 @@ use std::{
 use tui::{
     layout::{self, Layout},
     text::{Span, Spans, Text},
-    widgets::{Block, Borders, Paragraph, Sparkline},
+    widgets::{Block, Borders, Paragraph},
 };
 
 pub(crate) struct TaskView {
@@ -50,7 +53,7 @@ impl TaskView {
                 [
                     layout::Constraint::Length(1),
                     layout::Constraint::Length(6),
-                    layout::Constraint::Length(6),
+                    layout::Constraint::Length(7),
                     layout::Constraint::Percentage(60),
                 ]
                 .as_ref(),
@@ -160,16 +163,31 @@ impl TaskView {
         let mut fields = Text::default();
         fields.extend(task.formatted_fields().iter().cloned().map(Spans::from));
 
-        let chart_data = make_chart_data(self.details.clone(), task.id(), sparkline_area.width - 2);
-        let histogram_sparkline = Sparkline::default()
-            .block(Block::default().title("Poll Times").borders(Borders::ALL))
-            .data(&chart_data);
+        // Bit of a deadlock: We cannot know the highest bucket value without determining the number of buckets,
+        // and we cannot determine the number of buckets without knowing the width of the chart area which depends on
+        // the number of digits in the highest bucket value.
+        // So just assume here the number of digits in the highest bucket value is 3.
+        // If we overshoot, there will be empty columns/buckets at the right end of the chart.
+        // If we undershoot, the rightmost 1-2 columns/buckets will be hidden.
+        // We could get the max bucket value from the previous render though...
+        let (chart_data, metadata) =
+            make_chart_data(self.details.clone(), task.id(), sparkline_area.width - 3);
+
+        let histogram_sparkline = MiniHistogram::default()
+            .block(
+                Block::default()
+                    .title("Poll Times Histogram")
+                    .borders(Borders::ALL),
+            )
+            .data(&chart_data)
+            .metadata(metadata)
+            .duration_precision(2);
 
         let task_widget = Paragraph::new(metrics).block(block_for("Task"));
         let wakers_widget = Paragraph::new(vec![wakers, wakeups]).block(block_for("Waker"));
         let fields_widget = Paragraph::new(fields).block(block_for("Fields"));
 
-        let percentiles_widget = block_for("Poll Times Stats");
+        let percentiles_widget = block_for("Poll Times Percentiles");
         let (percentiles_1, percentiles_2) =
             make_percentiles_widgets(self.details.clone(), task.id());
         let percentiles_widget_1 = Paragraph::new(percentiles_1);
@@ -186,24 +204,47 @@ impl TaskView {
     }
 }
 
-fn make_chart_data(details: DetailsRef, task_id: u64, width: u16) -> Vec<u64> {
+fn make_chart_data(details: DetailsRef, task_id: u64, width: u16) -> (Vec<u64>, HistogramMetadata) {
     details
         .borrow()
         .as_ref()
         .and_then(|details| filter_same_task(task_id, details))
         .and_then(|details| details.poll_times_histogram())
         .map(|histogram| {
-            // This is probably very buggy
-            let steps = ((histogram.max() - histogram.min()) as f64 / width as f64).ceil() as u64;
-            if steps > 0 {
+            let step_size =
+                ((histogram.max() - histogram.min()) as f64 / width as f64).ceil() as u64 + 1;
+            let data = if step_size > 0 {
+                let mut found_first_nonzero = false;
                 let data: Vec<u64> = histogram
-                    .iter_linear(steps)
+                    .iter_linear(step_size)
                     .map(|it| it.count_since_last_iteration())
+                    .filter(|count| {
+                        // Remove the 0s from the leading side of the buckets.
+                        // Because HdrHistogram can return empty buckets depending
+                        // on its internal state, as it approximates values.
+                        if *count == 0 && !found_first_nonzero {
+                            false
+                        } else {
+                            found_first_nonzero = true;
+                            true
+                        }
+                    })
                     .collect();
                 data
             } else {
                 Vec::new()
-            }
+            };
+            let max_bucket = data.iter().max().copied().unwrap_or_default();
+            let min_bucket = data.iter().min().copied().unwrap_or_default();
+            (
+                data,
+                HistogramMetadata {
+                    max_value: histogram.max(),
+                    min_value: histogram.min(),
+                    max_bucket,
+                    min_bucket,
+                },
+            )
         })
         .unwrap_or_default()
 }
@@ -216,6 +257,7 @@ fn make_percentiles_widgets(details: DetailsRef, task_id: u64) -> (Text<'static>
         .and_then(|details| details.poll_times_histogram())
         .map(|histogram| {
             vec![
+                (5, histogram.value_at_percentile(5.0)),
                 (10, histogram.value_at_percentile(10.0)),
                 (25, histogram.value_at_percentile(25.0)),
                 (50, histogram.value_at_percentile(50.0)),
