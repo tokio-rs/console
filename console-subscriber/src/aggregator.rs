@@ -110,6 +110,8 @@ impl Default for Stats {
             waker_clones: 0,
             waker_drops: 0,
             last_wake: None,
+            // significant figures should be in the [0-5] range and memory usage
+            // grows exponentially with higher a sigfig
             poll_times_histogram: Histogram::<u64>::new(2).unwrap(),
         }
     }
@@ -163,19 +165,18 @@ impl Aggregator {
 
                 // a new client has started watching!
                 subscription = self.rpcs.recv() => {
-                    if let Some(subscription) = subscription {
-                        match subscription {
-                            WatchKind::Task(subscription) => {
-                                self.add_task_subscription(subscription);
-                            },
-                            WatchKind::TaskDetail(watch_request) => {
-                                self.add_task_detail_subscription(watch_request);
-                            },
-                        };
-                    } else {
-                        tracing::debug!("rpc channel closed, terminating");
-                        return;
-                    }
+                    match subscription {
+                        Some(WatchKind::Tasks(subscription)) => {
+                            self.add_task_subscription(subscription);
+                        },
+                        Some(WatchKind::TaskDetail(watch_request)) => {
+                            self.add_task_detail_subscription(watch_request);
+                        },
+                        _ => {
+                            tracing::debug!("rpc channel closed, terminating");
+                            return;
+                        }
+                    };
 
                     false
                 }
@@ -254,7 +255,7 @@ impl Aggregator {
         } = watch_request;
         tracing::debug!(id = ?id, "new task details subscription");
         let task_id: span::Id = id.into();
-        if let Some(stats) = self.stats.find(&task_id) {
+        if let Some(stats) = self.stats.get(&task_id) {
             let (tx, rx) = mpsc::channel(buffer);
             let subscription = Watch(tx);
             let now = SystemTime::now();
@@ -264,9 +265,7 @@ impl Aggregator {
                 && subscription.update(&proto::tasks::TaskDetails {
                     task_id: Some(task_id.clone().into()),
                     now: Some(now.into()),
-                    details: Some(proto::tasks::Details {
-                        poll_times_histogram: serialize_histogram(&stats.poll_times_histogram).ok(),
-                    }),
+                    poll_times_histogram: serialize_histogram(&stats.poll_times_histogram).ok(),
                 })
             {
                 self.details_watchers
@@ -315,14 +314,12 @@ impl Aggregator {
         // Assuming there are much fewer task details subscribers than there are
         // stats updates, iterate over `details_watchers` and compact the map.
         self.details_watchers.retain(|id, watchers| {
-            if let Some(task_stats) = stats.find(id) {
+            if let Some(task_stats) = stats.get(id) {
                 let details = proto::tasks::TaskDetails {
                     task_id: Some(id.clone().into()),
                     now: Some(now.into()),
-                    details: Some(proto::tasks::Details {
-                        poll_times_histogram: serialize_histogram(&task_stats.poll_times_histogram)
-                            .ok(),
-                    }),
+                    poll_times_histogram: serialize_histogram(&task_stats.poll_times_histogram)
+                        .ok(),
                 };
                 watchers.retain(|watch| watch.update(&details));
                 !watchers.is_empty()
@@ -540,7 +537,7 @@ impl<T> TaskData<T> {
         self.data.iter().map(|(id, (data, _))| (id, data))
     }
 
-    fn find(&self, id: &span::Id) -> Option<&T> {
+    fn get(&self, id: &span::Id) -> Option<&T> {
         self.data.get(id).map(|(data, _)| data)
     }
 }

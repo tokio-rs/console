@@ -54,7 +54,7 @@ struct WakerVisitor {
 struct Watch<T>(mpsc::Sender<Result<T, tonic::Status>>);
 
 enum WatchKind {
-    Task(Watch<proto::tasks::TaskUpdate>),
+    Tasks(Watch<proto::tasks::TaskUpdate>),
     TaskDetail(WatchRequest<proto::tasks::TaskDetails>),
 }
 
@@ -357,7 +357,7 @@ impl proto::tasks::tasks_server::Tasks for Server {
             tonic::Status::internal("cannot start new watch, aggregation task is not running")
         })?;
         let (tx, rx) = mpsc::channel(self.client_buffer);
-        permit.send(WatchKind::Task(Watch(tx)));
+        permit.send(WatchKind::Tasks(Watch(tx)));
         tracing::debug!("watch started");
         let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
         Ok(tonic::Response::new(stream))
@@ -385,7 +385,10 @@ impl proto::tasks::tasks_server::Tasks for Server {
         // If the aggregator drops the sender, the task doesn't exist.
         let rx = stream_recv
             .await
-            .map_err(|_| tonic::Status::not_found("task not found"))?;
+            .map_err(|_| {
+                tracing::warn!(id = ?task_id, "requested task not found");
+                tonic::Status::not_found("task not found")
+            })?;
 
         tracing::debug!(id = ?task_id, "task details watch started");
         let stream = tokio_stream::wrappers::ReceiverStream::new(rx);

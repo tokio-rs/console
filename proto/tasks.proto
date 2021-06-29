@@ -56,7 +56,8 @@ message TaskDetails {
 
     google.protobuf.Timestamp now = 2;
 
-    Details details = 3;
+    // HdrHistogram.rs `Histogram` serialized to binary in the V2 format
+    optional bytes poll_times_histogram = 3;
 }
 
 // Data recorded when a new task is spawned.
@@ -142,9 +143,4 @@ message Stats {
     //
     // If this is `None`, the task has not yet been woken.
     optional google.protobuf.Timestamp last_wake = 10;
-}
-
-message Details {
-    // HdrHistogram.rs `Histogram` serialized to binary in the V2 format
-    optional bytes poll_times_histogram = 1;
 }

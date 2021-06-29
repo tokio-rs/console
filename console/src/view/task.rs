@@ -213,6 +213,7 @@ fn make_chart_data(details: DetailsRef, task_id: u64, width: u16) -> (Vec<u64>, 
         .map(|histogram| {
             let step_size =
                 ((histogram.max() - histogram.min()) as f64 / width as f64).ceil() as u64 + 1;
+            // `iter_linear` panics if step_size is 0
             let data = if step_size > 0 {
                 let mut found_first_nonzero = false;
                 let data: Vec<u64> = histogram

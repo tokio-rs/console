@@ -203,14 +203,11 @@ impl State {
         if let Some(id) = update.task_id {
             let details = Details {
                 task_id: id.id,
-                poll_times_histogram: update
-                    .details
-                    .and_then(|details| details.poll_times_histogram)
-                    .and_then(|data| {
-                        hdrhistogram::serialization::Deserializer::new()
-                            .deserialize(&mut Cursor::new(&data))
-                            .ok()
-                    }),
+                poll_times_histogram: update.poll_times_histogram.and_then(|data| {
+                    hdrhistogram::serialization::Deserializer::new()
+                        .deserialize(&mut Cursor::new(&data))
+                        .ok()
+                }),
                 last_updated_at: update.now.map(|now| now.into()),
             };
 

@@ -105,9 +105,6 @@ impl<'a> Widget for MiniHistogram<'a> {
 }
 
 impl<'a> MiniHistogram<'a> {
-    // fn bars_area_width() -> u64 {
-    //     max_qty_label.len() as u16;
-    // }
 
     fn render_legend(
         &mut self,
