@@ -105,7 +105,6 @@ impl<'a> Widget for MiniHistogram<'a> {
 }
 
 impl<'a> MiniHistogram<'a> {
-
     fn render_legend(
         &mut self,
         area: tui::layout::Rect,

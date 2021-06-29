@@ -6,9 +6,9 @@ use tui::{
     text::Span,
 };
 
+mod mini_histogram;
 mod task;
 mod tasks;
-mod mini_histogram;
 
 pub struct View {
     /// The tasks list is stored separately from the currently selected state,

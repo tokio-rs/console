@@ -383,12 +383,10 @@ impl proto::tasks::tasks_server::Tasks for Server {
             buffer: self.client_buffer,
         }));
         // If the aggregator drops the sender, the task doesn't exist.
-        let rx = stream_recv
-            .await
-            .map_err(|_| {
-                tracing::warn!(id = ?task_id, "requested task not found");
-                tonic::Status::not_found("task not found")
-            })?;
+        let rx = stream_recv.await.map_err(|_| {
+            tracing::warn!(id = ?task_id, "requested task not found");
+            tonic::Status::not_found("task not found")
+        })?;
 
         tracing::debug!(id = ?task_id, "task details watch started");
         let stream = tokio_stream::wrappers::ReceiverStream::new(rx);

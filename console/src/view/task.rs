@@ -257,24 +257,21 @@ fn make_percentiles_widgets(details: DetailsRef, task_id: u64) -> (Text<'static>
         .and_then(|details| filter_same_task(task_id, details))
         .and_then(|details| details.poll_times_histogram())
         .map(|histogram| {
-            [10f64, 25f64, 50f64, 75f64, 90f64, 95f64, 99f64].iter().map(|i| {
-                (*i, histogram.value_at_percentile(*i))
-            }).collect::<Vec<(f64, u64)>>()
+            [10f64, 25f64, 50f64, 75f64, 90f64, 95f64, 99f64]
+                .iter()
+                .map(|i| (*i, histogram.value_at_percentile(*i)))
+                .collect::<Vec<(f64, u64)>>()
         })
         .map(|pairs| {
             pairs.into_iter().map(|pair| {
-                Spans::from(
-                    vec![
-                        bold(format!("p{:>2}: ", pair.0)),
-                        Span::from(
-                            format!(
-                                "{:.prec$?}",
-                                Duration::from_nanos(pair.1),
-                                prec = DUR_PRECISION,
-                            )
-                        )
-                    ],
-                )
+                Spans::from(vec![
+                    bold(format!("p{:>2}: ", pair.0)),
+                    Span::from(format!(
+                        "{:.prec$?}",
+                        Duration::from_nanos(pair.1),
+                        prec = DUR_PRECISION,
+                    )),
+                ])
             })
         });
 
