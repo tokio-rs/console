@@ -257,24 +257,23 @@ fn make_percentiles_widgets(details: DetailsRef, task_id: u64) -> (Text<'static>
         .and_then(|details| filter_same_task(task_id, details))
         .and_then(|details| details.poll_times_histogram())
         .map(|histogram| {
-            vec![
-                (5, histogram.value_at_percentile(5.0)),
-                (10, histogram.value_at_percentile(10.0)),
-                (25, histogram.value_at_percentile(25.0)),
-                (50, histogram.value_at_percentile(50.0)),
-                (75, histogram.value_at_percentile(75.0)),
-                (90, histogram.value_at_percentile(90.0)),
-                (95, histogram.value_at_percentile(95.0)),
-                (99, histogram.value_at_percentile(99.0)),
-            ]
+            [10f64, 25f64, 50f64, 75f64, 90f64, 95f64, 99f64].iter().map(|i| {
+                (*i, histogram.value_at_percentile(*i))
+            }).collect::<Vec<(f64, u64)>>()
         })
         .map(|pairs| {
             pairs.into_iter().map(|pair| {
-                format!(
-                    "p{}: {:.prec$?}",
-                    pair.0,
-                    Duration::from_nanos(pair.1),
-                    prec = DUR_PRECISION,
+                Spans::from(
+                    vec![
+                        bold(format!("p{:>2}: ", pair.0)),
+                        Span::from(
+                            format!(
+                                "{:.prec$?}",
+                                Duration::from_nanos(pair.1),
+                                prec = DUR_PRECISION,
+                            )
+                        )
+                    ],
                 )
             })
         });
@@ -282,7 +281,7 @@ fn make_percentiles_widgets(details: DetailsRef, task_id: u64) -> (Text<'static>
     let mut percentiles_1 = Text::default();
     let mut percentiles_2 = Text::default();
     if let Some(mut percentiles_iter) = percentiles_iter {
-        percentiles_1.extend(percentiles_iter.by_ref().take(4).map(Spans::from));
+        percentiles_1.extend(percentiles_iter.by_ref().take(5).map(Spans::from));
         percentiles_2.extend(percentiles_iter.map(Spans::from));
     }
     (percentiles_1, percentiles_2)
