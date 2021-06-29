@@ -11,12 +11,20 @@ use std::{
 };
 use tui::text::Span;
 
+#[derive(Debug)]
+pub(crate) enum ConnectionState {
+    Pending,
+    Connected(String),
+    Disconnected,
+}
+
 #[derive(Default, Debug)]
 pub(crate) struct State {
     tasks: HashMap<u64, Rc<RefCell<Task>>>,
     metas: HashMap<u64, Metadata>,
     last_updated_at: Option<SystemTime>,
     new_tasks: Vec<TaskRef>,
+    connection_state: ConnectionState,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -98,6 +106,14 @@ impl State {
     /// Returns any new tasks that were added since the last task update.
     pub(crate) fn take_new_tasks(&mut self) -> impl Iterator<Item = TaskRef> + '_ {
         self.new_tasks.drain(..)
+    }
+
+    pub(crate) fn set_connection_state(&mut self, conn_state: ConnectionState) {
+        self.connection_state = conn_state;
+    }
+
+    pub(crate) fn connection_state(&self) -> &ConnectionState {
+        &self.connection_state
     }
 
     pub(crate) fn update_tasks(&mut self, update: proto::tasks::TaskUpdate) {
@@ -381,5 +397,11 @@ impl fmt::Display for FieldValue {
         }
 
         Ok(())
+    }
+}
+
+impl Default for ConnectionState {
+    fn default() -> ConnectionState {
+        ConnectionState::Pending
     }
 }

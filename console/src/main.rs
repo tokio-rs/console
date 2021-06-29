@@ -1,10 +1,11 @@
 use color_eyre::{eyre::eyre, Help, SectionExt};
 use console_api::tasks::{tasks_client::TasksClient, TasksRequest};
 use futures::stream::StreamExt;
+use tasks::{ConnectionState, State};
 
 use tui::{
     layout::{Constraint, Direction, Layout},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Span, Spans},
     widgets::{Block, Paragraph, Wrap},
 };
@@ -30,8 +31,9 @@ async fn main() -> color_eyre::Result<()> {
 
     let mut client = TasksClient::connect(target.clone()).await?;
     let request = tonic::Request::new(TasksRequest {});
+    let mut tasks = State::default();
     let mut stream = client.watch_tasks(request).await?.into_inner();
-    let mut tasks = tasks::State::default();
+    tasks.set_connection_state(ConnectionState::Connected(target));
     let mut input = input::EventStream::new();
     let mut view = view::View::default();
     loop {
@@ -46,10 +48,20 @@ async fn main() -> color_eyre::Result<()> {
                 view.update_input(input);
             },
             task_update = stream.next() => {
-                let update = task_update
-                    .ok_or_else(|| eyre!("data stream closed by server"))
-                    .with_section(|| "in the future, this should be reconnected automatically...".header("Note:"))?;
-                tasks.update_tasks(update?);
+                match task_update {
+                    Some(Ok(update)) => {
+                        tasks.update_tasks(update);
+                    },
+                    Some(Err(status)) => {
+                        tracing::error!(%status, "error fro stream");
+                        tasks.set_connection_state(ConnectionState::Disconnected);
+                    },
+                    None => {
+                        tracing::error!("data stream closed by server");
+                        tasks.set_connection_state(ConnectionState::Disconnected);
+                    }
+
+                }
             }
         }
         terminal.draw(|f| {
@@ -60,11 +72,25 @@ async fn main() -> color_eyre::Result<()> {
                 .split(f.size());
 
             let header_block = Block::default().title(vec![
-                Span::raw("connected to: "),
-                Span::styled(
-                    target.as_str(),
-                    Style::default().add_modifier(Modifier::BOLD),
-                ),
+                Span::raw("connection: "),
+                match tasks.connection_state() {
+                    ConnectionState::Connected(t) => Span::styled(
+                        t.as_str(),
+                        Style::default()
+                            .add_modifier(Modifier::BOLD)
+                            .fg(Color::Green),
+                    ),
+                    ConnectionState::Disconnected => Span::styled(
+                        "DISCONNECTED",
+                        Style::default().add_modifier(Modifier::BOLD).fg(Color::Red),
+                    ),
+                    ConnectionState::Pending => Span::styled(
+                        "PENDING",
+                        Style::default()
+                            .add_modifier(Modifier::BOLD)
+                            .fg(Color::Yellow),
+                    ),
+                },
             ]);
 
             let text = vec![Spans::from(vec![
