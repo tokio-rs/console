@@ -46,6 +46,10 @@ impl TaskView {
         // - logs?
 
         let task = &*self.task.borrow();
+        let details_ref = self.details.borrow();
+        let details = details_ref
+            .as_ref()
+            .filter(|details| details.task_id() == task.id());
 
         let chunks = Layout::default()
             .direction(layout::Direction::Vertical)
@@ -170,8 +174,9 @@ impl TaskView {
         // If we overshoot, there will be empty columns/buckets at the right end of the chart.
         // If we undershoot, the rightmost 1-2 columns/buckets will be hidden.
         // We could get the max bucket value from the previous render though...
-        let (chart_data, metadata) =
-            make_chart_data(self.details.clone(), task.id(), sparkline_area.width - 3);
+        let (chart_data, metadata) = details
+            .map(|d| d.make_chart_data(sparkline_area.width - 3))
+            .unwrap_or_default();
 
         let histogram_sparkline = MiniHistogram::default()
             .block(
@@ -188,8 +193,9 @@ impl TaskView {
         let fields_widget = Paragraph::new(fields).block(block_for("Fields"));
 
         let percentiles_widget = block_for("Poll Times Percentiles");
-        let (percentiles_1, percentiles_2) =
-            make_percentiles_widgets(self.details.clone(), task.id());
+        let (percentiles_1, percentiles_2) = details
+            .map(|d| d.make_percentiles_widgets(5))
+            .unwrap_or_default();
         let percentiles_widget_1 = Paragraph::new(percentiles_1);
         let percentiles_widget_2 = Paragraph::new(percentiles_2);
 
@@ -204,90 +210,85 @@ impl TaskView {
     }
 }
 
-fn make_chart_data(details: DetailsRef, task_id: u64, width: u16) -> (Vec<u64>, HistogramMetadata) {
-    details
-        .borrow()
-        .as_ref()
-        .and_then(|details| filter_same_task(task_id, details))
-        .and_then(|details| details.poll_times_histogram())
-        .map(|histogram| {
-            let step_size =
-                ((histogram.max() - histogram.min()) as f64 / width as f64).ceil() as u64 + 1;
-            // `iter_linear` panics if step_size is 0
-            let data = if step_size > 0 {
-                let mut found_first_nonzero = false;
-                let data: Vec<u64> = histogram
-                    .iter_linear(step_size)
-                    .map(|it| it.count_since_last_iteration())
-                    .filter(|count| {
-                        // Remove the 0s from the leading side of the buckets.
-                        // Because HdrHistogram can return empty buckets depending
-                        // on its internal state, as it approximates values.
-                        if *count == 0 && !found_first_nonzero {
-                            false
-                        } else {
-                            found_first_nonzero = true;
-                            true
-                        }
-                    })
-                    .collect();
-                data
-            } else {
-                Vec::new()
-            };
-            let max_bucket = data.iter().max().copied().unwrap_or_default();
-            let min_bucket = data.iter().min().copied().unwrap_or_default();
-            (
-                data,
-                HistogramMetadata {
-                    max_value: histogram.max(),
-                    min_value: histogram.min(),
-                    max_bucket,
-                    min_bucket,
-                },
-            )
-        })
-        .unwrap_or_default()
-}
-
-fn make_percentiles_widgets(details: DetailsRef, task_id: u64) -> (Text<'static>, Text<'static>) {
-    let percentiles_iter = details
-        .borrow()
-        .as_ref()
-        .and_then(|details| filter_same_task(task_id, details))
-        .and_then(|details| details.poll_times_histogram())
-        .map(|histogram| {
-            [10f64, 25f64, 50f64, 75f64, 90f64, 95f64, 99f64]
-                .iter()
-                .map(|i| (*i, histogram.value_at_percentile(*i)))
-                .collect::<Vec<(f64, u64)>>()
-        })
-        .map(|pairs| {
-            pairs.into_iter().map(|pair| {
-                Spans::from(vec![
-                    bold(format!("p{:>2}: ", pair.0)),
-                    Span::from(format!(
-                        "{:.prec$?}",
-                        Duration::from_nanos(pair.1),
-                        prec = DUR_PRECISION,
-                    )),
-                ])
+impl Details {
+    /// From the histogram, build a visual representation by trying to make as
+    // many buckets as the width of the render area.
+    fn make_chart_data(&self, width: u16) -> (Vec<u64>, HistogramMetadata) {
+        self.poll_times_histogram()
+            .map(|histogram| {
+                let step_size =
+                    ((histogram.max() - histogram.min()) as f64 / width as f64).ceil() as u64 + 1;
+                // `iter_linear` panics if step_size is 0
+                let data = if step_size > 0 {
+                    let mut found_first_nonzero = false;
+                    let data: Vec<u64> = histogram
+                        .iter_linear(step_size)
+                        .map(|it| it.count_since_last_iteration())
+                        .filter(|count| {
+                            // Remove the 0s from the leading side of the buckets.
+                            // Because HdrHistogram can return empty buckets depending
+                            // on its internal state, as it approximates values.
+                            if *count == 0 && !found_first_nonzero {
+                                false
+                            } else {
+                                found_first_nonzero = true;
+                                true
+                            }
+                        })
+                        .collect();
+                    data
+                } else {
+                    Vec::new()
+                };
+                let max_bucket = data.iter().max().copied().unwrap_or_default();
+                let min_bucket = data.iter().min().copied().unwrap_or_default();
+                (
+                    data,
+                    HistogramMetadata {
+                        max_value: histogram.max(),
+                        min_value: histogram.min(),
+                        max_bucket,
+                        min_bucket,
+                    },
+                )
             })
-        });
-
-    let mut percentiles_1 = Text::default();
-    let mut percentiles_2 = Text::default();
-    if let Some(mut percentiles_iter) = percentiles_iter {
-        percentiles_1.extend(percentiles_iter.by_ref().take(5).map(Spans::from));
-        percentiles_2.extend(percentiles_iter.map(Spans::from));
+            .unwrap_or_default()
     }
-    (percentiles_1, percentiles_2)
-}
 
-fn filter_same_task(task_id: u64, details: &Details) -> Option<&Details> {
-    if details.task_id() == task_id {
-        Some(details)
-    } else {
-        None
+    /// Get the important percentile values from the histogram and  make two paragraphs listing them
+    fn make_percentiles_widgets(&self, column_height: usize) -> (Text<'static>, Text<'static>) {
+        let percentiles_iter = self
+            .poll_times_histogram()
+            .map(|histogram| {
+                [10f64, 25f64, 50f64, 75f64, 90f64, 95f64, 99f64]
+                    .iter()
+                    .map(|i| (*i, histogram.value_at_percentile(*i)))
+                    .collect::<Vec<(f64, u64)>>()
+            })
+            .map(|pairs| {
+                pairs.into_iter().map(|pair| {
+                    Spans::from(vec![
+                        bold(format!("p{:>2}: ", pair.0)),
+                        Span::from(format!(
+                            "{:.prec$?}",
+                            Duration::from_nanos(pair.1),
+                            prec = DUR_PRECISION,
+                        )),
+                    ])
+                })
+            });
+
+        let mut percentiles_1 = Text::default();
+        let mut percentiles_2 = Text::default();
+        if let Some(mut percentiles_iter) = percentiles_iter {
+            percentiles_1.extend(
+                percentiles_iter
+                    .by_ref()
+                    .take(column_height)
+                    .map(Spans::from),
+            );
+            percentiles_2.extend(percentiles_iter.map(Spans::from));
+        }
+        (percentiles_1, percentiles_2)
     }
 }
