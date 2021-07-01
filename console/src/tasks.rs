@@ -195,7 +195,7 @@ impl State {
         }
     }
 
-    pub(crate) fn get_task_details_ref(&self) -> DetailsRef {
+    pub(crate) fn details_ref(&self) -> DetailsRef {
         self.current_task_details.clone()
     }
 

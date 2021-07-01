@@ -223,16 +223,16 @@ impl Details {
                     let mut found_first_nonzero = false;
                     let data: Vec<u64> = histogram
                         .iter_linear(step_size)
-                        .map(|it| it.count_since_last_iteration())
-                        .filter(|count| {
+                        .filter_map(|value| {
+                            let count = value.count_since_last_iteration();
                             // Remove the 0s from the leading side of the buckets.
                             // Because HdrHistogram can return empty buckets depending
                             // on its internal state, as it approximates values.
-                            if *count == 0 && !found_first_nonzero {
-                                false
+                            if count == 0 && !found_first_nonzero {
+                                None
                             } else {
                                 found_first_nonzero = true;
-                                true
+                                Some(count)
                             }
                         })
                         .collect();
@@ -255,18 +255,17 @@ impl Details {
             .unwrap_or_default()
     }
 
-    /// Get the important percentile values from the histogram and  make two paragraphs listing them
+    /// Get the important percentile values from the histogram and make two paragraphs listing them
     fn make_percentiles_widgets(&self, column_height: usize) -> (Text<'static>, Text<'static>) {
         let percentiles_iter = self
             .poll_times_histogram()
             .map(|histogram| {
                 [10f64, 25f64, 50f64, 75f64, 90f64, 95f64, 99f64]
                     .iter()
-                    .map(|i| (*i, histogram.value_at_percentile(*i)))
-                    .collect::<Vec<(f64, u64)>>()
+                    .map(move |i| (*i, histogram.value_at_percentile(*i)))
             })
             .map(|pairs| {
-                pairs.into_iter().map(|pair| {
+                pairs.map(|pair| {
                     Spans::from(vec![
                         bold(format!("p{:>2}: ", pair.0)),
                         Span::from(format!(

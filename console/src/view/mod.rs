@@ -60,10 +60,8 @@ impl View {
                     key!(Enter) => {
                         if let Some(task) = self.list.selected_task().upgrade() {
                             update_kind = UpdateKind::SelectTask(task.borrow().id());
-                            self.state = TaskInstance(self::task::TaskView::new(
-                                task,
-                                tasks.get_task_details_ref(),
-                            ));
+                            self.state =
+                                TaskInstance(self::task::TaskView::new(task, tasks.details_ref()));
                         }
                     }
                     _ => {
