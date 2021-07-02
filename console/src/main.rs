@@ -1,7 +1,7 @@
 use color_eyre::{eyre::eyre, Help, SectionExt};
-use console_api::tasks::{tasks_client::TasksClient, TasksRequest};
+use console_api::tasks::{tasks_client::TasksClient, TaskUpdate, TasksRequest};
 use futures::stream::StreamExt;
-use tasks::{ConnectionState, State};
+use tasks::State;
 
 use tui::{
     layout::{Constraint, Direction, Layout},
@@ -14,6 +14,25 @@ mod input;
 mod tasks;
 mod term;
 mod view;
+
+enum ConnectionState {
+    Connected,
+    Disconnected,
+}
+
+async fn connect(
+    target: String,
+    should_delay: bool,
+) -> Result<tonic::Streaming<TaskUpdate>, Box<dyn std::error::Error>> {
+    if should_delay {
+        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+    }
+
+    let mut client = TasksClient::connect(target).await?;
+    let request = tonic::Request::new(TasksRequest {});
+    let rsp = client.watch_tasks(request).await?;
+    Ok(rsp.into_inner())
+}
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
@@ -28,14 +47,12 @@ async fn main() -> color_eyre::Result<()> {
 
     let (mut terminal, _cleanup) = term::init_crossterm()?;
     terminal.clear()?;
-
-    let mut client = TasksClient::connect(target.clone()).await?;
-    let request = tonic::Request::new(TasksRequest {});
     let mut tasks = State::default();
-    let mut stream = client.watch_tasks(request).await?.into_inner();
-    tasks.set_connection_state(ConnectionState::Connected(target));
+    let mut stream: Option<tonic::Streaming<TaskUpdate>> = None;
+    let mut connection_state: Option<ConnectionState> = None;
     let mut input = input::EventStream::new();
     let mut view = view::View::default();
+
     loop {
         tokio::select! { biased;
             input = input.next() => {
@@ -47,18 +64,35 @@ async fn main() -> color_eyre::Result<()> {
                 }
                 view.update_input(input);
             },
-            task_update = stream.next() => {
+            connection = connect(target.clone(), connection_state.is_some()), if stream.is_none() => {
+                match connection {
+                    Ok(s) => {
+                        stream = Some(s);
+                        connection_state = Some(ConnectionState::Connected);
+                    },
+                    Err(err) => {
+                        tracing::error!(%err, "connection unsuccessful");
+                        stream = None;
+                    }
+                }
+            },
+            task_update = async { match stream.as_mut() {
+                Some(s) => s.next().await,
+                None => None,
+            }}, if stream.is_some() => {
                 match task_update {
                     Some(Ok(update)) => {
                         tasks.update_tasks(update);
                     },
                     Some(Err(status)) => {
-                        tracing::error!(%status, "error fro stream");
-                        tasks.set_connection_state(ConnectionState::Disconnected);
+                        tracing::error!(%status, "error from stream");
+                        stream = None;
+                        connection_state = Some(ConnectionState::Disconnected);
                     },
                     None => {
-                        tracing::error!("data stream closed by server");
-                        tasks.set_connection_state(ConnectionState::Disconnected);
+                        tracing::error!("stream closed by server");
+                        stream = None;
+                        connection_state = Some(ConnectionState::Disconnected);
                     }
 
                 }
@@ -71,24 +105,20 @@ async fn main() -> color_eyre::Result<()> {
                 .constraints([Constraint::Length(2), Constraint::Percentage(95)].as_ref())
                 .split(f.size());
 
+            let target = target.clone();
+
             let header_block = Block::default().title(vec![
-                Span::raw("connection: "),
-                match tasks.connection_state() {
-                    ConnectionState::Connected(t) => Span::styled(
-                        t.as_str(),
+                Span::raw(format!("connection: {} ", target.clone())),
+                match connection_state {
+                    Some(ConnectionState::Connected) => Span::styled(
+                        "(CONNECTED)",
                         Style::default()
                             .add_modifier(Modifier::BOLD)
                             .fg(Color::Green),
                     ),
-                    ConnectionState::Disconnected => Span::styled(
-                        "DISCONNECTED",
+                    Some(ConnectionState::Disconnected) | None => Span::styled(
+                        "(DISCONNECTED)",
                         Style::default().add_modifier(Modifier::BOLD).fg(Color::Red),
-                    ),
-                    ConnectionState::Pending => Span::styled(
-                        "PENDING",
-                        Style::default()
-                            .add_modifier(Modifier::BOLD)
-                            .fg(Color::Yellow),
                     ),
                 },
             ]);
