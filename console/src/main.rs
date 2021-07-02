@@ -105,10 +105,8 @@ async fn main() -> color_eyre::Result<()> {
                 .constraints([Constraint::Length(2), Constraint::Percentage(95)].as_ref())
                 .split(f.size());
 
-            let target = target.clone();
-
             let header_block = Block::default().title(vec![
-                Span::raw(format!("connection: {} ", target.clone())),
+                Span::raw(format!("connection: {} ", target)),
                 match connection_state {
                     Some(ConnectionState::Connected) => Span::styled(
                         "(CONNECTED)",
