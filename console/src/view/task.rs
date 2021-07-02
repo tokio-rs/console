@@ -1,5 +1,16 @@
-use crate::{input, tasks::Task, view::bold};
-use std::{cell::RefCell, rc::Rc, time::SystemTime};
+use crate::{
+    input,
+    tasks::{Details, DetailsRef, Task},
+    view::{
+        bold,
+        mini_histogram::{HistogramMetadata, MiniHistogram},
+    },
+};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    time::{Duration, SystemTime},
+};
 use tui::{
     layout::{self, Layout},
     text::{Span, Spans, Text},
@@ -8,11 +19,14 @@ use tui::{
 
 pub(crate) struct TaskView {
     task: Rc<RefCell<Task>>,
+    details: DetailsRef,
 }
 
+const DUR_PRECISION: usize = 4;
+
 impl TaskView {
-    pub(super) fn new(task: Rc<RefCell<Task>>) -> Self {
-        TaskView { task }
+    pub(super) fn new(task: Rc<RefCell<Task>>, details: DetailsRef) -> Self {
+        TaskView { task, details }
     }
 
     pub(crate) fn update_input(&mut self, _event: input::Event) {
@@ -32,7 +46,10 @@ impl TaskView {
         // - logs?
 
         let task = &*self.task.borrow();
-        const DUR_PRECISION: usize = 4;
+        let details_ref = self.details.borrow();
+        let details = details_ref
+            .as_ref()
+            .filter(|details| details.task_id() == task.id());
 
         let chunks = Layout::default()
             .direction(layout::Direction::Vertical)
@@ -40,6 +57,7 @@ impl TaskView {
                 [
                     layout::Constraint::Length(1),
                     layout::Constraint::Length(6),
+                    layout::Constraint::Length(7),
                     layout::Constraint::Percentage(60),
                 ]
                 .as_ref(),
@@ -58,7 +76,33 @@ impl TaskView {
             )
             .split(chunks[1]);
 
-        let fields_area = chunks[2];
+        let histogram_area = Layout::default()
+            .direction(layout::Direction::Horizontal)
+            .constraints(
+                [
+                    layout::Constraint::Percentage(50),
+                    layout::Constraint::Percentage(50),
+                ]
+                .as_ref(),
+            )
+            .split(chunks[2]);
+
+        let percentiles_columns = Layout::default()
+            .direction(layout::Direction::Horizontal)
+            .constraints(
+                [
+                    layout::Constraint::Percentage(50),
+                    layout::Constraint::Percentage(50),
+                ]
+                .as_ref(),
+            )
+            .split(histogram_area[0].inner(&layout::Margin {
+                horizontal: 1,
+                vertical: 1,
+            }));
+
+        let fields_area = chunks[3];
+        let sparkline_area = histogram_area[1];
 
         let controls = Spans::from(vec![
             Span::raw("controls: "),
@@ -123,13 +167,127 @@ impl TaskView {
         let mut fields = Text::default();
         fields.extend(task.formatted_fields().iter().cloned().map(Spans::from));
 
+        // Bit of a deadlock: We cannot know the highest bucket value without determining the number of buckets,
+        // and we cannot determine the number of buckets without knowing the width of the chart area which depends on
+        // the number of digits in the highest bucket value.
+        // So just assume here the number of digits in the highest bucket value is 3.
+        // If we overshoot, there will be empty columns/buckets at the right end of the chart.
+        // If we undershoot, the rightmost 1-2 columns/buckets will be hidden.
+        // We could get the max bucket value from the previous render though...
+        let (chart_data, metadata) = details
+            .map(|d| d.make_chart_data(sparkline_area.width - 3))
+            .unwrap_or_default();
+
+        let histogram_sparkline = MiniHistogram::default()
+            .block(
+                Block::default()
+                    .title("Poll Times Histogram")
+                    .borders(Borders::ALL),
+            )
+            .data(&chart_data)
+            .metadata(metadata)
+            .duration_precision(2);
+
         let task_widget = Paragraph::new(metrics).block(block_for("Task"));
         let wakers_widget = Paragraph::new(vec![wakers, wakeups]).block(block_for("Waker"));
         let fields_widget = Paragraph::new(fields).block(block_for("Fields"));
+
+        let percentiles_widget = block_for("Poll Times Percentiles");
+        let (percentiles_1, percentiles_2) = details
+            .map(|d| d.make_percentiles_widgets(5))
+            .unwrap_or_default();
+        let percentiles_widget_1 = Paragraph::new(percentiles_1);
+        let percentiles_widget_2 = Paragraph::new(percentiles_2);
 
         frame.render_widget(Block::default().title(controls), controls_area);
         frame.render_widget(task_widget, stats_area[0]);
         frame.render_widget(wakers_widget, stats_area[1]);
         frame.render_widget(fields_widget, fields_area);
+        frame.render_widget(percentiles_widget, histogram_area[0]);
+        frame.render_widget(percentiles_widget_1, percentiles_columns[0]);
+        frame.render_widget(percentiles_widget_2, percentiles_columns[1]);
+        frame.render_widget(histogram_sparkline, sparkline_area);
+    }
+}
+
+impl Details {
+    /// From the histogram, build a visual representation by trying to make as
+    // many buckets as the width of the render area.
+    fn make_chart_data(&self, width: u16) -> (Vec<u64>, HistogramMetadata) {
+        self.poll_times_histogram()
+            .map(|histogram| {
+                let step_size =
+                    ((histogram.max() - histogram.min()) as f64 / width as f64).ceil() as u64 + 1;
+                // `iter_linear` panics if step_size is 0
+                let data = if step_size > 0 {
+                    let mut found_first_nonzero = false;
+                    let data: Vec<u64> = histogram
+                        .iter_linear(step_size)
+                        .filter_map(|value| {
+                            let count = value.count_since_last_iteration();
+                            // Remove the 0s from the leading side of the buckets.
+                            // Because HdrHistogram can return empty buckets depending
+                            // on its internal state, as it approximates values.
+                            if count == 0 && !found_first_nonzero {
+                                None
+                            } else {
+                                found_first_nonzero = true;
+                                Some(count)
+                            }
+                        })
+                        .collect();
+                    data
+                } else {
+                    Vec::new()
+                };
+                let max_bucket = data.iter().max().copied().unwrap_or_default();
+                let min_bucket = data.iter().min().copied().unwrap_or_default();
+                (
+                    data,
+                    HistogramMetadata {
+                        max_value: histogram.max(),
+                        min_value: histogram.min(),
+                        max_bucket,
+                        min_bucket,
+                    },
+                )
+            })
+            .unwrap_or_default()
+    }
+
+    /// Get the important percentile values from the histogram and make two paragraphs listing them
+    fn make_percentiles_widgets(&self, column_height: usize) -> (Text<'static>, Text<'static>) {
+        let percentiles_iter = self
+            .poll_times_histogram()
+            .map(|histogram| {
+                [10f64, 25f64, 50f64, 75f64, 90f64, 95f64, 99f64]
+                    .iter()
+                    .map(move |i| (*i, histogram.value_at_percentile(*i)))
+            })
+            .map(|pairs| {
+                pairs.map(|pair| {
+                    Spans::from(vec![
+                        bold(format!("p{:>2}: ", pair.0)),
+                        Span::from(format!(
+                            "{:.prec$?}",
+                            Duration::from_nanos(pair.1),
+                            prec = DUR_PRECISION,
+                        )),
+                    ])
+                })
+            });
+
+        let mut percentiles_1 = Text::default();
+        let mut percentiles_2 = Text::default();
+        if let Some(mut percentiles_iter) = percentiles_iter {
+            percentiles_1.extend(
+                percentiles_iter
+                    .by_ref()
+                    .take(column_height)
+                    .map(Spans::from),
+            );
+            percentiles_2.extend(percentiles_iter.map(Spans::from));
+        }
+        (percentiles_1, percentiles_2)
     }
 }

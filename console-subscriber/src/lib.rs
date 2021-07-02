@@ -1,5 +1,6 @@
 use console_api as proto;
-use tokio::sync::mpsc;
+use proto::SpanId;
+use tokio::sync::{mpsc, oneshot};
 
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -34,7 +35,7 @@ pub struct TasksLayer {
 }
 
 pub struct Server {
-    subscribe: mpsc::Sender<Watch>,
+    subscribe: mpsc::Sender<WatchKind>,
     addr: SocketAddr,
     aggregator: Option<Aggregator>,
     client_buffer: usize,
@@ -50,7 +51,18 @@ struct WakerVisitor {
     op: Option<WakeOp>,
 }
 
-struct Watch(mpsc::Sender<Result<proto::tasks::TaskUpdate, tonic::Status>>);
+struct Watch<T>(mpsc::Sender<Result<T, tonic::Status>>);
+
+enum WatchKind {
+    Tasks(Watch<proto::tasks::TaskUpdate>),
+    TaskDetail(WatchRequest<proto::tasks::TaskDetails>),
+}
+
+struct WatchRequest<T> {
+    id: SpanId,
+    stream_sender: oneshot::Sender<mpsc::Receiver<Result<T, tonic::Status>>>,
+    buffer: usize,
+}
 
 enum Event {
     Metadata(&'static Metadata<'static>),
@@ -331,6 +343,8 @@ impl Server {
 impl proto::tasks::tasks_server::Tasks for Server {
     type WatchTasksStream =
         tokio_stream::wrappers::ReceiverStream<Result<proto::tasks::TaskUpdate, tonic::Status>>;
+    type WatchTaskDetailsStream =
+        tokio_stream::wrappers::ReceiverStream<Result<proto::tasks::TaskDetails, tonic::Status>>;
     async fn watch_tasks(
         &self,
         req: tonic::Request<proto::tasks::TasksRequest>,
@@ -343,8 +357,38 @@ impl proto::tasks::tasks_server::Tasks for Server {
             tonic::Status::internal("cannot start new watch, aggregation task is not running")
         })?;
         let (tx, rx) = mpsc::channel(self.client_buffer);
-        permit.send(Watch(tx));
+        permit.send(WatchKind::Tasks(Watch(tx)));
         tracing::debug!("watch started");
+        let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        Ok(tonic::Response::new(stream))
+    }
+
+    async fn watch_task_details(
+        &self,
+        req: tonic::Request<proto::tasks::DetailsRequest>,
+    ) -> Result<tonic::Response<Self::WatchTaskDetailsStream>, tonic::Status> {
+        let task_id = req
+            .into_inner()
+            .id
+            .ok_or_else(|| tonic::Status::invalid_argument("missing task_id"))?;
+        let permit = self.subscribe.reserve().await.map_err(|_| {
+            tonic::Status::internal("cannot start new watch, aggregation task is not running")
+        })?;
+
+        // Check with the aggregator task to request a stream if the task exists.
+        let (stream_sender, stream_recv) = oneshot::channel();
+        permit.send(WatchKind::TaskDetail(WatchRequest {
+            id: task_id.clone(),
+            stream_sender,
+            buffer: self.client_buffer,
+        }));
+        // If the aggregator drops the sender, the task doesn't exist.
+        let rx = stream_recv.await.map_err(|_| {
+            tracing::warn!(id = ?task_id, "requested task not found");
+            tonic::Status::not_found("task not found")
+        })?;
+
+        tracing::debug!(id = ?task_id, "task details watch started");
         let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
         Ok(tonic::Response::new(stream))
     }
