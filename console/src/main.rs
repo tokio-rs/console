@@ -20,20 +20,6 @@ enum ConnectionState {
     Disconnected,
 }
 
-async fn connect(
-    target: String,
-    should_delay: bool,
-) -> Result<tonic::Streaming<TaskUpdate>, Box<dyn std::error::Error>> {
-    if should_delay {
-        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-    }
-
-    let mut client = TasksClient::connect(target).await?;
-    let request = tonic::Request::new(TasksRequest {});
-    let rsp = client.watch_tasks(request).await?;
-    Ok(rsp.into_inner())
-}
-
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -135,4 +121,18 @@ async fn main() -> color_eyre::Result<()> {
             view.render(f, chunks[1], &mut tasks);
         })?;
     }
+}
+
+async fn connect(
+    target: String,
+    is_reconnect: bool,
+) -> Result<tonic::Streaming<TaskUpdate>, Box<dyn std::error::Error>> {
+    if is_reconnect {
+        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+    }
+
+    let mut client = TasksClient::connect(target).await?;
+    let request = tonic::Request::new(TasksRequest {});
+    let rsp = client.watch_tasks(request).await?;
+    Ok(rsp.into_inner())
 }
