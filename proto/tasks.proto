@@ -8,9 +8,14 @@ import "common.proto";
 
 service Tasks {
     rpc WatchTasks(TasksRequest) returns (stream TaskUpdate) {}
+    rpc WatchTaskDetails(DetailsRequest) returns (stream TaskDetails) {}
 }
 
 message TasksRequest {
+}
+
+message DetailsRequest {
+    common.SpanId id = 1;
 }
 
 // A task state update.
@@ -42,6 +47,17 @@ message TaskUpdate {
     // This is the timestamp any durations in the included `Stats` were
     // calculated relative to.
     google.protobuf.Timestamp now = 4;
+}
+
+// A task details update
+message TaskDetails {
+    // The task's ID which the details belong to.
+    common.SpanId task_id = 1;
+
+    google.protobuf.Timestamp now = 2;
+
+    // HdrHistogram.rs `Histogram` serialized to binary in the V2 format
+    optional bytes poll_times_histogram = 3;
 }
 
 // Data recorded when a new task is spawned.
