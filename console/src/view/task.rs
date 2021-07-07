@@ -57,7 +57,7 @@ impl TaskView {
                 [
                     layout::Constraint::Length(1),
                     layout::Constraint::Length(6),
-                    layout::Constraint::Length(7),
+                    layout::Constraint::Length(9),
                     layout::Constraint::Percentage(60),
                 ]
                 .as_ref(),
@@ -80,29 +80,18 @@ impl TaskView {
             .direction(layout::Direction::Horizontal)
             .constraints(
                 [
-                    layout::Constraint::Percentage(50),
-                    layout::Constraint::Percentage(50),
+                    // 24 chars is long enough for the title "Poll Times Percentiles"
+                    layout::Constraint::Max(24),
+                    layout::Constraint::Min(50),
                 ]
                 .as_ref(),
             )
             .split(chunks[2]);
 
-        let percentiles_columns = Layout::default()
-            .direction(layout::Direction::Horizontal)
-            .constraints(
-                [
-                    layout::Constraint::Percentage(50),
-                    layout::Constraint::Percentage(50),
-                ]
-                .as_ref(),
-            )
-            .split(histogram_area[0].inner(&layout::Margin {
-                horizontal: 1,
-                vertical: 1,
-            }));
+        let percentiles_area = histogram_area[0];
+        let sparkline_area = histogram_area[1];
 
         let fields_area = chunks[3];
-        let sparkline_area = histogram_area[1];
 
         let controls = Spans::from(vec![
             Span::raw("controls: "),
@@ -191,21 +180,18 @@ impl TaskView {
         let task_widget = Paragraph::new(metrics).block(block_for("Task"));
         let wakers_widget = Paragraph::new(vec![wakers, wakeups]).block(block_for("Waker"));
         let fields_widget = Paragraph::new(fields).block(block_for("Fields"));
-
-        let percentiles_widget = block_for("Poll Times Percentiles");
-        let (percentiles_1, percentiles_2) = details
-            .map(|d| d.make_percentiles_widgets(5))
-            .unwrap_or_default();
-        let percentiles_widget_1 = Paragraph::new(percentiles_1);
-        let percentiles_widget_2 = Paragraph::new(percentiles_2);
+        let percentiles_widget = Paragraph::new(
+            details
+                .map(Details::make_percentiles_widget)
+                .unwrap_or_default(),
+        )
+        .block(block_for("Poll Times Percentiles"));
 
         frame.render_widget(Block::default().title(controls), controls_area);
         frame.render_widget(task_widget, stats_area[0]);
         frame.render_widget(wakers_widget, stats_area[1]);
         frame.render_widget(fields_widget, fields_area);
-        frame.render_widget(percentiles_widget, histogram_area[0]);
-        frame.render_widget(percentiles_widget_1, percentiles_columns[0]);
-        frame.render_widget(percentiles_widget_2, percentiles_columns[1]);
+        frame.render_widget(percentiles_widget, percentiles_area);
         frame.render_widget(histogram_sparkline, sparkline_area);
     }
 }
@@ -255,39 +241,26 @@ impl Details {
             .unwrap_or_default()
     }
 
-    /// Get the important percentile values from the histogram and make two paragraphs listing them
-    fn make_percentiles_widgets(&self, column_height: usize) -> (Text<'static>, Text<'static>) {
-        let percentiles_iter = self
-            .poll_times_histogram()
-            .map(|histogram| {
-                [10f64, 25f64, 50f64, 75f64, 90f64, 95f64, 99f64]
-                    .iter()
-                    .map(move |i| (*i, histogram.value_at_percentile(*i)))
+    /// Get the important percentile values from the histogram
+    fn make_percentiles_widget(&self) -> Text<'static> {
+        let mut text = Text::default();
+        let histogram = self.poll_times_histogram();
+        let percentiles = histogram.iter().flat_map(|histogram| {
+            let pairs = [10f64, 25f64, 50f64, 75f64, 90f64, 95f64, 99f64]
+                .iter()
+                .map(move |i| (*i, histogram.value_at_percentile(*i)));
+            pairs.map(|pair| {
+                Spans::from(vec![
+                    bold(format!("p{:>2}: ", pair.0)),
+                    Span::from(format!(
+                        "{:.prec$?}",
+                        Duration::from_nanos(pair.1),
+                        prec = DUR_PRECISION,
+                    )),
+                ])
             })
-            .map(|pairs| {
-                pairs.map(|pair| {
-                    Spans::from(vec![
-                        bold(format!("p{:>2}: ", pair.0)),
-                        Span::from(format!(
-                            "{:.prec$?}",
-                            Duration::from_nanos(pair.1),
-                            prec = DUR_PRECISION,
-                        )),
-                    ])
-                })
-            });
-
-        let mut percentiles_1 = Text::default();
-        let mut percentiles_2 = Text::default();
-        if let Some(mut percentiles_iter) = percentiles_iter {
-            percentiles_1.extend(
-                percentiles_iter
-                    .by_ref()
-                    .take(column_height)
-                    .map(Spans::from),
-            );
-            percentiles_2.extend(percentiles_iter.map(Spans::from));
-        }
-        (percentiles_1, percentiles_2)
+        });
+        text.extend(percentiles);
+        text
     }
 }
