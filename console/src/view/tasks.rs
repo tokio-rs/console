@@ -104,7 +104,7 @@ impl List {
                 )),
                 Cell::from(format!(
                     "{:>width$.prec$?}",
-                    task.busy(),
+                    task.busy(now),
                     width = DUR_LEN,
                     prec = DUR_PRECISION,
                 )),

@@ -73,7 +73,8 @@ struct Stats {
     current_polls: u64,
     created_at: Option<SystemTime>,
     first_poll: Option<SystemTime>,
-    last_poll: Option<SystemTime>,
+    last_poll_started: Option<SystemTime>,
+    last_poll_ended: Option<SystemTime>,
     busy_time: Duration,
     closed_at: Option<SystemTime>,
 
@@ -103,7 +104,8 @@ impl Default for Stats {
             current_polls: 0,
             created_at: None,
             first_poll: None,
-            last_poll: None,
+            last_poll_started: None,
+            last_poll_ended: None,
             busy_time: Default::default(),
             closed_at: None,
             wakes: 0,
@@ -363,7 +365,7 @@ impl Aggregator {
             Event::Enter { id, at } => {
                 let mut stats = self.stats.update_or_default(id);
                 if stats.current_polls == 0 {
-                    stats.last_poll = Some(at);
+                    stats.last_poll_started = Some(at);
                     if stats.first_poll == None {
                         stats.first_poll = Some(at);
                     }
@@ -376,8 +378,9 @@ impl Aggregator {
                 let mut stats = self.stats.update_or_default(id);
                 stats.current_polls -= 1;
                 if stats.current_polls == 0 {
-                    if let Some(last_poll) = stats.last_poll {
-                        let elapsed = at.duration_since(last_poll).unwrap();
+                    if let Some(last_poll_started) = stats.last_poll_started {
+                        let elapsed = at.duration_since(last_poll_started).unwrap();
+                        stats.last_poll_ended = Some(at);
                         stats.busy_time += elapsed;
                         stats
                             .poll_times_histogram
@@ -587,7 +590,8 @@ impl Stats {
             polls: self.polls,
             created_at: self.created_at.map(Into::into),
             first_poll: self.first_poll.map(Into::into),
-            last_poll: self.last_poll.map(Into::into),
+            last_poll_started: self.last_poll_started.map(Into::into),
+            last_poll_ended: self.last_poll_ended.map(Into::into),
             busy_time: Some(self.busy_time.into()),
             total_time: self.total_time().map(Into::into),
             wakes: self.wakes,

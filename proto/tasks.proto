@@ -115,32 +115,39 @@ message Stats {
     // Subtracting this timestamp from `created_at` can be used to calculate the
     // time to first poll for this task, a measurement of executor latency.
     optional google.protobuf.Timestamp first_poll = 3;
-    // The timestamp of the most recent time this task was polled.
+    // The timestamp of the most recent time this task's poll method was invoked.
     //
     // If this is `None`, the task has not yet been polled.
     //
     // If the task has only been polled a single time, then this value may be
     // equal to the `first_poll` timestamp.
     //
-    // If the task has completed, then this is the time the final poll occurred.
-    optional google.protobuf.Timestamp last_poll = 4;
+    optional google.protobuf.Timestamp last_poll_started = 4;
+    // The timestamp of the most recent time this task's poll method finished execution.
+    //
+    // If this is `None`, the task has not yet been polled or is currently being polled.
+    //
+    // If the task has completed, then this is the time the final invocation of its poll
+    // method has completed.
+    optional google.protobuf.Timestamp last_poll_ended = 5;
     // The total duration this task was being *actively polled*, summed across
-    // all polls.
-    google.protobuf.Duration busy_time = 5;
+    // all polls. Note that this includes only polls that have completed and is
+    // not reflecting any inprogress polls.
+    google.protobuf.Duration busy_time = 6;
     // The amount of time this task has *existed*, regardless of whether or not
     // it was being polled.
     //
     // Subtracting `busy_time` from `total_time` calculates the task's idle
     // time, the amount of time it has spent *waiting* to be polled.
-    google.protobuf.Duration total_time = 6;
+    google.protobuf.Duration total_time = 7;
     // The total number of times this task's waker has been woken.
-    uint64 wakes = 7;
+    uint64 wakes = 8;
     // The total number of times this task's waker has been cloned.
-    uint64 waker_clones = 8;
+    uint64 waker_clones = 9;
     // The total number of times this task's waker has been dropped.
-    uint64 waker_drops = 9;
+    uint64 waker_drops = 10;
     // The timestamp of the most recent time this task has been woken.
     //
     // If this is `None`, the task has not yet been woken.
-    optional google.protobuf.Timestamp last_wake = 10;
+    optional google.protobuf.Timestamp last_wake = 11;
 }
