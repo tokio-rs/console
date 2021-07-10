@@ -7,7 +7,6 @@ use std::{
     convert::TryFrom,
     fmt,
     io::Cursor,
-    ops::Add,
     rc::{Rc, Weak},
     sync::Arc,
     time::{Duration, SystemTime},
@@ -267,7 +266,7 @@ impl Task {
         {
             // in this case the task is being polled at the moment
             let current_time_in_poll = since.duration_since(last_poll_started).unwrap();
-            return self.stats.busy.add(current_time_in_poll);
+            return self.stats.busy + current_time_in_poll;
         }
         self.stats.busy
     }
