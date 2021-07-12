@@ -56,7 +56,7 @@ impl TaskView {
             .constraints(
                 [
                     layout::Constraint::Length(1),
-                    layout::Constraint::Length(6),
+                    layout::Constraint::Length(7),
                     layout::Constraint::Length(9),
                     layout::Constraint::Percentage(60),
                 ]
@@ -102,6 +102,7 @@ impl TaskView {
         ]);
 
         let attrs = Spans::from(vec![bold("ID: "), Span::raw(task.id_hex())]);
+        let target = Spans::from(vec![bold("Target: "), Span::raw(task.target())]);
 
         let mut total = vec![
             bold("Total Time: "),
@@ -124,7 +125,7 @@ impl TaskView {
             Span::from(format!("{:.prec$?}", task.idle(now), prec = DUR_PRECISION,)),
         ]);
 
-        let metrics = vec![attrs, total, busy, idle];
+        let metrics = vec![attrs, target, total, busy, idle];
 
         let wakers = Spans::from(vec![
             bold("Current wakers: "),

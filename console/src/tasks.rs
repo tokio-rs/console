@@ -44,6 +44,7 @@ pub(crate) struct Task {
     kind: &'static str,
     stats: Stats,
     completed_for: usize,
+    target: Arc<str>,
 }
 
 #[derive(Debug, Default)]
@@ -56,6 +57,7 @@ pub(crate) struct Details {
 #[derive(Debug)]
 pub(crate) struct Metadata {
     field_names: Vec<Arc<str>>,
+    target: Arc<str>,
     //TODO: add more metadata as needed
 }
 
@@ -141,6 +143,20 @@ impl State {
                 proto::tasks::task::Kind::Blocking => "B",
             };
 
+            let meta_id = match task.metadata.as_ref() {
+                Some(id) => id.id,
+                None => {
+                    tracing::warn!(?task, "task has no metadata ID, skipping");
+                    return None;
+                }
+            };
+            let meta = match metas.get(&meta_id) {
+                Some(meta) => meta,
+                None => {
+                    tracing::warn!(?task, meta_id, "no metadata for task, skipping");
+                    return None;
+                }
+            };
             let fields: Vec<Field> = task
                 .fields
                 .drain(..)
@@ -149,11 +165,12 @@ impl State {
                     let name: Option<Arc<str>> = match field_name {
                         proto::field::Name::StrName(n) => Some(n.clone().into()),
                         proto::field::Name::NameIdx(idx) => {
-                            let meta_id = f.metadata_id.as_ref()?;
-                            metas
-                                .get(&meta_id.id)
-                                .and_then(|meta| meta.field_names.get(*idx as usize))
-                                .cloned()
+                            debug_assert_eq!(
+                                f.metadata_id.map(|m| m.id),
+                                Some(meta_id),
+                                "malformed field name: metadata ID mismatch!"
+                            );
+                            meta.field_names.get(*idx as usize).cloned()
                         }
                     };
                     let value = f.value.as_ref().expect("no value").clone().into();
@@ -180,6 +197,7 @@ impl State {
                 kind,
                 stats,
                 completed_for: 0,
+                target: meta.target.clone(),
             };
             task.update();
             let task = Rc::new(RefCell::new(task));
@@ -244,6 +262,10 @@ impl Task {
 
     pub(crate) fn id_hex(&self) -> &str {
         &self.id_hex
+    }
+
+    pub(crate) fn target(&self) -> &str {
+        &self.target
     }
 
     pub(crate) fn formatted_fields(&self) -> &[Vec<Span<'static>>] {
@@ -373,6 +395,7 @@ impl From<proto::Metadata> for Metadata {
     fn from(pb: proto::Metadata) -> Self {
         Self {
             field_names: pb.field_names.into_iter().map(|n| n.into()).collect(),
+            target: pb.target.into(),
         }
     }
 }
