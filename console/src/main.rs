@@ -1,12 +1,15 @@
 use color_eyre::{eyre::eyre, Help, SectionExt};
-use console_api::tasks::{tasks_client::TasksClient, DetailsRequest, TaskDetails, TasksRequest};
+use console_api::tasks::{
+    tasks_client::TasksClient, DetailsRequest, TaskDetails, TaskUpdate, TasksRequest,
+};
 use futures::stream::StreamExt;
+use tasks::State;
 
 use tokio::sync::{mpsc, watch};
 use tonic::transport::Channel;
 use tui::{
     layout::{Constraint, Direction, Layout},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Span, Spans},
     widgets::{Block, Paragraph, Wrap},
 };
@@ -17,6 +20,11 @@ mod input;
 mod tasks;
 mod term;
 mod view;
+
+enum ConnectionState {
+    Connected,
+    Disconnected,
+}
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
@@ -31,19 +39,18 @@ async fn main() -> color_eyre::Result<()> {
 
     let (mut terminal, _cleanup) = term::init_crossterm()?;
     terminal.clear()?;
-
-    let mut client = TasksClient::connect(target.clone()).await?;
-    let request = tonic::Request::new(TasksRequest {});
-    let mut tasks_stream = client.watch_tasks(request).await?.into_inner();
-
+    let mut stream: Option<tonic::Streaming<TaskUpdate>> = None;
+    let mut client: Option<TasksClient<Channel>> = None;
+    let mut connection_state: Option<ConnectionState> = None;
     // A channel to send the outcome of `View::update_input` to the watch_details_stream task.
     let (update_tx, update_rx) = watch::channel(UpdateKind::Other);
     // A channel to send the task details update stream (no need to keep outdated details in the memory)
     let (details_tx, mut details_rx) = mpsc::channel::<TaskDetails>(2);
 
-    let mut tasks = tasks::State::default();
+    let mut tasks = State::default();
     let mut input = input::EventStream::new();
     let mut view = view::View::default();
+
     loop {
         tokio::select! { biased;
             input = input.next() => {
@@ -66,11 +73,40 @@ async fn main() -> color_eyre::Result<()> {
                     _ => {}
                 }
             },
-            task_update = tasks_stream.next() => {
-                let update = task_update
-                    .ok_or_else(|| eyre!("data stream closed by server"))
-                    .with_section(|| "in the future, this should be reconnected automatically...".header("Note:"))?;
-                tasks.update_tasks(update?);
+            connection = connect(target.clone(), connection_state.is_some()), if stream.is_none() => {
+                match connection {
+                    Ok((s, c)) => {
+                        stream = Some(s);
+                        client = Some(c);
+                        connection_state = Some(ConnectionState::Connected);
+                    },
+                    Err(err) => {
+                        tracing::error!(%err, "connection unsuccessful");
+                        stream = None;
+                        client = None;
+                    }
+                }
+            },
+            task_update = async { match stream.as_mut() {
+                Some(s) => s.next().await,
+                None => None,
+            }}, if stream.is_some() => {
+                match task_update {
+                    Some(Ok(update)) => {
+                        tasks.update_tasks(update);
+                    },
+                    Some(Err(status)) => {
+                        tracing::error!(%status, "error from stream");
+                        stream = None;
+                        connection_state = Some(ConnectionState::Disconnected);
+                    },
+                    None => {
+                        tracing::error!("stream closed by server");
+                        stream = None;
+                        connection_state = Some(ConnectionState::Disconnected);
+                    }
+
+                }
             },
             details_update = details_rx.recv() => {
                 if let Some(details_update) = details_update {
@@ -86,11 +122,19 @@ async fn main() -> color_eyre::Result<()> {
                 .split(f.size());
 
             let header_block = Block::default().title(vec![
-                Span::raw("connected to: "),
-                Span::styled(
-                    target.as_str(),
-                    Style::default().add_modifier(Modifier::BOLD),
-                ),
+                Span::raw(format!("connection: {} ", target)),
+                match connection_state {
+                    Some(ConnectionState::Connected) => Span::styled(
+                        "(CONNECTED)",
+                        Style::default()
+                            .add_modifier(Modifier::BOLD)
+                            .fg(Color::Green),
+                    ),
+                    Some(ConnectionState::Disconnected) | None => Span::styled(
+                        "(DISCONNECTED)",
+                        Style::default().add_modifier(Modifier::BOLD).fg(Color::Red),
+                    ),
+                },
             ]);
 
             let text = vec![Spans::from(vec![
@@ -109,6 +153,20 @@ async fn main() -> color_eyre::Result<()> {
     }
 }
 
+async fn connect(
+    target: String,
+    is_reconnect: bool,
+) -> Result<(tonic::Streaming<TaskUpdate>, TasksClient<Channel>), Box<dyn std::error::Error>> {
+    if is_reconnect {
+        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+    }
+
+    let mut client = TasksClient::connect(target).await?;
+    let request = tonic::Request::new(TasksRequest {});
+    let rsp = client.watch_tasks(request).await?;
+    Ok((rsp.into_inner(), client))
+}
+
 /// Connects to the task details stream for the given task id, sends the updates
 /// to the `details_tx` channel until the currently-viewed task changes.
 ///
@@ -117,47 +175,49 @@ async fn main() -> color_eyre::Result<()> {
 /// replace the details stream with another one.
 async fn watch_details_stream(
     task_id: u64,
-    mut client: TasksClient<Channel>,
+    mut client: Option<TasksClient<Channel>>,
     mut watch_rx: watch::Receiver<UpdateKind>,
     details_tx: mpsc::Sender<TaskDetails>,
 ) {
     let request = tonic::Request::new(DetailsRequest {
         id: Some(task_id.into()),
     });
-    if let Ok(streaming) = client.watch_task_details(request).await {
-        let mut details_stream = streaming.into_inner();
-        loop {
-            tokio::select! { biased;
-                details = details_stream.next() => {
-                    match details {
-                        Some(Ok(details)) => {
-                            if details_tx.send(details).await.is_err() {
+    if let Some(c) = client.as_mut() {
+        if let Ok(streaming) = c.watch_task_details(request).await {
+            let mut details_stream = streaming.into_inner();
+            loop {
+                tokio::select! { biased;
+                    details = details_stream.next() => {
+                        match details {
+                            Some(Ok(details)) => {
+                                if details_tx.send(details).await.is_err() {
+                                    break;
+                                }
+                            },
+                            _ => {
                                 break;
                             }
-                        },
-                        _ => {
+                        }
+                    },
+                    update = watch_rx.changed() => {
+                        if update.is_ok() {
+                            match *watch_rx.borrow() {
+                                UpdateKind::ExitTaskView => {
+                                    break;
+                                },
+                                UpdateKind::SelectTask(new_id) if new_id != task_id => {
+                                    break;
+                                },
+                                _ => {}
+                            }
+                        } else {
                             break;
                         }
-                    }
-                },
-                update = watch_rx.changed() => {
-                    if update.is_ok() {
-                        match *watch_rx.borrow() {
-                            UpdateKind::ExitTaskView => {
-                                break;
-                            },
-                            UpdateKind::SelectTask(new_id) if new_id != task_id => {
-                                break;
-                            },
-                            _ => {}
-                        }
-                    } else {
-                        break;
-                    }
-                },
+                    },
+                }
             }
+        } else {
+            // TODO: handle connection error, print details somewhere? Related to Issue #30
         }
-    } else {
-        // TODO: handle connection error, print details somewhere? Related to Issue #30
     }
 }
