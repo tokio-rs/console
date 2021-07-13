@@ -81,7 +81,7 @@ impl TaskView {
             .constraints(
                 [
                     // 24 chars is long enough for the title "Poll Times Percentiles"
-                    layout::Constraint::Max(24),
+                    layout::Constraint::Length(24),
                     layout::Constraint::Min(50),
                 ]
                 .as_ref(),
