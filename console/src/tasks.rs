@@ -64,6 +64,8 @@ struct Stats {
     polls: u64,
     created_at: SystemTime,
     busy: Duration,
+    last_poll_started: Option<SystemTime>,
+    last_poll_ended: Option<SystemTime>,
     idle: Option<Duration>,
     total: Option<Duration>,
 
@@ -258,14 +260,21 @@ impl Task {
             .unwrap_or_else(|| since.duration_since(self.stats.created_at).unwrap())
     }
 
-    pub(crate) fn busy(&self) -> Duration {
+    pub(crate) fn busy(&self, since: SystemTime) -> Duration {
+        if let (Some(last_poll_started), None) =
+            (self.stats.last_poll_started, self.stats.last_poll_ended)
+        {
+            // in this case the task is being polled at the moment
+            let current_time_in_poll = since.duration_since(last_poll_started).unwrap();
+            return self.stats.busy + current_time_in_poll;
+        }
         self.stats.busy
     }
 
     pub(crate) fn idle(&self, since: SystemTime) -> Duration {
         self.stats
             .idle
-            .unwrap_or_else(|| self.total(since) - self.busy())
+            .unwrap_or_else(|| self.total(since) - self.busy(since))
     }
 
     /// Returns the total number of times the task has been polled.
@@ -348,6 +357,8 @@ impl From<proto::tasks::Stats> for Stats {
             total,
             idle,
             busy,
+            last_poll_started: pb.last_poll_started.map(Into::into),
+            last_poll_ended: pb.last_poll_ended.map(Into::into),
             polls: pb.polls,
             created_at: pb.created_at.expect("task span was never created").into(),
             wakes: pb.wakes,
@@ -396,7 +407,7 @@ impl SortBy {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().idle(now)))
             }
             Self::Busy => {
-                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().busy()))
+                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().busy(now)))
             }
             Self::Polls => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().stats.polls))

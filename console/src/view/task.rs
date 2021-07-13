@@ -117,7 +117,7 @@ impl TaskView {
 
         let busy = Spans::from(vec![
             bold("Busy: "),
-            Span::from(format!("{:.prec$?}", task.busy(), prec = DUR_PRECISION,)),
+            Span::from(format!("{:.prec$?}", task.busy(now), prec = DUR_PRECISION,)),
         ]);
         let idle = Spans::from(vec![
             bold("Idle: "),
