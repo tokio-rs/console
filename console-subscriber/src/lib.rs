@@ -218,6 +218,7 @@ where
             // scheme
             || (meta.name() == "task" && meta.target() == "tokio::task")
         {
+            println!("found spawn callsite: {:#?}", meta);
             self.spawn_callsites.insert(meta);
         } else if meta.target() == "runtime::waker"
             // back compat until tokio is updated to use the standardized naming

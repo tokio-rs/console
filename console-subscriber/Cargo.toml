@@ -20,6 +20,6 @@ hdrhistogram = { version = "7.3.0", default-features = false, features = ["seria
 parking_lot = "0.11"
 
 [dev-dependencies]
-
 tokio = { version = "^1.7", features = ["full", "rt-multi-thread"]}
 futures = "0.3"
+rayon = { git = "https://github.com/hawkw/rayon", branch = "eliza/tracing", features = ["tracing"]}
