@@ -6,11 +6,13 @@ use tracing_core::Metadata;
 
 #[derive(Debug, Default)]
 pub(crate) struct Callsites {
-    // In practice each of these will have like, 1-5 callsites in it, max, so
-    // 32 is probably fine...if it ever becomes not fine, we'll fix that.
-    ptrs: [AtomicPtr<Metadata<'static>>; 32],
+    ptrs: [AtomicPtr<Metadata<'static>>; MAX_CALLSITES],
     len: AtomicUsize,
 }
+
+// In practice each of these will have like, 1-5 callsites in it, max, so
+// 32 is probably fine...if it ever becomes not fine, we'll fix that.
+const MAX_CALLSITES: usize = 32;
 
 impl Callsites {
     #[track_caller]
@@ -24,7 +26,7 @@ impl Callsites {
 
         let idx = self.len.fetch_add(1, Ordering::AcqRel);
         assert!(
-            idx < 64,
+            idx < MAX_CALLSITES,
             "you tried to store more than 64 callsites, \
             time to make the callsite sets bigger i guess \
             (please open an issue for this)"
@@ -41,7 +43,7 @@ impl Callsites {
 
     pub(crate) fn contains(&self, callsite: &'static Metadata<'static>) -> bool {
         let len = self.len.load(Ordering::Acquire);
-        for cs in &self.ptrs[..len + 1] {
+        for cs in &self.ptrs[..len] {
             if ptr::eq(cs.load(Ordering::Acquire), callsite) {
                 return true;
             }
