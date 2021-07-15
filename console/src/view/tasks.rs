@@ -20,8 +20,9 @@ pub(crate) struct List {
 }
 
 impl List {
-    const HEADER: &'static [&'static str] =
-        &["TID", "KIND", "TOTAL", "BUSY", "IDLE", "POLLS", "FIELDS"];
+    const HEADER: &'static [&'static str] = &[
+        "TID", "KIND", "TOTAL", "BUSY", "IDLE", "POLLS", "TARGET", "FIELDS",
+    ];
 
     pub(crate) fn update_input(&mut self, event: input::Event) {
         // Clippy likes to remind us that we could use an `if let` here, since
@@ -83,6 +84,7 @@ impl List {
         // there's room for the unit!)
         const DUR_PRECISION: usize = 4;
         const POLLS_LEN: usize = 5;
+        const MIN_TARGET_LEN: usize = 15;
 
         self.sorted_tasks.extend(state.take_new_tasks());
         self.sort_by.sort(now, &mut self.sorted_tasks);
@@ -115,6 +117,7 @@ impl List {
                     prec = DUR_PRECISION,
                 )),
                 Cell::from(format!("{:>width$}", task.total_polls(), width = POLLS_LEN)),
+                Cell::from(task.target().to_owned()),
                 Cell::from(Spans::from(
                     task.formatted_fields()
                         .iter()
@@ -169,6 +172,7 @@ impl List {
                 layout::Constraint::Min(DUR_LEN as u16),
                 layout::Constraint::Min(DUR_LEN as u16),
                 layout::Constraint::Min(POLLS_LEN as u16),
+                layout::Constraint::Min(MIN_TARGET_LEN as u16),
                 layout::Constraint::Min(10),
             ])
             .highlight_symbol(">> ")

@@ -4,11 +4,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    ptr,
-    sync::{
-        atomic::{AtomicPtr, Ordering::*},
-        Arc,
-    },
+    sync::Arc,
     time::{Duration, SystemTime},
 };
 use tracing_core::{
@@ -20,18 +16,21 @@ use tracing_core::{
 use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
 mod aggregator;
-use aggregator::Aggregator;
 mod builder;
-pub use builder::Builder;
-
+mod callsites;
 mod init;
+
+use aggregator::Aggregator;
+pub use builder::Builder;
+use callsites::Callsites;
+
 pub use init::{build, init};
 
 pub struct TasksLayer {
-    task_meta: AtomicPtr<Metadata<'static>>,
-    blocking_meta: AtomicPtr<Metadata<'static>>,
     tx: mpsc::Sender<Event>,
     flush: Arc<aggregator::Flush>,
+    spawn_callsites: Callsites,
+    waker_callsites: Callsites,
 }
 
 pub struct Server {
@@ -139,8 +138,8 @@ impl TasksLayer {
         let layer = Self {
             tx,
             flush,
-            task_meta: AtomicPtr::new(ptr::null_mut()),
-            blocking_meta: AtomicPtr::new(ptr::null_mut()),
+            spawn_callsites: Callsites::default(),
+            waker_callsites: Callsites::default(),
         };
         (layer, server)
     }
@@ -159,10 +158,8 @@ impl TasksLayer {
     // chosen by fair die roll, guaranteed to be random :)
     const FLUSH_AT_CAPACITY: usize = 100;
 
-    #[inline(always)]
     fn is_spawn(&self, meta: &'static Metadata<'static>) -> bool {
-        ptr::eq(self.task_meta.load(Relaxed), meta as *const _ as *mut _)
-        // || ptr::eq(self.blocking_meta.load(Relaxed), meta as *const _ as *mut _)
+        self.spawn_callsites.contains(meta)
     }
 
     fn is_id_spawned<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
@@ -216,24 +213,19 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn register_callsite(&self, meta: &'static Metadata<'static>) -> subscriber::Interest {
-        if meta.target() == "tokio::task" && meta.name() == "task" {
-            if meta.fields().iter().any(|f| f.name() == "function") {
-                let _ = self.blocking_meta.compare_exchange(
-                    ptr::null_mut(),
-                    meta as *const _ as *mut _,
-                    AcqRel,
-                    Acquire,
-                );
-            } else {
-                let _ = self.task_meta.compare_exchange(
-                    ptr::null_mut(),
-                    meta as *const _ as *mut _,
-                    AcqRel,
-                    Acquire,
-                );
-            }
+        if meta.name() == "runtime.spawn"
+            // back compat until tokio is updated to use the standardized naming
+            // scheme
+            || (meta.name() == "task" && meta.target() == "tokio::task")
+        {
+            self.spawn_callsites.insert(meta);
+        } else if meta.target() == "runtime::waker"
+            // back compat until tokio is updated to use the standardized naming
+            // scheme
+            || meta.target() == "tokio::task::waker"
+        {
+            self.waker_callsites.insert(meta);
         }
-
         self.send(Event::Metadata(meta));
 
         subscriber::Interest::always()
@@ -259,9 +251,7 @@ where
     }
 
     fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
-        let meta = event.metadata();
-        // make faster like spawn metadata pointer check?
-        if meta.target() == "tokio::task::waker" {
+        if self.waker_callsites.contains(event.metadata()) {
             let at = SystemTime::now();
             let mut visitor = WakerVisitor { id: None, op: None };
             event.record(&mut visitor);
