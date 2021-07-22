@@ -1,7 +1,7 @@
 use crate::{
     input,
     tasks::{self, TaskRef},
-    view::bold,
+    view::{self, bold},
 };
 use std::convert::TryFrom;
 use tui::{
@@ -89,6 +89,15 @@ impl List {
         self.sorted_tasks.extend(state.take_new_tasks());
         self.sort_by.sort(now, &mut self.sorted_tasks);
 
+        fn dur_cell(dur: std::time::Duration) -> Cell<'static> {
+            Cell::from(view::color_time_units(format!(
+                "{:>width$.prec$?}",
+                dur,
+                width = DUR_LEN,
+                prec = DUR_PRECISION,
+            )))
+        }
+
         let rows = self.sorted_tasks.iter().filter_map(|task| {
             let task = task.upgrade()?;
             let task = task.borrow();
@@ -98,24 +107,9 @@ impl List {
                 // TODO(eliza): is there a way to write a `fmt::Debug` impl
                 // directly to tui without doing an allocation?
                 Cell::from(task.kind().to_string()),
-                Cell::from(format!(
-                    "{:>width$.prec$?}",
-                    task.total(now),
-                    width = DUR_LEN,
-                    prec = DUR_PRECISION,
-                )),
-                Cell::from(format!(
-                    "{:>width$.prec$?}",
-                    task.busy(now),
-                    width = DUR_LEN,
-                    prec = DUR_PRECISION,
-                )),
-                Cell::from(format!(
-                    "{:>width$.prec$?}",
-                    task.idle(now),
-                    width = DUR_LEN,
-                    prec = DUR_PRECISION,
-                )),
+                dur_cell(task.total(now)),
+                dur_cell(task.busy(now)),
+                dur_cell(task.idle(now)),
                 Cell::from(format!("{:>width$}", task.total_polls(), width = POLLS_LEN)),
                 Cell::from(task.target().to_owned()),
                 Cell::from(Spans::from(
