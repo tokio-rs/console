@@ -129,7 +129,7 @@ pub(crate) fn color_time_units<'a>(text: impl Into<Cow<'a, str>>) -> Span<'a> {
     let style = match text.as_ref() {
         s if s.ends_with("ps") => fg_style(Indexed(40)), // green 3
         s if s.ends_with("ns") => fg_style(Indexed(41)), // spring green 3
-        s if s.ends_with("μs") || s.ends_with("us") => fg_style(Indexed(42)), // spring green 2
+        s if s.ends_with("µs") || s.ends_with("us") => fg_style(Indexed(42)), // spring green 2
         s if s.ends_with("ms") => fg_style(Indexed(43)), // cyan 3
         s if s.ends_with('s') => fg_style(Indexed(44)),  // dark turquoise,
         _ => Style::default(),
