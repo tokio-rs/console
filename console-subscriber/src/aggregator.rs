@@ -6,7 +6,7 @@ use tokio::sync::{mpsc, Notify};
 
 use futures::FutureExt;
 use std::{
-    collections::HashMap,
+    collections::{hash_map::Entry, HashMap},
     convert::TryInto,
     ops::{Deref, DerefMut},
     sync::{
@@ -21,6 +21,8 @@ use hdrhistogram::{
     serialization::{Serializer, V2SerializeError, V2Serializer},
     Histogram,
 };
+
+pub type TaskId = u64;
 
 pub(crate) struct Aggregator {
     /// Channel of incoming events emitted by `TaskLayer`s.
@@ -42,7 +44,7 @@ pub(crate) struct Aggregator {
     watchers: Vec<Watch<proto::tasks::TaskUpdate>>,
 
     /// Currently active RPCs streaming task details events, by task ID.
-    details_watchers: HashMap<span::Id, Vec<Watch<proto::tasks::TaskDetails>>>,
+    details_watchers: HashMap<TaskId, Vec<Watch<proto::tasks::TaskDetails>>>,
 
     /// *All* metadata for task spans and user-defined spans that we care about.
     ///
@@ -59,6 +61,12 @@ pub(crate) struct Aggregator {
 
     /// Map of task IDs to task stats.
     stats: TaskData<Stats>,
+
+    /// A counter for the pretty task IDs.
+    task_id_counter: TaskId,
+
+    /// A table that contains the span ID to pretty task ID mappings.
+    task_id_mappings: HashMap<span::Id, TaskId>,
 }
 
 #[derive(Debug)]
@@ -89,7 +97,7 @@ struct Stats {
 
 #[derive(Default)]
 struct TaskData<T> {
-    data: HashMap<span::Id, (T, bool)>,
+    data: HashMap<TaskId, (T, bool)>,
 }
 
 struct Task {
@@ -139,9 +147,11 @@ impl Aggregator {
             all_metadata: Vec::new(),
             new_metadata: Vec::new(),
             tasks: TaskData {
-                data: HashMap::<span::Id, (Task, bool)>::new(),
+                data: HashMap::<TaskId, (Task, bool)>::new(),
             },
             stats: TaskData::default(),
+            task_id_counter: 0,
+            task_id_mappings: HashMap::new(),
         }
     }
 
@@ -223,13 +233,13 @@ impl Aggregator {
         let new_tasks = self
             .tasks
             .all()
-            .map(|(id, task)| task.to_proto(id.clone()))
+            .map(|(&id, task)| task.to_proto(id))
             .collect();
         let now = SystemTime::now();
         let stats_update = self
             .stats
             .all()
-            .map(|(id, stats)| (id.into_u64(), stats.to_proto()))
+            .map(|(&id, stats)| (id, stats.to_proto()))
             .collect();
         // Send the initial state --- if this fails, the subscription is already dead
         if subscription.update(&proto::tasks::TaskUpdate {
@@ -256,8 +266,7 @@ impl Aggregator {
             buffer,
         } = watch_request;
         tracing::debug!(id = ?id, "new task details subscription");
-        let task_id: span::Id = id.into();
-        if let Some(stats) = self.stats.get(&task_id) {
+        if let Some(stats) = self.stats.get(&id) {
             let (tx, rx) = mpsc::channel(buffer);
             let subscription = Watch(tx);
             let now = SystemTime::now();
@@ -265,13 +274,13 @@ impl Aggregator {
             // Then send the initial state --- if this fails, the subscription is already dead.
             if stream_sender.send(rx).is_ok()
                 && subscription.update(&proto::tasks::TaskDetails {
-                    task_id: Some(task_id.clone().into()),
+                    task_id: id,
                     now: Some(now.into()),
                     poll_times_histogram: serialize_histogram(&stats.poll_times_histogram).ok(),
                 })
             {
                 self.details_watchers
-                    .entry(task_id)
+                    .entry(id)
                     .or_insert_with(Vec::new)
                     .push(subscription);
             }
@@ -294,13 +303,13 @@ impl Aggregator {
         let new_tasks = self
             .tasks
             .since_last_update()
-            .map(|(id, task)| task.to_proto(id.clone()))
+            .map(|(&id, task)| task.to_proto(id))
             .collect();
         let now = SystemTime::now();
         let stats_update = self
             .stats
             .since_last_update()
-            .map(|(id, stats)| (id.into_u64(), stats.to_proto()))
+            .map(|(&id, stats)| (id, stats.to_proto()))
             .collect();
 
         let update = proto::tasks::TaskUpdate {
@@ -318,7 +327,7 @@ impl Aggregator {
         self.details_watchers.retain(|id, watchers| {
             if let Some(task_stats) = stats.get(id) {
                 let details = proto::tasks::TaskDetails {
-                    task_id: Some(id.clone().into()),
+                    task_id: *id,
                     now: Some(now.into()),
                     poll_times_histogram: serialize_histogram(&task_stats.poll_times_histogram)
                         .ok(),
@@ -345,8 +354,9 @@ impl Aggregator {
                 at,
                 fields,
             } => {
+                let task_id = self.get_or_insert_task_id(id);
                 self.tasks.insert(
-                    id.clone(),
+                    task_id,
                     Task {
                         metadata,
                         fields,
@@ -354,7 +364,7 @@ impl Aggregator {
                     },
                 );
                 self.stats.insert(
-                    id,
+                    task_id,
                     Stats {
                         polls: 0,
                         created_at: Some(at),
@@ -363,7 +373,8 @@ impl Aggregator {
                 );
             }
             Event::Enter { id, at } => {
-                let mut stats = self.stats.update_or_default(id);
+                let task_id = self.get_or_insert_task_id(id);
+                let mut stats = self.stats.update_or_default(task_id);
                 if stats.current_polls == 0 {
                     stats.last_poll_started = Some(at);
                     if stats.first_poll == None {
@@ -375,7 +386,8 @@ impl Aggregator {
             }
 
             Event::Exit { id, at } => {
-                let mut stats = self.stats.update_or_default(id);
+                let task_id = self.get_or_insert_task_id(id);
+                let mut stats = self.stats.update_or_default(task_id);
                 stats.current_polls -= 1;
                 if stats.current_polls == 0 {
                     if let Some(last_poll_started) = stats.last_poll_started {
@@ -391,17 +403,19 @@ impl Aggregator {
             }
 
             Event::Close { id, at } => {
-                self.stats.update_or_default(id).closed_at = Some(at);
+                let task_id = self.get_or_insert_task_id(id);
+                self.stats.update_or_default(task_id).closed_at = Some(at);
             }
 
             Event::Waker { id, op, at } => {
+                let task_id = self.get_or_insert_task_id(id);
                 // It's possible for wakers to exist long after a task has
                 // finished. We don't want those cases to create a "new"
                 // task that isn't closed, just to insert some waker stats.
                 //
                 // It may be useful to eventually be able to report about
                 // "wasted" waker ops, but we'll leave that for another time.
-                if let Some(mut stats) = self.stats.update(&id) {
+                if let Some(mut stats) = self.stats.update(&task_id) {
                     match op {
                         WakeOp::Wake | WakeOp::WakeByRef => {
                             stats.wakes += 1;
@@ -427,6 +441,18 @@ impl Aggregator {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    fn get_or_insert_task_id(&mut self, span_id: span::Id) -> TaskId {
+        match self.task_id_mappings.entry(span_id) {
+            Entry::Occupied(entry) => *entry.get(),
+            Entry::Vacant(entry) => {
+                let task_id = self.task_id_counter;
+                entry.insert(task_id);
+                self.task_id_counter = self.task_id_counter.wrapping_add(1);
+                task_id
             }
         }
     }
@@ -510,22 +536,22 @@ impl Flush {
 }
 
 impl<T> TaskData<T> {
-    fn update_or_default(&mut self, id: span::Id) -> Updating<'_, T>
+    fn update_or_default(&mut self, id: TaskId) -> Updating<'_, T>
     where
         T: Default,
     {
         Updating(self.data.entry(id).or_default())
     }
 
-    fn update(&mut self, id: &span::Id) -> Option<Updating<'_, T>> {
+    fn update(&mut self, id: &TaskId) -> Option<Updating<'_, T>> {
         self.data.get_mut(id).map(Updating)
     }
 
-    fn insert(&mut self, id: span::Id, data: T) {
+    fn insert(&mut self, id: TaskId, data: T) {
         self.data.insert(id, (data, true));
     }
 
-    fn since_last_update(&mut self) -> impl Iterator<Item = (&span::Id, &mut T)> {
+    fn since_last_update(&mut self) -> impl Iterator<Item = (&TaskId, &mut T)> {
         self.data.iter_mut().filter_map(|(id, (data, dirty))| {
             if *dirty {
                 *dirty = false;
@@ -536,11 +562,11 @@ impl<T> TaskData<T> {
         })
     }
 
-    fn all(&self) -> impl Iterator<Item = (&span::Id, &T)> {
+    fn all(&self) -> impl Iterator<Item = (&TaskId, &T)> {
         self.data.iter().map(|(id, (data, _))| (id, data))
     }
 
-    fn get(&self, id: &span::Id) -> Option<&T> {
+    fn get(&self, id: &TaskId) -> Option<&T> {
         self.data.get(id).map(|(data, _)| data)
     }
 }
@@ -603,9 +629,9 @@ impl Stats {
 }
 
 impl Task {
-    fn to_proto(&self, id: span::Id) -> proto::tasks::Task {
+    fn to_proto(&self, id: u64) -> proto::tasks::Task {
         proto::tasks::Task {
-            id: Some(id.into()),
+            id,
             // TODO: more kinds of tasks...
             kind: proto::tasks::task::Kind::Spawn as i32,
             metadata: Some(self.metadata.into()),

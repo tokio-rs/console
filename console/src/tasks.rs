@@ -135,9 +135,6 @@ impl State {
 
         let metas = &mut self.metas;
         let new_tasks = update.new_tasks.into_iter().filter_map(|mut task| {
-            if task.id.is_none() {
-                tracing::warn!(?task, "skipping task with no id");
-            }
             let kind = match task.kind() {
                 proto::tasks::task::Kind::Spawn => "T",
                 proto::tasks::task::Kind::Blocking => "B",
@@ -187,7 +184,7 @@ impl State {
                 acc
             });
 
-            let id = task.id?.id;
+            let id = task.id;
             let stats = stats_update.remove(&id)?.into();
             let mut task = Task {
                 id,
@@ -220,19 +217,17 @@ impl State {
     }
 
     pub(crate) fn update_task_details(&mut self, update: proto::tasks::TaskDetails) {
-        if let Some(id) = update.task_id {
-            let details = Details {
-                task_id: id.id,
-                poll_times_histogram: update.poll_times_histogram.and_then(|data| {
-                    hdrhistogram::serialization::Deserializer::new()
-                        .deserialize(&mut Cursor::new(&data))
-                        .ok()
-                }),
-                last_updated_at: update.now.map(|now| now.into()),
-            };
+        let details = Details {
+            task_id: update.task_id,
+            poll_times_histogram: update.poll_times_histogram.and_then(|data| {
+                hdrhistogram::serialization::Deserializer::new()
+                    .deserialize(&mut Cursor::new(&data))
+                    .ok()
+            }),
+            last_updated_at: update.now.map(|now| now.into()),
+        };
 
-            *self.current_task_details.borrow_mut() = Some(details);
-        }
+        *self.current_task_details.borrow_mut() = Some(details);
     }
 
     pub(crate) fn unset_task_details(&mut self) {

@@ -86,9 +86,7 @@ impl Connection {
         loop {
             match self.state {
                 State::Connected { ref mut client, .. } => {
-                    let request = tonic::Request::new(DetailsRequest {
-                        id: Some(task_id.into()),
-                    });
+                    let request = tonic::Request::new(DetailsRequest { id: task_id });
                     match client.watch_task_details(request).await {
                         Ok(watch) => return Ok(watch.into_inner()),
                         // If the error is a `h2::Error`, that indicates

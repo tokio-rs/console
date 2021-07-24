@@ -103,7 +103,7 @@ impl List {
             let task = task.borrow();
 
             let mut row = Row::new(vec![
-                Cell::from(task.id_hex().to_string()),
+                Cell::from(task.id().to_string()),
                 // TODO(eliza): is there a way to write a `fmt::Debug` impl
                 // directly to tui without doing an allocation?
                 Cell::from(task.kind().to_string()),
@@ -160,7 +160,7 @@ impl List {
             .header(header)
             .block(block)
             .widths(&[
-                layout::Constraint::Min(20),
+                layout::Constraint::Min(4),
                 layout::Constraint::Length(4),
                 layout::Constraint::Min(DUR_LEN as u16),
                 layout::Constraint::Min(DUR_LEN as u16),

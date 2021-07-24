@@ -15,7 +15,7 @@ message TasksRequest {
 }
 
 message DetailsRequest {
-    common.SpanId id = 1;
+    uint64 id = 1;
 }
 
 // A task state update.
@@ -52,7 +52,7 @@ message TaskUpdate {
 // A task details update
 message TaskDetails {
     // The task's ID which the details belong to.
-    common.SpanId task_id = 1;
+    uint64 task_id = 1;
 
     google.protobuf.Timestamp now = 2;
 
@@ -69,7 +69,7 @@ message Task {
     // identified by this ID; if the client requires additional information
     // included in the `Task` message, it should store that data and access it
     // by ID.
-    common.SpanId id = 1;
+    uint64 id = 1;
     // The numeric ID of the task's `Metadata`.
     //
     // This identifies the `Metadata` that describes the `tracing` span

@@ -1,5 +1,4 @@
 use console_api as proto;
-use proto::SpanId;
 use tokio::sync::{mpsc, oneshot};
 
 use std::{
@@ -58,7 +57,7 @@ enum WatchKind {
 }
 
 struct WatchRequest<T> {
-    id: SpanId,
+    id: u64,
     stream_sender: oneshot::Sender<mpsc::Receiver<Result<T, tonic::Status>>>,
     buffer: usize,
 }
@@ -357,10 +356,7 @@ impl proto::tasks::tasks_server::Tasks for Server {
         &self,
         req: tonic::Request<proto::tasks::DetailsRequest>,
     ) -> Result<tonic::Response<Self::WatchTaskDetailsStream>, tonic::Status> {
-        let task_id = req
-            .into_inner()
-            .id
-            .ok_or_else(|| tonic::Status::invalid_argument("missing task_id"))?;
+        let task_id = req.into_inner().id;
         let permit = self.subscribe.reserve().await.map_err(|_| {
             tonic::Status::internal("cannot start new watch, aggregation task is not running")
         })?;
@@ -368,7 +364,7 @@ impl proto::tasks::tasks_server::Tasks for Server {
         // Check with the aggregator task to request a stream if the task exists.
         let (stream_sender, stream_recv) = oneshot::channel();
         permit.send(WatchKind::TaskDetail(WatchRequest {
-            id: task_id.clone(),
+            id: task_id,
             stream_sender,
             buffer: self.client_buffer,
         }));
