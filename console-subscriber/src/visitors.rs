@@ -342,9 +342,9 @@ impl Visit for ResourceOpVisitor {
             let p0 = parts[0];
             let p1 = parts[1];
             let p2 = parts[2];
-            if p0 == Self::OP_STATE_FIELD_PREFIX  &&   p2 == Self::OP_STATE_FIELD_TYPE_VALUE{
-                    let attr = self.state_numeric_attrs.entry(p1.into()).or_default();
-                    attr.val = Some(value)
+            if p0 == Self::OP_STATE_FIELD_PREFIX && p2 == Self::OP_STATE_FIELD_TYPE_VALUE {
+                let attr = self.state_numeric_attrs.entry(p1.into()).or_default();
+                attr.val = Some(value)
             }
         }
     }
