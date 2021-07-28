@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package rs.tokio.console.async_ops;
+
+import "google/protobuf/timestamp/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "common.proto";
+
+
+// An AsyncOp state update.
+//
+// An async operation is a an operation that is associated with a resource
+// This could be a a read or write on a tcp stream or a receive operation on
+// a chan.
+message AsyncOpUpdate {
+    // A list of new async operation that were created since the last `AsyncOpUpdate`
+    // was sent. Note that the fact that an async operation has been created
+    // does not mean that is has been polled or is being polled. This information
+    // is refelcted in the Stats of the operation.
+    repeated AsyncOp new_async_ops = 1;
+    // Any async op stats that have changed since the last update.
+    map<uint64, Stats> stats_update = 2;
+}
+
+message AsyncOp {
+    // The async op's ID.
+    //
+    // This uniquely identifies this op across all *currently live*
+    // ones.
+    common.SpanId id = 1;
+    // The numeric ID of the op's `Metadata`.
+    //
+    // This identifies the `Metadata` that describes the `tracing` span
+    // corresponding to this async op. The metadata for this ID will have been sent
+    // in a prior `RegisterMetadata` message.
+    common.MetaId metadata = 2;
+    // The source of this async operation. Most commonly this should be the name
+    // of the method where the instantiation of this op has happened.
+    string source = 3;
+}
+
+
+message Stats {
+    // Timestamp of when the async op created spawned.
+    google.protobuf.Timestamp created_at = 1;
+
+    // The amount of time this op has *existed*, regardless of whether or not
+    // it was being polled.
+    //
+    // Subtracting `poll_stats.busy_time` from `total_time` calculates the resource's idle
+    // time, the amount of time it has spent *waiting* to be polled.
+    google.protobuf.Duration total_time = 2;
+    // The id of the latest `ResourceOp` with type `Poll` that was invoked within the context
+    // of this async op
+    common.MetaId latest_poll_op = 3;
+    // The resource Id this `AsyncOp` is associated with. Note that both
+    // `resource_id` and `task_id` can be None if this async op has not been polled yet
+    common.SpanId resource_id = 4;
+    // The Id of the task that is awaiting on this op.
+    common.SpanId task_id = 5;
+    // Contains op poll statistics.
+    common.PollStats poll_stats = 7;
+}
+

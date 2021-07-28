@@ -60,7 +60,10 @@ async fn main() -> color_eyre::Result<()> {
                             Ok(stream) => {
                                 tokio::spawn(watch_details_stream(task_id, stream, update_rx.clone(), details_tx.clone()));
                             },
-                            Err(error) => {tracing::warn!(%error, "error watching task details"); tasks.unset_task_details();}
+                            Err(error) => {
+                                tracing::warn!(%error, "error watching task details");
+                                tasks.unset_task_details();
+                        }
                         }
                     },
                     UpdateKind::ExitTaskView => {
@@ -69,7 +72,12 @@ async fn main() -> color_eyre::Result<()> {
                     _ => {}
                 }
             },
-            task_update = conn.next_update() => tasks.update_tasks(task_update),
+            instrument_update = conn.next_update() => {
+                let now = instrument_update.now.map(Into::into);
+                if let Some(task_update) = instrument_update.task_update {
+                    tasks.update_tasks(task_update, instrument_update.new_metadata, now);
+                }
+            }
             details_update = details_rx.recv() => {
                 if let Some(details_update) = details_update {
                     tasks.update_task_details(details_update);

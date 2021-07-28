@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package rs.tokio.console.resource_ops;
+
+import "google/protobuf/timestamp/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "common.proto";
+
+
+// An AsyncOp state update.
+message ResourceOpUpdate {
+    repeated ResourceOp new_resource_ops = 1;
+}
+
+message ResourceOp {
+    // The resources's ID.
+    //
+    // This uniquely identifies this op across all *currently live*
+    // ones.
+    common.MetaId id = 1;
+    // The numeric ID of the op's `Metadata`.
+    //
+    // This identifies the `Metadata` that describes the `tracing` span
+    // corresponding to this op. The metadata for this ID will have been sent
+    // in a prior `RegisterMetadata` message.
+    common.MetaId metadata = 2;
+    // The resources's ID.
+    common.SpanId resource_id = 3;
+    OpType op_type = 4;
+    // the name of this op (e.g. poll_elapsed, new_timeout, reset, etc.)
+    string name = 5;
+}
+
+
+message OpType {
+    oneof op_type {
+        // An op that reflects changes to the state of the resource.
+        StateUpdate state_update = 1;
+        // An op that reflects the invocation of a `poll` method
+        Poll poll = 2;
+    };
+
+    message StateUpdate {
+        repeated AttributeUpdate updates = 1;
+
+        message AttributeUpdate {
+            string name = 1;
+            oneof update {
+                Numeric numeric = 2;
+                string text = 3;
+            };
+
+            message Numeric {
+                uint64 val = 1;
+                Op op = 2;
+                string unit = 3;
+
+                enum Op {
+                    ADD = 0;
+                    OVR = 1;
+                    SUB = 2;
+                }
+            }
+        }
+    }
+
+    message Poll {
+        // Identifies the task context that this poll op has been called from.
+        common.SpanId task_id = 1;
+        // Identifies the async op ID that this poll op is part of.
+        common.SpanId async_op_id = 2;
+        // Whether this poll op has returned with ready or pending.
+        Readiness readiness = 3;
+        enum Readiness {
+            READY = 0;
+            PENDING = 1;
+        }
+    }
+}
+

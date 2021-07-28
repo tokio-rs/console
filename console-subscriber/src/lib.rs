@@ -3,12 +3,13 @@ use proto::SpanId;
 use tokio::sync::{mpsc, oneshot};
 
 use std::{
+    cell::RefCell,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
     time::{Duration, SystemTime},
 };
+use thread_local::ThreadLocal;
 use tracing_core::{
-    field::{self, Visit},
     span,
     subscriber::{self, Subscriber},
     Metadata,
@@ -19,18 +20,28 @@ mod aggregator;
 mod builder;
 mod callsites;
 mod init;
+mod stack;
+mod visitors;
 
 use aggregator::Aggregator;
 pub use builder::Builder;
 use callsites::Callsites;
+use stack::SpanStack;
+use visitors::{
+    AsyncOpVisitor, FieldVisitor, ResourceOpData, ResourceOpVisitor, ResourceVisitor, WakerVisitor,
+};
 
 pub use init::{build, init};
 
 pub struct TasksLayer {
+    current_spans: ThreadLocal<RefCell<SpanStack>>,
     tx: mpsc::Sender<Event>,
     flush: Arc<aggregator::Flush>,
     spawn_callsites: Callsites,
     waker_callsites: Callsites,
+    resource_callsites: Callsites,
+    async_op_callsites: Callsites,
+    resource_op_callsites: Callsites,
 }
 
 pub struct Server {
@@ -40,20 +51,10 @@ pub struct Server {
     client_buffer: usize,
 }
 
-struct FieldVisitor {
-    fields: Vec<proto::Field>,
-    meta_id: proto::MetaId,
-}
-
-struct WakerVisitor {
-    id: Option<span::Id>,
-    op: Option<WakeOp>,
-}
-
 struct Watch<T>(mpsc::Sender<Result<T, tonic::Status>>);
 
 enum WatchKind {
-    Tasks(Watch<proto::tasks::TaskUpdate>),
+    Instrument(Watch<proto::instrument::InstrumentUpdate>),
     TaskDetail(WatchRequest<proto::tasks::TaskDetails>),
 }
 
@@ -63,6 +64,7 @@ struct WatchRequest<T> {
     buffer: usize,
 }
 
+#[derive(Debug)]
 enum Event {
     Metadata(&'static Metadata<'static>),
     Spawn {
@@ -88,8 +90,68 @@ enum Event {
         op: WakeOp,
         at: SystemTime,
     },
+    Resource {
+        id: span::Id,
+        metadata: &'static Metadata<'static>,
+        at: SystemTime,
+        concrete_type: String,
+        kind: String,
+    },
+    ResourceOp {
+        metadata: &'static Metadata<'static>,
+        at: SystemTime,
+        resource_id: span::Id,
+        op_name: String,
+        op_type: OpType,
+    },
+    AsyncResourceOp {
+        id: span::Id,
+        metadata: &'static Metadata<'static>,
+        at: SystemTime,
+        source: String,
+    },
 }
 
+#[derive(Debug, Clone)]
+enum Readiness {
+    Pending,
+    Ready,
+}
+
+#[derive(Clone, Debug)]
+enum OpType {
+    Poll {
+        async_op_id: span::Id,
+        task_id: span::Id,
+        readiness: Readiness,
+    },
+    StateUpdate(Vec<AttributeUpdate>),
+}
+
+#[derive(Debug, Clone)]
+struct AttributeUpdate {
+    name: String,
+    val: AttributeUpdateValue,
+}
+
+#[derive(Debug, Clone)]
+enum AttributeUpdateValue {
+    Text(String),
+    Numeric {
+        val: u64,
+        op: AttributeUpdateOp,
+        unit: String,
+    },
+}
+
+#[derive(Debug, Clone)]
+enum AttributeUpdateOp {
+    Add,
+    Ovr,
+    Sub,
+}
+
+#[derive(Debug)]
 enum WakeOp {
     Wake,
     WakeByRef,
@@ -140,6 +202,10 @@ impl TasksLayer {
             flush,
             spawn_callsites: Callsites::default(),
             waker_callsites: Callsites::default(),
+            resource_callsites: Callsites::default(),
+            async_op_callsites: Callsites::default(),
+            resource_op_callsites: Callsites::default(),
+            current_spans: ThreadLocal::new(),
         };
         (layer, server)
     }
@@ -162,6 +228,18 @@ impl TasksLayer {
         self.spawn_callsites.contains(meta)
     }
 
+    fn is_resource(&self, meta: &'static Metadata<'static>) -> bool {
+        self.resource_callsites.contains(meta)
+    }
+
+    fn is_async_op(&self, meta: &'static Metadata<'static>) -> bool {
+        self.async_op_callsites.contains(meta)
+    }
+
+    fn is_resource_op(&self, meta: &'static Metadata<'static>) -> bool {
+        self.resource_op_callsites.contains(meta)
+    }
+
     fn is_id_spawned<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
     where
         S: Subscriber + for<'a> LookupSpan<'a>,
@@ -169,6 +247,56 @@ impl TasksLayer {
         cx.span(id)
             .map(|span| self.is_spawn(span.metadata()))
             .unwrap_or(false)
+    }
+
+    fn is_id_resource<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
+    where
+        S: Subscriber + for<'a> LookupSpan<'a>,
+    {
+        cx.span(id)
+            .map(|span| self.is_resource(span.metadata()))
+            .unwrap_or(false)
+    }
+
+    fn is_id_async_op<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
+    where
+        S: Subscriber + for<'a> LookupSpan<'a>,
+    {
+        cx.span(id)
+            .map(|span| self.is_async_op(span.metadata()))
+            .unwrap_or(false)
+    }
+
+    fn is_id_resource_op<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
+    where
+        S: Subscriber + for<'a> LookupSpan<'a>,
+    {
+        cx.span(id)
+            .map(|span| self.is_resource_op(span.metadata()))
+            .unwrap_or(false)
+    }
+
+    fn is_id_tracked<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
+    where
+        S: Subscriber + for<'a> LookupSpan<'a>,
+    {
+        self.is_id_async_op(id, cx)
+            || self.is_id_resource(id, cx)
+            || self.is_id_spawned(id, cx)
+            || self.is_id_resource_op(id, cx)
+    }
+
+    fn first_entered<P>(&self, stack: &SpanStack, p: P) -> Option<span::Id>
+    where
+        P: Fn(&span::Id) -> bool,
+    {
+        return stack
+            .stack()
+            .iter()
+            .rev()
+            .find(|id| p(id.id()))
+            .map(|id| id.id())
+            .cloned();
     }
 
     fn send(&self, event: Event) {
@@ -225,9 +353,14 @@ where
             || meta.target() == "tokio::task::waker"
         {
             self.waker_callsites.insert(meta);
+        } else if meta.name() == "runtime.resource" {
+            self.resource_callsites.insert(meta);
+        } else if meta.name() == "runtime.async_op" {
+            self.async_op_callsites.insert(meta);
+        } else if meta.target() == "tokio::resource::op" {
+            self.resource_op_callsites.insert(meta);
         }
         self.send(Event::Metadata(meta));
-
         subscriber::Interest::always()
     }
 
@@ -235,45 +368,123 @@ where
         let metadata = attrs.metadata();
         if self.is_spawn(metadata) {
             let at = SystemTime::now();
-            let mut fields_collector = FieldVisitor {
-                fields: Vec::default(),
-                meta_id: metadata.into(),
-            };
-            attrs.record(&mut fields_collector);
-
+            let mut field_visitor = FieldVisitor::new(metadata.into());
+            attrs.record(&mut field_visitor);
             self.send(Event::Spawn {
                 id: id.clone(),
                 at,
                 metadata,
-                fields: fields_collector.fields,
+                fields: field_visitor.result(),
             });
+        } else if self.is_resource(metadata) {
+            let mut resource_visitor = ResourceVisitor::default();
+            attrs.record(&mut resource_visitor);
+            match resource_visitor.result() {
+                Some((concrete_type, kind)) => {
+                    let at = SystemTime::now();
+                    self.send(Event::Resource {
+                        id: id.clone(),
+                        metadata,
+                        at,
+                        concrete_type,
+                        kind,
+                    });
+                }
+                _ => tracing::warn!("unknown resource span format: {:?}", attrs),
+            }
+        } else if self.is_async_op(metadata) {
+            let mut async_op_visitor = AsyncOpVisitor::default();
+            attrs.record(&mut async_op_visitor);
+            if let Some(source) = async_op_visitor.result() {
+                let at = SystemTime::now();
+                self.send(Event::AsyncResourceOp {
+                    id: id.clone(),
+                    at,
+                    metadata,
+                    source,
+                });
+            } else {
+                tracing::warn!("async op span needs to have a source field: {:?}", attrs);
+            }
         }
     }
 
-    fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
+    fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
+        let metadata = event.metadata();
         if self.waker_callsites.contains(event.metadata()) {
             let at = SystemTime::now();
-            let mut visitor = WakerVisitor { id: None, op: None };
+            let mut visitor = WakerVisitor::default();
             event.record(&mut visitor);
+            match visitor.result() {
+                Some((id, op)) => self.send(Event::Waker { id, op, at }),
+                None => tracing::warn!("unknown waker event: {:?}", event),
+            }
+        } else if self.resource_op_callsites.contains(event.metadata()) {
+            match ctx.current_span().id() {
+                Some(resource_id) if self.is_id_resource(resource_id, &ctx) => {
+                    let mut resource_op_visitor = ResourceOpVisitor::default();
+                    event.record(&mut resource_op_visitor);
+                    let res = resource_op_visitor.result();
+                    let op_data = match res {
+                        Some(ResourceOpData::Poll { op_name, readiness }) => self
+                            .current_spans
+                            .get()
+                            .and_then(|stack| {
+                                let stack = stack.borrow();
+                                let task_id =
+                                    self.first_entered(&stack, |id| self.is_id_spawned(id, &ctx));
 
-            match visitor {
-                WakerVisitor {
-                    id: Some(id),
-                    op: Some(op),
-                } => {
-                    self.send(Event::Waker { id, op, at });
+                                let async_op_id =
+                                    self.first_entered(&stack, |id| self.is_id_async_op(id, &ctx));
+
+                                task_id.zip(async_op_id)
+                            })
+                            .map(|(task_id, async_op_id)| {
+                                let op_type = OpType::Poll {
+                                    async_op_id,
+                                    task_id,
+                                    readiness,
+                                };
+
+                                (op_name, op_type)
+                            }),
+                        Some(ResourceOpData::StateUpdate { op_name, attrs }) => {
+                            Some((op_name, OpType::StateUpdate(attrs)))
+                        }
+                        None => None,
+                    };
+
+                    if let Some((op_name, op_type)) = op_data {
+                        let at = SystemTime::now();
+                        self.send(Event::ResourceOp {
+                            metadata,
+                            at,
+                            resource_id: resource_id.clone(),
+                            op_name,
+                            op_type,
+                        });
+                    } else {
+                        tracing::warn!("resource op event has invalid format: {:?}", event);
+                    }
                 }
-                _ => {
-                    tracing::warn!("unknown waker event: {:?}", event);
-                }
+                _ => tracing::warn!(
+                    "resource op event should be emitted in the context of a resource span: {:?}",
+                    event
+                ),
             }
         }
     }
 
     fn on_enter(&self, id: &span::Id, cx: Context<'_, S>) {
-        if !self.is_id_spawned(id, &cx) {
+        if !self.is_id_tracked(&id, &cx) {
             return;
         }
+
+        self.current_spans
+            .get_or_default()
+            .borrow_mut()
+            .push(id.clone());
+
         self.send(Event::Enter {
             at: SystemTime::now(),
             id: id.clone(),
@@ -281,9 +492,14 @@ where
     }
 
     fn on_exit(&self, id: &span::Id, cx: Context<'_, S>) {
-        if !self.is_id_spawned(id, &cx) {
+        if !self.is_id_tracked(&id, &cx) {
             return;
         }
+
+        if let Some(spans) = self.current_spans.get() {
+            spans.borrow_mut().pop(id);
+        }
+
         self.send(Event::Exit {
             at: SystemTime::now(),
             id: id.clone(),
@@ -291,9 +507,10 @@ where
     }
 
     fn on_close(&self, id: span::Id, cx: Context<'_, S>) {
-        if !self.is_id_spawned(&id, &cx) {
+        if !self.is_id_tracked(&id, &cx) {
             return;
         }
+
         self.send(Event::Close {
             at: SystemTime::now(),
             id,
@@ -321,7 +538,9 @@ impl Server {
         let aggregate = tokio::spawn(aggregate.run());
         let addr = self.addr;
         let res = builder
-            .add_service(proto::tasks::tasks_server::TasksServer::new(self))
+            .add_service(proto::instrument::instrument_server::InstrumentServer::new(
+                self,
+            ))
             .serve(addr)
             .await;
         aggregate.abort();
@@ -330,15 +549,16 @@ impl Server {
 }
 
 #[tonic::async_trait]
-impl proto::tasks::tasks_server::Tasks for Server {
-    type WatchTasksStream =
-        tokio_stream::wrappers::ReceiverStream<Result<proto::tasks::TaskUpdate, tonic::Status>>;
+impl proto::instrument::instrument_server::Instrument for Server {
+    type WatchUpdatesStream = tokio_stream::wrappers::ReceiverStream<
+        Result<proto::instrument::InstrumentUpdate, tonic::Status>,
+    >;
     type WatchTaskDetailsStream =
         tokio_stream::wrappers::ReceiverStream<Result<proto::tasks::TaskDetails, tonic::Status>>;
-    async fn watch_tasks(
+    async fn watch_updates(
         &self,
-        req: tonic::Request<proto::tasks::TasksRequest>,
-    ) -> Result<tonic::Response<Self::WatchTasksStream>, tonic::Status> {
+        req: tonic::Request<proto::instrument::InstrumentRequest>,
+    ) -> Result<tonic::Response<Self::WatchUpdatesStream>, tonic::Status> {
         match req.remote_addr() {
             Some(addr) => tracing::debug!(client.addr = %addr, "starting a new watch"),
             None => tracing::debug!(client.addr = %"<unknown>", "starting a new watch"),
@@ -347,7 +567,7 @@ impl proto::tasks::tasks_server::Tasks for Server {
             tonic::Status::internal("cannot start new watch, aggregation task is not running")
         })?;
         let (tx, rx) = mpsc::channel(self.client_buffer);
-        permit.send(WatchKind::Tasks(Watch(tx)));
+        permit.send(WatchKind::Instrument(Watch(tx)));
         tracing::debug!("watch started");
         let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
         Ok(tonic::Response::new(stream))
@@ -355,7 +575,7 @@ impl proto::tasks::tasks_server::Tasks for Server {
 
     async fn watch_task_details(
         &self,
-        req: tonic::Request<proto::tasks::DetailsRequest>,
+        req: tonic::Request<proto::instrument::TaskDetailsRequest>,
     ) -> Result<tonic::Response<Self::WatchTaskDetailsStream>, tonic::Status> {
         let task_id = req
             .into_inner()
@@ -381,71 +601,5 @@ impl proto::tasks::tasks_server::Tasks for Server {
         tracing::debug!(id = ?task_id, "task details watch started");
         let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
         Ok(tonic::Response::new(stream))
-    }
-}
-
-impl Visit for FieldVisitor {
-    fn record_debug(&mut self, field: &field::Field, value: &dyn std::fmt::Debug) {
-        self.fields.push(proto::Field {
-            name: Some(field.name().into()),
-            value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
-        });
-    }
-
-    fn record_i64(&mut self, field: &tracing_core::Field, value: i64) {
-        self.fields.push(proto::Field {
-            name: Some(field.name().into()),
-            value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
-        });
-    }
-
-    fn record_u64(&mut self, field: &tracing_core::Field, value: u64) {
-        self.fields.push(proto::Field {
-            name: Some(field.name().into()),
-            value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
-        });
-    }
-
-    fn record_bool(&mut self, field: &tracing_core::Field, value: bool) {
-        self.fields.push(proto::Field {
-            name: Some(field.name().into()),
-            value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
-        });
-    }
-
-    fn record_str(&mut self, field: &tracing_core::Field, value: &str) {
-        self.fields.push(proto::Field {
-            name: Some(field.name().into()),
-            value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
-        });
-    }
-}
-
-impl Visit for WakerVisitor {
-    fn record_debug(&mut self, _: &field::Field, _: &dyn std::fmt::Debug) {
-        // don't care (yet?)
-    }
-
-    fn record_u64(&mut self, field: &tracing_core::Field, value: u64) {
-        if field.name() == "task.id" {
-            self.id = Some(span::Id::from_u64(value));
-        }
-    }
-
-    fn record_str(&mut self, field: &tracing_core::Field, value: &str) {
-        if field.name() == "op" {
-            self.op = Some(match value {
-                "waker.wake" => WakeOp::Wake,
-                "waker.wake_by_ref" => WakeOp::WakeByRef,
-                "waker.clone" => WakeOp::Clone,
-                "waker.drop" => WakeOp::Drop,
-                _ => return,
-            });
-        }
     }
 }
