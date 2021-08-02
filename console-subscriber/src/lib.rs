@@ -477,7 +477,7 @@ where
     }
 
     fn on_enter(&self, id: &span::Id, cx: Context<'_, S>) {
-        if !self.is_id_tracked(&id, &cx) {
+        if !self.is_id_tracked(id, &cx) {
             return;
         }
 
@@ -493,7 +493,7 @@ where
     }
 
     fn on_exit(&self, id: &span::Id, cx: Context<'_, S>) {
-        if !self.is_id_tracked(&id, &cx) {
+        if !self.is_id_tracked(id, &cx) {
             return;
         }
 
