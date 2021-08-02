@@ -34,7 +34,17 @@ message Resource {
     // The resources's concrete rust type.
     string concrete_type = 3;
     // The kind of resource (e.g timer, mutex)
-    string kind = 4;
+    Kind kind = 4;
+
+    message Kind {
+        oneof kind {
+            Known known = 1;
+            string other = 2;
+        }
+        enum Known {
+            TIMER = 0;
+        }
+    }
 }
 
 // Task runtime stats of a resource.

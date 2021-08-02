@@ -1,5 +1,6 @@
 use console_api as proto;
-use proto::SpanId;
+use proto::{resources::resource, SpanId};
+
 use tokio::sync::{mpsc, oneshot};
 
 use std::{
@@ -95,7 +96,7 @@ enum Event {
         metadata: &'static Metadata<'static>,
         at: SystemTime,
         concrete_type: String,
-        kind: String,
+        kind: resource::Kind,
     },
     ResourceOp {
         metadata: &'static Metadata<'static>,

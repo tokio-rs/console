@@ -1,5 +1,6 @@
 use super::{AttributeUpdate, AttributeUpdateOp, AttributeUpdateValue, Readiness, WakeOp};
 use console_api as proto;
+use proto::resources::resource;
 use std::collections::HashMap;
 use tracing_core::{
     field::{self, Visit},
@@ -9,7 +10,7 @@ use tracing_core::{
 #[derive(Default)]
 pub(crate) struct ResourceVisitor {
     concrete_type: Option<String>,
-    kind: Option<String>,
+    kind: Option<resource::Kind>,
 }
 
 pub(crate) struct FieldVisitor {
@@ -59,8 +60,9 @@ struct NumericStateAttr {
 impl ResourceVisitor {
     const RES_CONCRETE_TYPE_FIELD_NAME: &'static str = "concrete_type";
     const RES_KIND_FIELD_NAME: &'static str = "kind";
+    const RES_KIND_TIMER: &'static str = "timer";
 
-    pub(crate) fn result(self) -> Option<(String, String)> {
+    pub(crate) fn result(self) -> Option<(String, resource::Kind)> {
         self.concrete_type.zip(self.kind)
     }
 }
@@ -72,7 +74,13 @@ impl Visit for ResourceVisitor {
         if field.name() == Self::RES_CONCRETE_TYPE_FIELD_NAME {
             self.concrete_type = Some(value.to_string());
         } else if field.name() == Self::RES_KIND_FIELD_NAME {
-            self.kind = Some(value.to_string());
+            let kind = Some(match value {
+                Self::RES_KIND_TIMER => {
+                    resource::kind::Kind::Known(resource::kind::Known::Timer as i32)
+                }
+                other => resource::kind::Kind::Other(other.to_string()),
+            });
+            self.kind = Some(resource::Kind { kind });
         }
     }
 }
@@ -271,11 +279,11 @@ impl Visit for ResourceOpVisitor {
 
     fn record_str(&mut self, field: &tracing_core::Field, value: &str) {
         let extract_partial_attr = || -> Option<MatchPart> {
-            let parts: Vec<_> = field.name().split('_').collect();
-            if parts.len() == 3 {
-                let p0 = parts[0];
-                let p1 = parts[1];
-                let p2 = parts[2];
+            let mut parts = field.name().split('_');
+            let p0 = parts.next();
+            let p1 = parts.next();
+            let p2 = parts.next();
+            if let (Some(p0), Some(p1), Some(p2)) = (p0, p1, p2) {
                 if p0 == Self::OP_STATE_FIELD_PREFIX {
                     if p2 == Self::OP_STATE_FIELD_TYPE_UNIT {
                         return Some(MatchPart {
@@ -337,11 +345,11 @@ impl Visit for ResourceOpVisitor {
     }
 
     fn record_u64(&mut self, field: &tracing_core::Field, value: u64) {
-        let parts: Vec<_> = field.name().split('_').collect();
-        if parts.len() == 3 {
-            let p0 = parts[0];
-            let p1 = parts[1];
-            let p2 = parts[2];
+        let mut parts = field.name().split('_');
+        let p0 = parts.next();
+        let p1 = parts.next();
+        let p2 = parts.next();
+        if let (Some(p0), Some(p1), Some(p2)) = (p0, p1, p2) {
             if p0 == Self::OP_STATE_FIELD_PREFIX && p2 == Self::OP_STATE_FIELD_TYPE_VALUE {
                 let attr = self.state_numeric_attrs.entry(p1.into()).or_default();
                 attr.val = Some(value)

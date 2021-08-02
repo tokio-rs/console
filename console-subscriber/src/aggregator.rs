@@ -4,6 +4,7 @@ use super::{
     AttributeUpdateOp, AttributeUpdateValue, Event, OpType, Readiness, WakeOp, Watch, WatchKind,
 };
 use console_api as proto;
+use proto::resources::resource;
 use tokio::sync::{mpsc, Notify};
 
 use futures::FutureExt;
@@ -105,7 +106,7 @@ struct Resource {
     id: span::Id,
     metadata: &'static Metadata<'static>,
     concrete_type: String,
-    kind: String,
+    kind: resource::Kind,
 }
 
 #[derive(Clone)]
@@ -167,7 +168,6 @@ struct ResourceOp {
     op_type: OpType,
 }
 
-#[derive(Default)]
 struct IdData<T> {
     data: HashMap<span::Id, (T, bool)>,
 }
@@ -187,6 +187,34 @@ impl Closable for TaskStats {
 impl Closable for AsyncOpStats {
     fn closed_at(&self) -> &Option<SystemTime> {
         &self.closed_at
+    }
+}
+
+impl PollStats {
+    fn update_on_span_enter(&mut self, timestamp: SystemTime) {
+        if self.current_polls == 0 {
+            self.last_poll_started = Some(timestamp);
+            if self.first_poll == None {
+                self.first_poll = Some(timestamp);
+            }
+            self.polls += 1;
+        }
+        self.current_polls += 1;
+    }
+    fn update_on_span_exit(&mut self, timestamp: SystemTime) {
+        self.current_polls -= 1;
+        if self.current_polls == 0 {
+            if let Some(last_poll_started) = self.last_poll_started {
+                let elapsed = timestamp.duration_since(last_poll_started).unwrap();
+                self.last_poll_ended = Some(timestamp);
+                self.busy_time += elapsed;
+            }
+        }
+    }
+
+    fn since_last_poll(&self, timestamp: SystemTime) -> Option<Duration> {
+        self.last_poll_started
+            .map(|lps| timestamp.duration_since(lps).unwrap())
     }
 }
 
@@ -239,22 +267,13 @@ impl Aggregator {
             details_watchers: HashMap::new(),
             all_metadata: Vec::new(),
             new_metadata: Vec::new(),
-            tasks: IdData {
-                data: HashMap::<span::Id, (Task, bool)>::new(),
-            },
+            tasks: IdData::default(),
             task_stats: IdData::default(),
-            resources: IdData {
-                data: HashMap::<span::Id, (Resource, bool)>::new(),
-            },
+            resources: IdData::default(),
             resource_stats: IdData::default(),
-
-            async_ops: IdData {
-                data: HashMap::<span::Id, (AsyncOp, bool)>::new(),
-            },
+            async_ops: IdData::default(),
             async_op_stats: IdData::default(),
-            resource_ops: IdData {
-                data: HashMap::<span::Id, (ResourceOp, bool)>::new(),
-            },
+            resource_ops: IdData::default(),
         }
     }
 
@@ -365,21 +384,36 @@ impl Aggregator {
         // Send the initial state --- if this fails, the subscription is already dead
         let update = &proto::instrument::InstrumentUpdate {
             task_update: Some(proto::tasks::TaskUpdate {
-                new_tasks: self.tasks.as_proto(false).values().cloned().collect(),
-                stats_update: self.task_stats.as_proto(false),
+                new_tasks: self
+                    .tasks
+                    .as_proto(Include::All)
+                    .values()
+                    .cloned()
+                    .collect(),
+                stats_update: self.task_stats.as_proto(Include::All),
             }),
             resource_update: Some(proto::resources::ResourceUpdate {
-                new_resources: self.resources.as_proto(false).values().cloned().collect(),
-                stats_update: self.resource_stats.as_proto(false),
+                new_resources: self
+                    .resources
+                    .as_proto(Include::All)
+                    .values()
+                    .cloned()
+                    .collect(),
+                stats_update: self.resource_stats.as_proto(Include::All),
             }),
             async_op_update: Some(proto::async_ops::AsyncOpUpdate {
-                new_async_ops: self.async_ops.as_proto(false).values().cloned().collect(),
-                stats_update: self.async_op_stats.as_proto(false),
+                new_async_ops: self
+                    .async_ops
+                    .as_proto(Include::All)
+                    .values()
+                    .cloned()
+                    .collect(),
+                stats_update: self.async_op_stats.as_proto(Include::All),
             }),
             resource_op_update: Some(proto::resource_ops::ResourceOpUpdate {
                 new_resource_ops: self
                     .resource_ops
-                    .as_proto(false)
+                    .as_proto(Include::All)
                     .values()
                     .cloned()
                     .collect(),
@@ -448,19 +482,39 @@ impl Aggregator {
             now: Some(now.into()),
             new_metadata,
             task_update: Some(proto::tasks::TaskUpdate {
-                new_tasks: self.tasks.as_proto(true).values().cloned().collect(),
-                stats_update: self.task_stats.as_proto(true),
+                new_tasks: self
+                    .tasks
+                    .as_proto(Include::UpdatedOnly)
+                    .values()
+                    .cloned()
+                    .collect(),
+                stats_update: self.task_stats.as_proto(Include::UpdatedOnly),
             }),
             resource_update: Some(proto::resources::ResourceUpdate {
-                new_resources: self.resources.as_proto(true).values().cloned().collect(),
-                stats_update: self.resource_stats.as_proto(true),
+                new_resources: self
+                    .resources
+                    .as_proto(Include::UpdatedOnly)
+                    .values()
+                    .cloned()
+                    .collect(),
+                stats_update: self.resource_stats.as_proto(Include::UpdatedOnly),
             }),
             async_op_update: Some(proto::async_ops::AsyncOpUpdate {
-                new_async_ops: self.async_ops.as_proto(true).values().cloned().collect(),
-                stats_update: self.async_op_stats.as_proto(true),
+                new_async_ops: self
+                    .async_ops
+                    .as_proto(Include::UpdatedOnly)
+                    .values()
+                    .cloned()
+                    .collect(),
+                stats_update: self.async_op_stats.as_proto(Include::UpdatedOnly),
             }),
             resource_op_update: Some(proto::resource_ops::ResourceOpUpdate {
-                new_resource_ops: self.resource_ops.as_proto(true).values().cloned().collect(),
+                new_resource_ops: self
+                    .resource_ops
+                    .as_proto(Include::UpdatedOnly)
+                    .values()
+                    .cloned()
+                    .collect(),
             }),
         };
 
@@ -520,54 +574,27 @@ impl Aggregator {
             }
             Event::Enter { id, at } => {
                 if let Some(mut task_stats) = self.task_stats.update(&id) {
-                    if task_stats.poll_stats.current_polls == 0 {
-                        task_stats.poll_stats.last_poll_started = Some(at);
-                        if task_stats.poll_stats.first_poll == None {
-                            task_stats.poll_stats.first_poll = Some(at);
-                        }
-                        task_stats.poll_stats.polls += 1;
-                    }
-                    task_stats.poll_stats.current_polls += 1;
+                    task_stats.poll_stats.update_on_span_enter(at);
                 }
 
                 if let Some(mut async_op_stats) = self.async_op_stats.update(&id) {
-                    if async_op_stats.poll_stats.current_polls == 0 {
-                        async_op_stats.poll_stats.last_poll_started = Some(at);
-                        if async_op_stats.poll_stats.first_poll == None {
-                            async_op_stats.poll_stats.first_poll = Some(at);
-                        }
-                        async_op_stats.poll_stats.polls += 1;
-                    }
-                    async_op_stats.poll_stats.current_polls += 1;
+                    async_op_stats.poll_stats.update_on_span_enter(at);
                 }
             }
 
             Event::Exit { id, at } => {
                 if let Some(mut task_stats) = self.task_stats.update(&id) {
-                    task_stats.poll_stats.current_polls -= 1;
-                    if task_stats.poll_stats.current_polls == 0 {
-                        if let Some(last_poll_started) = task_stats.poll_stats.last_poll_started {
-                            let elapsed = at.duration_since(last_poll_started).unwrap();
-                            task_stats.poll_stats.last_poll_ended = Some(at);
-                            task_stats.poll_stats.busy_time += elapsed;
-                            task_stats
-                                .poll_times_histogram
-                                .record(elapsed.as_nanos().try_into().unwrap_or(u64::MAX))
-                                .unwrap();
-                        }
+                    task_stats.poll_stats.update_on_span_exit(at);
+                    if let Some(since_last_poll) = task_stats.poll_stats.since_last_poll(at) {
+                        task_stats
+                            .poll_times_histogram
+                            .record(since_last_poll.as_nanos().try_into().unwrap_or(u64::MAX))
+                            .unwrap();
                     }
                 }
 
                 if let Some(mut async_op_stats) = self.async_op_stats.update(&id) {
-                    async_op_stats.poll_stats.current_polls -= 1;
-                    if async_op_stats.poll_stats.current_polls == 0 {
-                        if let Some(last_poll_started) = async_op_stats.poll_stats.last_poll_started
-                        {
-                            let elapsed = at.duration_since(last_poll_started).unwrap();
-                            async_op_stats.poll_stats.last_poll_ended = Some(at);
-                            async_op_stats.poll_stats.busy_time += elapsed;
-                        }
-                    }
+                    async_op_stats.poll_stats.update_on_span_exit(at);
                 }
             }
 
@@ -753,6 +780,11 @@ impl Flush {
     }
 }
 
+enum Include {
+    All,
+    UpdatedOnly,
+}
+
 impl<T> IdData<T> {
     fn update_or_default(&mut self, id: span::Id) -> Updating<'_, T>
     where
@@ -788,19 +820,28 @@ impl<T> IdData<T> {
         self.data.get(id).map(|(data, _)| data)
     }
 
-    fn as_proto(&mut self, updated_only: bool) -> HashMap<u64, T::Result>
+    fn as_proto(&mut self, include: Include) -> HashMap<u64, T::Result>
     where
         T: ToProto,
     {
-        if updated_only {
-            return self
+        match include {
+            Include::UpdatedOnly => self
                 .since_last_update()
                 .map(|(id, d)| (id.into_u64(), d.to_proto()))
-                .collect();
+                .collect(),
+            Include::All => self
+                .all()
+                .map(|(id, d)| (id.into_u64(), d.to_proto()))
+                .collect(),
         }
-        self.all()
-            .map(|(id, d)| (id.into_u64(), d.to_proto()))
-            .collect()
+    }
+}
+
+impl<T> Default for IdData<T> {
+    fn default() -> Self {
+        IdData {
+            data: HashMap::<span::Id, (T, bool)>::new(),
+        }
     }
 }
 
@@ -888,7 +929,7 @@ impl ToProto for Resource {
     fn to_proto(&self) -> Self::Result {
         proto::resources::Resource {
             id: Some(self.id.clone().into()),
-            kind: self.kind.clone(),
+            kind: Some(self.kind.clone()),
             metadata: Some(self.metadata.into()),
             concrete_type: self.concrete_type.clone(),
         }
