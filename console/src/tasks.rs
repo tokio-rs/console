@@ -38,7 +38,6 @@ pub(crate) type DetailsRef = Rc<RefCell<Option<Details>>>;
 #[derive(Debug)]
 pub(crate) struct Task {
     id: u64,
-    id_hex: String,
     fields: Vec<Field>,
     formatted_fields: Vec<Vec<Span<'static>>>,
     kind: &'static str,
@@ -191,7 +190,6 @@ impl State {
             let stats = stats_update.remove(&id)?.into();
             let mut task = Task {
                 id,
-                id_hex: format!("{:x}", id),
                 fields,
                 formatted_fields,
                 kind,
@@ -258,10 +256,6 @@ impl Task {
 
     pub(crate) fn id(&self) -> u64 {
         self.id
-    }
-
-    pub(crate) fn id_hex(&self) -> &str {
-        &self.id_hex
     }
 
     pub(crate) fn target(&self) -> &str {

@@ -99,7 +99,7 @@ impl TaskView {
             Span::raw(" = quit"),
         ]);
 
-        let attrs = Spans::from(vec![bold("ID: "), Span::raw(task.id_hex())]);
+        let attrs = Spans::from(vec![bold("ID: "), Span::raw(task.id().to_string())]);
         let target = Spans::from(vec![bold("Target: "), Span::raw(task.target())]);
 
         let mut total = vec![bold("Total Time: "), dur(task.total(now))];

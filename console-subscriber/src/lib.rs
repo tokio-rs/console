@@ -1,5 +1,4 @@
 use console_api as proto;
-use proto::SpanId;
 use tokio::sync::{mpsc, oneshot};
 
 use std::{
@@ -25,6 +24,8 @@ pub use builder::Builder;
 use callsites::Callsites;
 
 pub use init::{build, init};
+
+use crate::aggregator::TaskId;
 
 pub struct TasksLayer {
     tx: mpsc::Sender<Event>,
@@ -58,7 +59,7 @@ enum WatchKind {
 }
 
 struct WatchRequest<T> {
-    id: SpanId,
+    id: TaskId,
     stream_sender: oneshot::Sender<mpsc::Receiver<Result<T, tonic::Status>>>,
     buffer: usize,
 }
@@ -368,7 +369,7 @@ impl proto::tasks::tasks_server::Tasks for Server {
         // Check with the aggregator task to request a stream if the task exists.
         let (stream_sender, stream_recv) = oneshot::channel();
         permit.send(WatchKind::TaskDetail(WatchRequest {
-            id: task_id.clone(),
+            id: task_id.into(),
             stream_sender,
             buffer: self.client_buffer,
         }));
