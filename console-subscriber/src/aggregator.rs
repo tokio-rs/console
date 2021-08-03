@@ -274,7 +274,7 @@ impl Aggregator {
             // Then send the initial state --- if this fails, the subscription is already dead.
             if stream_sender.send(rx).is_ok()
                 && subscription.update(&proto::tasks::TaskDetails {
-                    task_id: id,
+                    task_id: Some(id.into()),
                     now: Some(now.into()),
                     poll_times_histogram: serialize_histogram(&stats.poll_times_histogram).ok(),
                 })
@@ -324,10 +324,10 @@ impl Aggregator {
         let stats = &self.stats;
         // Assuming there are much fewer task details subscribers than there are
         // stats updates, iterate over `details_watchers` and compact the map.
-        self.details_watchers.retain(|id, watchers| {
-            if let Some(task_stats) = stats.get(id) {
+        self.details_watchers.retain(|&id, watchers| {
+            if let Some(task_stats) = stats.get(&id) {
                 let details = proto::tasks::TaskDetails {
-                    task_id: *id,
+                    task_id: Some(id.into()),
                     now: Some(now.into()),
                     poll_times_histogram: serialize_histogram(&task_stats.poll_times_histogram)
                         .ok(),
@@ -631,7 +631,7 @@ impl Stats {
 impl Task {
     fn to_proto(&self, id: u64) -> proto::tasks::Task {
         proto::tasks::Task {
-            id,
+            id: Some(id.into()),
             // TODO: more kinds of tasks...
             kind: proto::tasks::task::Kind::Spawn as i32,
             metadata: Some(self.metadata.into()),
