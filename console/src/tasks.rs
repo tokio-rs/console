@@ -172,8 +172,13 @@ impl State {
                             meta.field_names.get(*idx as usize).cloned()
                         }
                     };
-                    let value = f.value.as_ref().expect("no value").clone().into();
-                    name.map(|name| Field { name, value })
+                    let mut value: FieldValue = f.value.as_ref().expect("no value").clone().into();
+                    name.map(|name| {
+                        if &*name == "spawn.location" {
+                            value = value.truncate_registry_path();
+                        }
+                        Field { name, value }
+                    })
                 })
                 .collect();
 
@@ -462,5 +467,31 @@ impl fmt::Display for FieldValue {
         }
 
         Ok(())
+    }
+}
+
+impl FieldValue {
+    /// Truncates paths including `.cargo/registry`.
+    fn truncate_registry_path(self) -> Self {
+        use once_cell::sync::OnceCell;
+        use regex::Regex;
+        use std::borrow::Cow;
+
+        static REGEX: OnceCell<Regex> = OnceCell::new();
+        let regex = REGEX.get_or_init(|| {
+            Regex::new(r#".*/\.cargo/registry/src/[^/]*/"#).expect("failed to compile regex")
+        });
+
+        let s = match self {
+            FieldValue::Str(s) | FieldValue::Debug(s) => s,
+            f => return f,
+        };
+
+        let s = match regex.replace(&s, "<cargo>/") {
+            Cow::Owned(s) => s,
+            // String was not modified, return the original.
+            Cow::Borrowed(_) => s,
+        };
+        FieldValue::Debug(s)
     }
 }
