@@ -84,6 +84,7 @@ impl List {
         // there's room for the unit!)
         const DUR_PRECISION: usize = 4;
         const POLLS_LEN: usize = 5;
+        const KIND_LEN: u16 = 4;
 
         self.sorted_tasks.extend(state.take_new_tasks());
         self.sort_by.sort(now, &mut self.sorted_tasks);
@@ -162,15 +163,29 @@ impl List {
         } else {
             Table::new(rows.rev())
         };
+
+        // How many characters wide are the fixed-length non-field columns?
+        let fixed_col_width = id_width.chars()
+            + KIND_LEN
+            + DUR_LEN as u16
+            + DUR_LEN as u16
+            + DUR_LEN as u16
+            + POLLS_LEN as u16
+            + target_width.chars();
+        // Fill all remaining characters in the frame with the task's fields.
+        // TODO(eliza): there's gotta be a nicer way to do this in `tui`...what
+        // we want is really just a constraint that says "always use all the
+        // characters remaining".
+        let fields_width = frame.size().width - fixed_col_width;
         let widths = &[
             id_width.constraint(),
-            layout::Constraint::Length(4),
-            layout::Constraint::Min(DUR_LEN as u16),
-            layout::Constraint::Min(DUR_LEN as u16),
-            layout::Constraint::Min(DUR_LEN as u16),
-            layout::Constraint::Min(POLLS_LEN as u16),
+            layout::Constraint::Length(KIND_LEN),
+            layout::Constraint::Length(DUR_LEN as u16),
+            layout::Constraint::Length(DUR_LEN as u16),
+            layout::Constraint::Length(DUR_LEN as u16),
+            layout::Constraint::Length(POLLS_LEN as u16),
             target_width.constraint(),
-            layout::Constraint::Min(10),
+            layout::Constraint::Min(fields_width),
         ];
         let t = t
             .header(header)
