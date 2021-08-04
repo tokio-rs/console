@@ -161,4 +161,8 @@ impl Width {
     pub(crate) fn constraint(&self) -> layout::Constraint {
         layout::Constraint::Length(self.curr)
     }
+
+    pub(crate) fn chars(&self) -> u16 {
+        self.curr
+    }
 }
