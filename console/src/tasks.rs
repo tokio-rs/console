@@ -57,6 +57,7 @@ pub(crate) struct Details {
 pub(crate) struct Metadata {
     field_names: Vec<Arc<str>>,
     target: Arc<str>,
+    id: u64,
     //TODO: add more metadata as needed
 }
 
@@ -123,7 +124,7 @@ impl State {
             let metas = new_metadata.metadata.into_iter().filter_map(|meta| {
                 let id = meta.id?.id;
                 let metadata = meta.metadata?;
-                Some((id, metadata.into()))
+                Some((id, Metadata::from_proto(metadata, id)))
             });
             self.metas.extend(metas);
         }
@@ -156,31 +157,11 @@ impl State {
                     return None;
                 }
             };
-            let fields: Vec<Field> = task
+            let fields = task
                 .fields
                 .drain(..)
-                .filter_map(|f| {
-                    let field_name = f.name.as_ref()?;
-                    let name: Option<Arc<str>> = match field_name {
-                        proto::field::Name::StrName(n) => Some(n.clone().into()),
-                        proto::field::Name::NameIdx(idx) => {
-                            debug_assert_eq!(
-                                f.metadata_id.map(|m| m.id),
-                                Some(meta_id),
-                                "malformed field name: metadata ID mismatch!"
-                            );
-                            meta.field_names.get(*idx as usize).cloned()
-                        }
-                    };
-                    let mut value: FieldValue = f.value.as_ref().expect("no value").clone().into();
-                    name.map(|name| {
-                        if &*name == "spawn.location" {
-                            value = value.truncate_registry_path();
-                        }
-                        Field { name, value }
-                    })
-                })
-                .collect();
+                .filter_map(|pb| Field::from_proto(pb, meta))
+                .collect::<Vec<_>>();
 
             let formatted_fields = fields.iter().fold(Vec::default(), |mut acc, f| {
                 acc.push(vec![
@@ -394,11 +375,12 @@ impl From<proto::tasks::Stats> for Stats {
     }
 }
 
-impl From<proto::Metadata> for Metadata {
-    fn from(pb: proto::Metadata) -> Self {
+impl Metadata {
+    fn from_proto(pb: proto::Metadata, id: u64) -> Self {
         Self {
             field_names: pb.field_names.into_iter().map(|n| n.into()).collect(),
             target: pb.target.into(),
+            id,
         }
     }
 }
@@ -456,6 +438,81 @@ impl TryFrom<usize> for SortBy {
     }
 }
 
+// === impl Field ===
+
+impl Field {
+    /// Converts a wire-format `Field` into an internal `Field` representation,
+    /// using the provided `Metadata` for the task span that the field came
+    /// from.
+    ///
+    /// If the field is invalid or it has a string value which is empty, this
+    /// returns `None`.
+    fn from_proto(
+        proto::Field {
+            name,
+            metadata_id,
+            value,
+        }: proto::Field,
+        meta: &Metadata,
+    ) -> Option<Self> {
+        use proto::field::Name;
+        let name: Arc<str> = match name? {
+            Name::StrName(n) => n.into(),
+            Name::NameIdx(idx) => {
+                let meta_id = metadata_id.map(|m| m.id);
+                if meta_id != Some(meta.id) {
+                    tracing::warn!(
+                        task.meta_id = meta.id,
+                        field.meta.id = ?meta_id,
+                        field.name_index = idx,
+                        ?meta,
+                        "skipping malformed field name (metadata id mismatch)"
+                    );
+                    debug_assert_eq!(
+                        meta_id,
+                        Some(meta.id),
+                        "malformed field name: metadata ID mismatch! (name idx={}; metadata={:#?})",
+                        idx,
+                        meta,
+                    );
+                    return None;
+                }
+                match meta.field_names.get(idx as usize).cloned() {
+                    Some(name) => name,
+                    None => {
+                        tracing::warn!(
+                            task.meta_id = meta.id,
+                            field.meta.id = ?meta_id,
+                            field.name_index = idx,
+                            ?meta,
+                            "missing field name for index"
+                        );
+                        return None;
+                    }
+                }
+            }
+        };
+
+        debug_assert!(
+            value.is_some(),
+            "missing field value for field `{:?}` (metadata={:#?})",
+            name,
+            meta,
+        );
+        let mut value = FieldValue::from(value?)
+            // if the value is an empty string, just skip it.
+            .ensure_nonempty()?;
+
+        if &*name == "spawn.location" {
+            value = value.truncate_registry_path();
+        }
+
+        Some(Self { name, value })
+    }
+}
+
+// === impl FieldValue ===
+
 impl fmt::Display for FieldValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -493,5 +550,13 @@ impl FieldValue {
             Cow::Borrowed(_) => s,
         };
         FieldValue::Debug(s)
+    }
+
+    /// If `self` is an empty string, returns `None`. Otherwise, returns `Some(self)`.
+    fn ensure_nonempty(self) -> Option<Self> {
+        match self {
+            FieldValue::Debug(s) | FieldValue::Str(s) if s.is_empty() => None,
+            val => Some(val),
+        }
     }
 }
