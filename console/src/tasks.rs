@@ -161,24 +161,37 @@ impl State {
                 .drain(..)
                 .filter_map(|f| {
                     let field_name = f.name.as_ref()?;
-                    let name: Option<Arc<str>> = match field_name {
-                        proto::field::Name::StrName(n) => Some(n.clone().into()),
+                    let name: Arc<str> = match field_name {
+                        proto::field::Name::StrName(n) => n.clone().into(),
                         proto::field::Name::NameIdx(idx) => {
                             debug_assert_eq!(
                                 f.metadata_id.map(|m| m.id),
                                 Some(meta_id),
                                 "malformed field name: metadata ID mismatch!"
                             );
-                            meta.field_names.get(*idx as usize).cloned()
+                            let name = meta.field_names.get(*idx as usize).cloned();
+                            if name.is_none() {
+                                tracing::warn!(index = idx, "missing field name for");
+                            };
+                            name?
                         }
                     };
-                    let mut value: FieldValue = f.value.as_ref().expect("no value").clone().into();
-                    name.map(|name| {
-                        if &*name == "spawn.location" {
-                            value = value.truncate_registry_path();
-                        }
-                        Field { name, value }
-                    })
+
+                    let value = f.value;
+                    debug_assert!(
+                        value.is_some(),
+                        "missing field value for field `{:?}`",
+                        name
+                    );
+                    let mut value = FieldValue::from(value?)
+                        // if the value is an empty string, just skip it.
+                        .ensure_nonempty()?;
+
+                    if &*name == "spawn.location" {
+                        value = value.truncate_registry_path();
+                    }
+
+                    Some(Field { name, value })
                 })
                 .collect();
 
@@ -493,5 +506,13 @@ impl FieldValue {
             Cow::Borrowed(_) => s,
         };
         FieldValue::Debug(s)
+    }
+
+    /// If `self` is an empty string, returns `None`. Otherwise, returns `Some(self)`.
+    fn ensure_nonempty(self) -> Option<Self> {
+        match self {
+            FieldValue::Debug(s) | FieldValue::Str(s) if s.is_empty() => None,
+            val => Some(val),
+        }
     }
 }
