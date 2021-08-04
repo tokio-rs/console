@@ -4,7 +4,7 @@ use hdrhistogram::Histogram;
 use std::{
     cell::RefCell,
     collections::HashMap,
-    convert::TryFrom,
+    convert::{TryFrom, TryInto},
     fmt,
     io::Cursor,
     rc::{Rc, Weak},
@@ -116,7 +116,7 @@ impl State {
 
     pub(crate) fn update_tasks(&mut self, update: proto::tasks::TaskUpdate) {
         if let Some(now) = update.now {
-            self.last_updated_at = Some(now.into());
+            self.last_updated_at = Some(now.try_into().unwrap());
         }
 
         if let Some(new_metadata) = update.new_metadata {
@@ -226,7 +226,7 @@ impl State {
                         .deserialize(&mut Cursor::new(&data))
                         .ok()
                 }),
-                last_updated_at: update.now.map(|now| now.into()),
+                last_updated_at: update.now.map(|now| now.try_into().unwrap()),
             };
 
             *self.current_task_details.borrow_mut() = Some(details);
@@ -373,14 +373,18 @@ impl From<proto::tasks::Stats> for Stats {
             total,
             idle,
             busy,
-            last_poll_started: pb.last_poll_started.map(Into::into),
-            last_poll_ended: pb.last_poll_ended.map(Into::into),
+            last_poll_started: pb.last_poll_started.map(|v| v.try_into().unwrap()),
+            last_poll_ended: pb.last_poll_ended.map(|v| v.try_into().unwrap()),
             polls: pb.polls,
-            created_at: pb.created_at.expect("task span was never created").into(),
+            created_at: pb
+                .created_at
+                .expect("task span was never created")
+                .try_into()
+                .unwrap(),
             wakes: pb.wakes,
             waker_clones: pb.waker_clones,
             waker_drops: pb.waker_drops,
-            last_wake: pb.last_wake.map(Into::into),
+            last_wake: pb.last_wake.map(|v| v.try_into().unwrap()),
         }
     }
 }
