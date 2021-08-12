@@ -1,7 +1,7 @@
 use crate::{
     input,
     tasks::{self, TaskRef},
-    view::bold,
+    view::{self, bold},
 };
 use std::convert::TryFrom;
 use tui::{
@@ -20,8 +20,9 @@ pub(crate) struct List {
 }
 
 impl List {
-    const HEADER: &'static [&'static str] =
-        &["TID", "KIND", "TOTAL", "BUSY", "IDLE", "POLLS", "FIELDS"];
+    const HEADER: &'static [&'static str] = &[
+        "TID", "KIND", "TOTAL", "BUSY", "IDLE", "POLLS", "TARGET", "FIELDS",
+    ];
 
     pub(crate) fn update_input(&mut self, event: input::Event) {
         // Clippy likes to remind us that we could use an `if let` here, since
@@ -83,51 +84,54 @@ impl List {
         // there's room for the unit!)
         const DUR_PRECISION: usize = 4;
         const POLLS_LEN: usize = 5;
+        const KIND_LEN: u16 = 4;
 
         self.sorted_tasks.extend(state.take_new_tasks());
         self.sort_by.sort(now, &mut self.sorted_tasks);
 
-        let rows = self.sorted_tasks.iter().filter_map(|task| {
-            let task = task.upgrade()?;
-            let task = task.borrow();
+        fn dur_cell(dur: std::time::Duration) -> Cell<'static> {
+            Cell::from(view::color_time_units(format!(
+                "{:>width$.prec$?}",
+                dur,
+                width = DUR_LEN,
+                prec = DUR_PRECISION,
+            )))
+        }
 
-            let mut row = Row::new(vec![
-                Cell::from(task.id_hex().to_string()),
-                // TODO(eliza): is there a way to write a `fmt::Debug` impl
-                // directly to tui without doing an allocation?
-                Cell::from(task.kind().to_string()),
-                Cell::from(format!(
-                    "{:>width$.prec$?}",
-                    task.total(now),
-                    width = DUR_LEN,
-                    prec = DUR_PRECISION,
-                )),
-                Cell::from(format!(
-                    "{:>width$.prec$?}",
-                    task.busy(),
-                    width = DUR_LEN,
-                    prec = DUR_PRECISION,
-                )),
-                Cell::from(format!(
-                    "{:>width$.prec$?}",
-                    task.idle(now),
-                    width = DUR_LEN,
-                    prec = DUR_PRECISION,
-                )),
-                Cell::from(format!("{:>width$}", task.total_polls(), width = POLLS_LEN)),
-                Cell::from(Spans::from(
-                    task.formatted_fields()
-                        .iter()
-                        .flatten()
-                        .cloned()
-                        .collect::<Vec<_>>(),
-                )),
-            ]);
-            if task.completed_for() > 0 {
-                row = row.style(Style::default().add_modifier(style::Modifier::DIM));
-            }
-            Some(row)
-        });
+        // Start out wide enough to display the column headers...
+        let mut id_width = view::Width::new(Self::HEADER[0].len() as u16);
+        let mut target_width = view::Width::new(Self::HEADER[6].len() as u16);
+        let rows = {
+            let id_width = &mut id_width;
+            let target_width = &mut target_width;
+            self.sorted_tasks.iter().filter_map(move |task| {
+                let task = task.upgrade()?;
+                let task = task.borrow();
+
+                let mut row = Row::new(vec![
+                    Cell::from(id_width.update_str(task.id().to_string())),
+                    // TODO(eliza): is there a way to write a `fmt::Debug` impl
+                    // directly to tui without doing an allocation?
+                    Cell::from(task.kind().to_string()),
+                    dur_cell(task.total(now)),
+                    dur_cell(task.busy(now)),
+                    dur_cell(task.idle(now)),
+                    Cell::from(format!("{:>width$}", task.total_polls(), width = POLLS_LEN)),
+                    Cell::from(target_width.update_str(task.target()).to_owned()),
+                    Cell::from(Spans::from(
+                        task.formatted_fields()
+                            .iter()
+                            .flatten()
+                            .cloned()
+                            .collect::<Vec<_>>(),
+                    )),
+                ]);
+                if task.completed_for() > 0 {
+                    row = row.style(Style::default().add_modifier(style::Modifier::DIM));
+                }
+                Some(row)
+            })
+        };
 
         let block = Block::default().title(vec![
             text::Span::raw("controls: "),
@@ -159,18 +163,34 @@ impl List {
         } else {
             Table::new(rows.rev())
         };
+
+        // How many characters wide are the fixed-length non-field columns?
+        let fixed_col_width = id_width.chars()
+            + KIND_LEN
+            + DUR_LEN as u16
+            + DUR_LEN as u16
+            + DUR_LEN as u16
+            + POLLS_LEN as u16
+            + target_width.chars();
+        // Fill all remaining characters in the frame with the task's fields.
+        // TODO(eliza): there's gotta be a nicer way to do this in `tui`...what
+        // we want is really just a constraint that says "always use all the
+        // characters remaining".
+        let fields_width = frame.size().width - fixed_col_width;
+        let widths = &[
+            id_width.constraint(),
+            layout::Constraint::Length(KIND_LEN),
+            layout::Constraint::Length(DUR_LEN as u16),
+            layout::Constraint::Length(DUR_LEN as u16),
+            layout::Constraint::Length(DUR_LEN as u16),
+            layout::Constraint::Length(POLLS_LEN as u16),
+            target_width.constraint(),
+            layout::Constraint::Min(fields_width),
+        ];
         let t = t
             .header(header)
             .block(block)
-            .widths(&[
-                layout::Constraint::Min(20),
-                layout::Constraint::Length(4),
-                layout::Constraint::Min(DUR_LEN as u16),
-                layout::Constraint::Min(DUR_LEN as u16),
-                layout::Constraint::Min(DUR_LEN as u16),
-                layout::Constraint::Min(POLLS_LEN as u16),
-                layout::Constraint::Min(10),
-            ])
+            .widths(widths)
             .highlight_symbol(">> ")
             .highlight_style(Style::default().add_modifier(style::Modifier::BOLD));
 

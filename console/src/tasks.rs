@@ -4,7 +4,7 @@ use hdrhistogram::Histogram;
 use std::{
     cell::RefCell,
     collections::HashMap,
-    convert::TryFrom,
+    convert::{TryFrom, TryInto},
     fmt,
     io::Cursor,
     rc::{Rc, Weak},
@@ -38,12 +38,12 @@ pub(crate) type DetailsRef = Rc<RefCell<Option<Details>>>;
 #[derive(Debug)]
 pub(crate) struct Task {
     id: u64,
-    id_hex: String,
     fields: Vec<Field>,
     formatted_fields: Vec<Vec<Span<'static>>>,
     kind: &'static str,
     stats: Stats,
     completed_for: usize,
+    target: Arc<str>,
 }
 
 #[derive(Debug, Default)]
@@ -56,6 +56,8 @@ pub(crate) struct Details {
 #[derive(Debug)]
 pub(crate) struct Metadata {
     field_names: Vec<Arc<str>>,
+    target: Arc<str>,
+    id: u64,
     //TODO: add more metadata as needed
 }
 
@@ -64,6 +66,8 @@ struct Stats {
     polls: u64,
     created_at: SystemTime,
     busy: Duration,
+    last_poll_started: Option<SystemTime>,
+    last_poll_ended: Option<SystemTime>,
     idle: Option<Duration>,
     total: Option<Duration>,
 
@@ -113,14 +117,14 @@ impl State {
 
     pub(crate) fn update_tasks(&mut self, update: proto::tasks::TaskUpdate) {
         if let Some(now) = update.now {
-            self.last_updated_at = Some(now.into());
+            self.last_updated_at = Some(now.try_into().unwrap());
         }
 
         if let Some(new_metadata) = update.new_metadata {
             let metas = new_metadata.metadata.into_iter().filter_map(|meta| {
                 let id = meta.id?.id;
                 let metadata = meta.metadata?;
-                Some((id, metadata.into()))
+                Some((id, Metadata::from_proto(metadata, id)))
             });
             self.metas.extend(metas);
         }
@@ -139,25 +143,25 @@ impl State {
                 proto::tasks::task::Kind::Blocking => "B",
             };
 
-            let fields: Vec<Field> = task
+            let meta_id = match task.metadata.as_ref() {
+                Some(id) => id.id,
+                None => {
+                    tracing::warn!(?task, "task has no metadata ID, skipping");
+                    return None;
+                }
+            };
+            let meta = match metas.get(&meta_id) {
+                Some(meta) => meta,
+                None => {
+                    tracing::warn!(?task, meta_id, "no metadata for task, skipping");
+                    return None;
+                }
+            };
+            let fields = task
                 .fields
                 .drain(..)
-                .filter_map(|f| {
-                    let field_name = f.name.as_ref()?;
-                    let name: Option<Arc<str>> = match field_name {
-                        proto::field::Name::StrName(n) => Some(n.clone().into()),
-                        proto::field::Name::NameIdx(idx) => {
-                            let meta_id = f.metadata_id.as_ref()?;
-                            metas
-                                .get(&meta_id.id)
-                                .and_then(|meta| meta.field_names.get(*idx as usize))
-                                .cloned()
-                        }
-                    };
-                    let value = f.value.as_ref().expect("no value").clone().into();
-                    name.map(|name| Field { name, value })
-                })
-                .collect();
+                .filter_map(|pb| Field::from_proto(pb, meta))
+                .collect::<Vec<_>>();
 
             let formatted_fields = fields.iter().fold(Vec::default(), |mut acc, f| {
                 acc.push(vec![
@@ -172,12 +176,12 @@ impl State {
             let stats = stats_update.remove(&id)?.into();
             let mut task = Task {
                 id,
-                id_hex: format!("{:x}", id),
                 fields,
                 formatted_fields,
                 kind,
                 stats,
                 completed_for: 0,
+                target: meta.target.clone(),
             };
             task.update();
             let task = Rc::new(RefCell::new(task));
@@ -208,7 +212,7 @@ impl State {
                         .deserialize(&mut Cursor::new(&data))
                         .ok()
                 }),
-                last_updated_at: update.now.map(|now| now.into()),
+                last_updated_at: update.now.map(|now| now.try_into().unwrap()),
             };
 
             *self.current_task_details.borrow_mut() = Some(details);
@@ -240,8 +244,8 @@ impl Task {
         self.id
     }
 
-    pub(crate) fn id_hex(&self) -> &str {
-        &self.id_hex
+    pub(crate) fn target(&self) -> &str {
+        &self.target
     }
 
     pub(crate) fn formatted_fields(&self) -> &[Vec<Span<'static>>] {
@@ -258,14 +262,21 @@ impl Task {
             .unwrap_or_else(|| since.duration_since(self.stats.created_at).unwrap())
     }
 
-    pub(crate) fn busy(&self) -> Duration {
+    pub(crate) fn busy(&self, since: SystemTime) -> Duration {
+        if let (Some(last_poll_started), None) =
+            (self.stats.last_poll_started, self.stats.last_poll_ended)
+        {
+            // in this case the task is being polled at the moment
+            let current_time_in_poll = since.duration_since(last_poll_started).unwrap();
+            return self.stats.busy + current_time_in_poll;
+        }
         self.stats.busy
     }
 
     pub(crate) fn idle(&self, since: SystemTime) -> Duration {
         self.stats
             .idle
-            .unwrap_or_else(|| self.total(since) - self.busy())
+            .unwrap_or_else(|| self.total(since) - self.busy(since))
     }
 
     /// Returns the total number of times the task has been polled.
@@ -348,20 +359,28 @@ impl From<proto::tasks::Stats> for Stats {
             total,
             idle,
             busy,
+            last_poll_started: pb.last_poll_started.map(|v| v.try_into().unwrap()),
+            last_poll_ended: pb.last_poll_ended.map(|v| v.try_into().unwrap()),
             polls: pb.polls,
-            created_at: pb.created_at.expect("task span was never created").into(),
+            created_at: pb
+                .created_at
+                .expect("task span was never created")
+                .try_into()
+                .unwrap(),
             wakes: pb.wakes,
             waker_clones: pb.waker_clones,
             waker_drops: pb.waker_drops,
-            last_wake: pb.last_wake.map(Into::into),
+            last_wake: pb.last_wake.map(|v| v.try_into().unwrap()),
         }
     }
 }
 
-impl From<proto::Metadata> for Metadata {
-    fn from(pb: proto::Metadata) -> Self {
+impl Metadata {
+    fn from_proto(pb: proto::Metadata, id: u64) -> Self {
         Self {
             field_names: pb.field_names.into_iter().map(|n| n.into()).collect(),
+            target: pb.target.into(),
+            id,
         }
     }
 }
@@ -396,7 +415,7 @@ impl SortBy {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().idle(now)))
             }
             Self::Busy => {
-                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().busy()))
+                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().busy(now)))
             }
             Self::Polls => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().stats.polls))
@@ -419,6 +438,81 @@ impl TryFrom<usize> for SortBy {
     }
 }
 
+// === impl Field ===
+
+impl Field {
+    /// Converts a wire-format `Field` into an internal `Field` representation,
+    /// using the provided `Metadata` for the task span that the field came
+    /// from.
+    ///
+    /// If the field is invalid or it has a string value which is empty, this
+    /// returns `None`.
+    fn from_proto(
+        proto::Field {
+            name,
+            metadata_id,
+            value,
+        }: proto::Field,
+        meta: &Metadata,
+    ) -> Option<Self> {
+        use proto::field::Name;
+        let name: Arc<str> = match name? {
+            Name::StrName(n) => n.into(),
+            Name::NameIdx(idx) => {
+                let meta_id = metadata_id.map(|m| m.id);
+                if meta_id != Some(meta.id) {
+                    tracing::warn!(
+                        task.meta_id = meta.id,
+                        field.meta.id = ?meta_id,
+                        field.name_index = idx,
+                        ?meta,
+                        "skipping malformed field name (metadata id mismatch)"
+                    );
+                    debug_assert_eq!(
+                        meta_id,
+                        Some(meta.id),
+                        "malformed field name: metadata ID mismatch! (name idx={}; metadata={:#?})",
+                        idx,
+                        meta,
+                    );
+                    return None;
+                }
+                match meta.field_names.get(idx as usize).cloned() {
+                    Some(name) => name,
+                    None => {
+                        tracing::warn!(
+                            task.meta_id = meta.id,
+                            field.meta.id = ?meta_id,
+                            field.name_index = idx,
+                            ?meta,
+                            "missing field name for index"
+                        );
+                        return None;
+                    }
+                }
+            }
+        };
+
+        debug_assert!(
+            value.is_some(),
+            "missing field value for field `{:?}` (metadata={:#?})",
+            name,
+            meta,
+        );
+        let mut value = FieldValue::from(value?)
+            // if the value is an empty string, just skip it.
+            .ensure_nonempty()?;
+
+        if &*name == "spawn.location" {
+            value = value.truncate_registry_path();
+        }
+
+        Some(Self { name, value })
+    }
+}
+
+// === impl FieldValue ===
+
 impl fmt::Display for FieldValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -430,5 +524,39 @@ impl fmt::Display for FieldValue {
         }
 
         Ok(())
+    }
+}
+
+impl FieldValue {
+    /// Truncates paths including `.cargo/registry`.
+    fn truncate_registry_path(self) -> Self {
+        use once_cell::sync::OnceCell;
+        use regex::Regex;
+        use std::borrow::Cow;
+
+        static REGEX: OnceCell<Regex> = OnceCell::new();
+        let regex = REGEX.get_or_init(|| {
+            Regex::new(r#".*/\.cargo/registry/src/[^/]*/"#).expect("failed to compile regex")
+        });
+
+        let s = match self {
+            FieldValue::Str(s) | FieldValue::Debug(s) => s,
+            f => return f,
+        };
+
+        let s = match regex.replace(&s, "<cargo>/") {
+            Cow::Owned(s) => s,
+            // String was not modified, return the original.
+            Cow::Borrowed(_) => s,
+        };
+        FieldValue::Debug(s)
+    }
+
+    /// If `self` is an empty string, returns `None`. Otherwise, returns `Some(self)`.
+    fn ensure_nonempty(self) -> Option<Self> {
+        match self {
+            FieldValue::Debug(s) | FieldValue::Str(s) if s.is_empty() => None,
+            val => Some(val),
+        }
     }
 }

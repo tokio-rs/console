@@ -1,5 +1,5 @@
 use crate::{input, tasks::State};
-use std::borrow::Cow;
+use std::{borrow::Cow, cmp};
 use tui::{
     layout,
     style::{self, Style},
@@ -21,6 +21,7 @@ pub struct View {
     list: tasks::List,
     state: ViewState,
 }
+
 enum ViewState {
     /// The table list of all tasks.
     TasksList,
@@ -37,6 +38,11 @@ pub(crate) enum UpdateKind {
     ExitTaskView,
     /// No significant change
     Other,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub(crate) struct Width {
+    curr: u16,
 }
 
 macro_rules! key {
@@ -121,4 +127,42 @@ impl Default for View {
 
 pub(crate) fn bold<'a>(text: impl Into<Cow<'a, str>>) -> Span<'a> {
     Span::styled(text, Style::default().add_modifier(style::Modifier::BOLD))
+}
+
+pub(crate) fn color_time_units<'a>(text: impl Into<Cow<'a, str>>) -> Span<'a> {
+    use tui::style::Color::Indexed;
+    let text = text.into();
+    let style = match text.as_ref() {
+        s if s.ends_with("ps") => fg_style(Indexed(40)), // green 3
+        s if s.ends_with("ns") => fg_style(Indexed(41)), // spring green 3
+        s if s.ends_with("µs") || s.ends_with("us") => fg_style(Indexed(42)), // spring green 2
+        s if s.ends_with("ms") => fg_style(Indexed(43)), // cyan 3
+        s if s.ends_with('s') => fg_style(Indexed(44)),  // dark turquoise,
+        _ => Style::default(),
+    };
+    Span::styled(text, style)
+}
+
+fn fg_style(color: style::Color) -> Style {
+    Style::default().fg(color)
+}
+
+impl Width {
+    pub(crate) fn new(curr: u16) -> Self {
+        Self { curr }
+    }
+
+    pub(crate) fn update_str<S: AsRef<str>>(&mut self, s: S) -> S {
+        let len = s.as_ref().len();
+        self.curr = cmp::max(self.curr, len as u16);
+        s
+    }
+
+    pub(crate) fn constraint(&self) -> layout::Constraint {
+        layout::Constraint::Length(self.curr)
+    }
+
+    pub(crate) fn chars(&self) -> u16 {
+        self.curr
+    }
 }

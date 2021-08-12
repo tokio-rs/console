@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-static HELP: &'static str = r#"
+static HELP: &str = r#"
 Example console-instrumented app
 
 USAGE:

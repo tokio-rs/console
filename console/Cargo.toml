@@ -7,14 +7,17 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tonic = { version = "0.4", features = ["transport"] }
 console-api = { path = "../console-api", features = ["transport"]}
 tokio = { version = "1", features = ["full", "rt-multi-thread"]}
+tonic = { version = "0.5", features = ["transport"] }
 futures = "0.3"
-tui = { version = "0.15.0", default-features = false, features = ["crossterm"] }
+tui = { version = "0.16.0", default-features = false, features = ["crossterm"] }
 chrono = "0.4"
 tracing = "0.1"
-prost-types = "0.7"
-crossterm = { version = "0.19", features = ["event-stream"] }
+prost-types = "0.8"
+crossterm = { version = "0.20", features = ["event-stream"] }
 color-eyre = "0.5"
 hdrhistogram = { version = "7.3.0", default-features = false, features = ["serialization"] }
+h2 = "0.3"
+regex = "1.5"
+once_cell = "1.8"

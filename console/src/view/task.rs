@@ -2,7 +2,7 @@ use crate::{
     input,
     tasks::{Details, DetailsRef, Task},
     view::{
-        bold,
+        self, bold,
         mini_histogram::{HistogramMetadata, MiniHistogram},
     },
 };
@@ -21,8 +21,6 @@ pub(crate) struct TaskView {
     task: Rc<RefCell<Task>>,
     details: DetailsRef,
 }
-
-const DUR_PRECISION: usize = 4;
 
 impl TaskView {
     pub(super) fn new(task: Rc<RefCell<Task>>, details: DetailsRef) -> Self {
@@ -56,7 +54,7 @@ impl TaskView {
             .constraints(
                 [
                     layout::Constraint::Length(1),
-                    layout::Constraint::Length(6),
+                    layout::Constraint::Length(7),
                     layout::Constraint::Length(9),
                     layout::Constraint::Percentage(60),
                 ]
@@ -81,7 +79,7 @@ impl TaskView {
             .constraints(
                 [
                     // 24 chars is long enough for the title "Poll Times Percentiles"
-                    layout::Constraint::Max(24),
+                    layout::Constraint::Length(24),
                     layout::Constraint::Min(50),
                 ]
                 .as_ref(),
@@ -101,12 +99,10 @@ impl TaskView {
             Span::raw(" = quit"),
         ]);
 
-        let attrs = Spans::from(vec![bold("ID: "), Span::raw(task.id_hex())]);
+        let attrs = Spans::from(vec![bold("ID: "), Span::raw(task.id().to_string())]);
+        let target = Spans::from(vec![bold("Target: "), Span::raw(task.target())]);
 
-        let mut total = vec![
-            bold("Total Time: "),
-            Span::from(format!("{:.prec$?}", task.total(now), prec = DUR_PRECISION,)),
-        ];
+        let mut total = vec![bold("Total Time: "), dur(task.total(now))];
 
         // TODO(eliza): maybe surface how long the task has been completed, as well?
         if task.is_completed() {
@@ -115,16 +111,10 @@ impl TaskView {
 
         let total = Spans::from(total);
 
-        let busy = Spans::from(vec![
-            bold("Busy: "),
-            Span::from(format!("{:.prec$?}", task.busy(), prec = DUR_PRECISION,)),
-        ]);
-        let idle = Spans::from(vec![
-            bold("Idle: "),
-            Span::from(format!("{:.prec$?}", task.idle(now), prec = DUR_PRECISION,)),
-        ]);
+        let busy = Spans::from(vec![bold("Busy: "), dur(task.busy(now))]);
+        let idle = Spans::from(vec![bold("Idle: "), dur(task.idle(now))]);
 
-        let metrics = vec![attrs, total, busy, idle];
+        let metrics = vec![attrs, target, total, busy, idle];
 
         let wakers = Spans::from(vec![
             bold("Current wakers: "),
@@ -252,15 +242,19 @@ impl Details {
             pairs.map(|pair| {
                 Spans::from(vec![
                     bold(format!("p{:>2}: ", pair.0)),
-                    Span::from(format!(
-                        "{:.prec$?}",
-                        Duration::from_nanos(pair.1),
-                        prec = DUR_PRECISION,
-                    )),
+                    dur(Duration::from_nanos(pair.1)),
                 ])
             })
         });
         text.extend(percentiles);
         text
     }
+}
+
+fn dur(dur: std::time::Duration) -> Span<'static> {
+    const DUR_PRECISION: usize = 4;
+    // TODO(eliza): can we not have to use `format!` to make a string here? is
+    // there a way to just give TUI a `fmt::Debug` implementation, or does it
+    // have to be given a string in order to do layout stuff?
+    view::color_time_units(format!("{:.prec$?}", dur, prec = DUR_PRECISION))
 }
