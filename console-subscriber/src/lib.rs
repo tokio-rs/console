@@ -2,6 +2,7 @@ use console_api as proto;
 use tokio::sync::{mpsc, oneshot};
 
 use std::{
+    fmt,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
     time::{Duration, SystemTime},
@@ -310,6 +311,19 @@ where
             at: SystemTime::now(),
             id,
         });
+    }
+}
+
+impl fmt::Debug for TasksLayer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TasksLayer")
+            // mpsc::Sender debug impl is not very useful
+            .field("tx", &format_args!("<...>"))
+            .field("tx.capacity", &self.tx.capacity())
+            .field("flush", &self.flush)
+            .field("spawn_callsites", &self.spawn_callsites)
+            .field("waker_callsites", &self.waker_callsites)
+            .finish()
     }
 }
 
