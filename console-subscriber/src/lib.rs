@@ -30,8 +30,11 @@ use crate::aggregator::TaskId;
 pub struct TasksLayer {
     tx: mpsc::Sender<Event>,
     flush: Arc<aggregator::Flush>,
-    spawn_callsites: Callsites,
-    waker_callsites: Callsites,
+
+    // For task spans, each runtime these will have like, 1-5 callsites in it, max, so
+    // 32 is probably fine. For async operations, we may need a bigger callsites array.
+    spawn_callsites: Callsites<32>,
+    waker_callsites: Callsites<32>,
 }
 
 pub struct Server {
