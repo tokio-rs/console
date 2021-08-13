@@ -24,7 +24,6 @@ mod record;
 use aggregator::Aggregator;
 pub use builder::Builder;
 use callsites::Callsites;
-use record::Recorder;
 
 pub use init::{build, init};
 
@@ -33,7 +32,6 @@ use crate::aggregator::TaskId;
 pub struct TasksLayer {
     tx: mpsc::Sender<Event>,
     flush: Arc<aggregator::Flush>,
-    recorder: Option<Recorder>,
     spawn_callsites: Callsites,
     waker_callsites: Callsites,
 }
@@ -137,11 +135,6 @@ impl TasksLayer {
         let aggregator = Aggregator::new(events, rpcs, &config);
         let flush = aggregator.flush().clone();
 
-        let recorder = config
-            .recording_path
-            .as_ref()
-            .map(|path| Recorder::new(path).expect("creating recorder"));
-
         let server = Server {
             aggregator: Some(aggregator),
             addr: config.server_addr,
@@ -151,7 +144,6 @@ impl TasksLayer {
         let layer = Self {
             tx,
             flush,
-            recorder,
             spawn_callsites: Callsites::default(),
             waker_callsites: Callsites::default(),
         };
@@ -187,11 +179,6 @@ impl TasksLayer {
 
     fn send(&self, event: Event) {
         use mpsc::error::TrySendError;
-
-        // always be recording...
-        if let Some(ref recorder) = self.recorder {
-            recorder.record(&event);
-        }
 
         match self.tx.try_reserve() {
             Ok(permit) => permit.send(event),

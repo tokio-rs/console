@@ -1,4 +1,4 @@
-use crate::WatchRequest;
+use crate::{record::Recorder, WatchRequest};
 
 use super::{Event, WakeOp, Watch, WatchKind};
 use console_api as proto;
@@ -67,6 +67,9 @@ pub(crate) struct Aggregator {
 
     /// A table that contains the span ID to pretty task ID mappings.
     task_id_mappings: HashMap<span::Id, TaskId>,
+
+    /// A sink to record all events to a file.
+    recorder: Option<Recorder>,
 }
 
 #[derive(Debug)]
@@ -152,6 +155,10 @@ impl Aggregator {
             stats: TaskData::default(),
             task_id_counter: 0,
             task_id_mappings: HashMap::new(),
+            recorder: builder
+                .recording_path
+                .as_ref()
+                .map(|path| Recorder::new(path).expect("creating recorder")),
         }
     }
 
@@ -205,7 +212,13 @@ impl Aggregator {
             // channel is almost full.
             while let Some(event) = self.events.recv().now_or_never() {
                 match event {
-                    Some(event) => self.update_state(event),
+                    Some(event) => {
+                        // always be recording...
+                        if let Some(ref recorder) = self.recorder {
+                            recorder.record(&event);
+                        }
+                        self.update_state(event)
+                    }
                     // The channel closed, no more events will be emitted...time
                     // to stop aggregating.
                     None => {
