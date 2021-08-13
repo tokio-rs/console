@@ -31,9 +31,17 @@ pub struct TasksLayer {
     tx: mpsc::Sender<Event>,
     flush: Arc<aggregator::Flush>,
 
-    // For task spans, each runtime these will have like, 1-5 callsites in it, max, so
-    // 32 is probably fine. For async operations, we may need a bigger callsites array.
-    spawn_callsites: Callsites<32>,
+    /// Set of callsites for spans representing spawned tasks.
+    ///
+    /// For task spans, each runtime these will have like, 1-5 callsites in it, max, so
+    /// 16 is probably fine. For async operations, we may need a bigger callsites array.
+    spawn_callsites: Callsites<16>,
+
+    /// Set of callsites for events representing waker operations.
+    ///
+    /// 32 is probably a reasonable number of waker ops; it's a bit generous if
+    /// there's only one async runtime library in use, but if there are multiple,
+    /// they might all have their own sets of waker ops.
     waker_callsites: Callsites<32>,
 }
 
