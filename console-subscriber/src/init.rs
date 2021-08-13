@@ -1,7 +1,7 @@
 use crate::TasksLayer;
 use std::thread;
 use tokio::runtime;
-use tracing_subscriber::{fmt, layer::Layered, prelude::*, EnvFilter, Registry};
+use tracing_subscriber::{layer::Layered, prelude::*, EnvFilter, Registry};
 
 type ConsoleSubscriberLayer = Layered<TasksLayer, Layered<EnvFilter, Registry>>;
 
@@ -41,9 +41,8 @@ type ConsoleSubscriberLayer = Layered<TasksLayer, Layered<EnvFilter, Registry>>;
 /// //  .with(..potential additional layer..)
 ///     .init();
 /// ```
-
 pub fn init() {
-    build().with(fmt::layer()).init()
+    build().init()
 }
 
 /// Returns a new `tracing` [subscriber] configured with a [`TasksLayer`]
@@ -62,10 +61,7 @@ pub fn init() {
 ///
 /// ## Differences from `init`
 ///
-/// **Note**: In order to support customizing the format `build` does
-/// not attach a [`tracing_subscriber::fmt::layer`], unlike [`init`].
-///
-/// Additionally, you must call
+/// You must call
 /// [`init`][tracing_subscriber::util::SubscriberInitExt::init] on the
 /// final layer in order to register the subscriber.
 ///
