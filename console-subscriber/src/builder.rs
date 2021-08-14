@@ -1,6 +1,7 @@
 use super::{Server, TasksLayer};
 use std::{
     net::{SocketAddr, ToSocketAddrs},
+    path::PathBuf,
     time::Duration,
 };
 
@@ -23,6 +24,9 @@ pub struct Builder {
 
     /// The address on which to serve the RPC server.
     pub(super) server_addr: SocketAddr,
+
+    /// If and where to save a recording of the events.
+    pub(super) recording_path: Option<PathBuf>,
 }
 
 impl Default for Builder {
@@ -33,6 +37,7 @@ impl Default for Builder {
             publish_interval: TasksLayer::DEFAULT_PUBLISH_INTERVAL,
             retention: TasksLayer::DEFAULT_RETENTION,
             server_addr: SocketAddr::new(Server::DEFAULT_IP, Server::DEFAULT_PORT),
+            recording_path: None,
         }
     }
 }
@@ -100,6 +105,14 @@ impl Builder {
         }
     }
 
+    /// Sets the path to record the events to the file system.
+    pub fn recording_path(self, path: impl Into<PathBuf>) -> Self {
+        Self {
+            recording_path: Some(path.into()),
+            ..self
+        }
+    }
+
     /// Completes the builder, returning a [`TasksLayer`] and [`Server`] task.
     pub fn build(self) -> (TasksLayer, Server) {
         TasksLayer::build(self)
@@ -112,6 +125,7 @@ impl Builder {
     /// | `TOKIO_CONSOLE_RETENTION_SECS`      | The number of seconds to accumulate completed tracing data                | 3600s (1h)        |
     /// | `TOKIO_CONSOLE_BIND`                | a HOST:PORT description, such as `localhost:1234`                         | `127.0.0.1:6669`  |
     /// | `TOKIO_CONSOLE_PUBLISH_INTERVAL_MS` | The number of milliseconds to wait between sending updates to the console | 1000ms (1s)       |
+    /// | `TOKIO_CONSOLE_RECORD_PATH`         | The file path to save a recording                                         | None              |
     pub fn with_default_env(mut self) -> Self {
         if let Ok(retention) = std::env::var("TOKIO_CONSOLE_RETENTION_SECS") {
             self.retention = Duration::from_secs(
@@ -135,6 +149,10 @@ impl Builder {
                     .parse()
                     .expect("TOKIO_CONSOLE_PUBLISH_INTERVAL_MS must be an integer"),
             );
+        }
+
+        if let Ok(path) = std::env::var("TOKIO_CONSOLE_RECORD_PATH") {
+            self.recording_path = Some(path.into());
         }
 
         self
