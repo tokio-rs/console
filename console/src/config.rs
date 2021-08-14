@@ -78,7 +78,7 @@ pub struct ColorToggles {
 
 impl Config {
     pub fn trace_init(&mut self) -> color_eyre::Result<()> {
-        let filter = std::mem::replace(&mut self.env_filter, Default::default());
+        let filter = std::mem::take(&mut self.env_filter);
         use tracing_subscriber::prelude::*;
 
         // If we're on a Linux distro with journald, try logging to the system
