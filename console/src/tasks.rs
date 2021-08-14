@@ -26,10 +26,18 @@ pub(crate) struct State {
 #[repr(usize)]
 pub(crate) enum SortBy {
     Tid = 0,
+    State = 1,
     Total = 2,
     Busy = 3,
     Idle = 4,
     Polls = 5,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub(crate) enum TaskState {
+    Completed,
+    Idle,
+    Running,
 }
 
 pub(crate) type TaskRef = Weak<RefCell<Task>>;
@@ -251,6 +259,18 @@ impl Task {
         self.stats.total.is_some()
     }
 
+    pub(crate) fn state(&self) -> TaskState {
+        if self.is_completed() {
+            return TaskState::Completed;
+        }
+
+        if self.is_running() {
+            return TaskState::Running;
+        }
+
+        TaskState::Idle
+    }
+
     pub(crate) fn total(&self, since: SystemTime) -> Duration {
         self.stats
             .total
@@ -402,6 +422,9 @@ impl SortBy {
         // tasks.retain(|t| t.upgrade().is_some());
         match self {
             Self::Tid => tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().id)),
+            Self::State => {
+                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().state()))
+            }
             Self::Total => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().total(now)))
             }
@@ -423,6 +446,7 @@ impl TryFrom<usize> for SortBy {
     fn try_from(idx: usize) -> Result<Self, Self::Error> {
         match idx {
             idx if idx == Self::Tid as usize => Ok(Self::Tid),
+            idx if idx == Self::State as usize => Ok(Self::State),
             idx if idx == Self::Total as usize => Ok(Self::Total),
             idx if idx == Self::Busy as usize => Ok(Self::Busy),
             idx if idx == Self::Idle as usize => Ok(Self::Idle),

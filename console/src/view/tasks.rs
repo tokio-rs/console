@@ -110,7 +110,7 @@ impl List {
 
                 let mut row = Row::new(vec![
                     Cell::from(id_width.update_str(task.id().to_string())),
-                    Cell::from(task.state()),
+                    Cell::from(task.state().render()),
                     dur_cell(task.total(now)),
                     dur_cell(task.busy(now)),
                     dur_cell(task.idle(now)),
@@ -239,20 +239,15 @@ impl List {
     }
 }
 
-impl crate::tasks::Task {
-    fn state(&self) -> &'static str {
+impl crate::tasks::TaskState {
+    fn render(self) -> &'static str {
         const STATE_RUNNING: &'static str = "\u{25B6}";
         const STATE_IDLE: &'static str = "\u{23F8}";
         const STATE_COMPLETED: &'static str = "\u{23F9}";
-
-        if self.is_running() {
-            return STATE_RUNNING;
+        match self {
+            Self::Running => STATE_RUNNING,
+            Self::Idle => STATE_IDLE,
+            Self::Completed => STATE_COMPLETED,
         }
-
-        if self.is_completed() {
-            return STATE_COMPLETED;
-        }
-
-        STATE_IDLE
     }
 }
