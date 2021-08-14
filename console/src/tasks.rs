@@ -581,9 +581,9 @@ impl FieldValue {
 
 impl TaskState {
     pub(crate) fn render(self, styles: &crate::view::Styles) -> &'static str {
-        const RUNNING_UTF8: &'static str = "\u{25B6}";
-        const IDLE_UTF8: &'static str = "\u{23F8}";
-        const COMPLETED_UTF8: &'static str = "\u{23F9}";
+        const RUNNING_UTF8: &str = "\u{25B6}";
+        const IDLE_UTF8: &str = "\u{23F8}";
+        const COMPLETED_UTF8: &str = "\u{23F9}";
         match self {
             Self::Running => styles.if_utf8(RUNNING_UTF8, ">"),
             Self::Idle => styles.if_utf8(IDLE_UTF8, ":"),
