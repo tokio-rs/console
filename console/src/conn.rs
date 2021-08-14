@@ -3,11 +3,11 @@ use console_api::tasks::{
 };
 use futures::stream::StreamExt;
 use std::{error::Error, pin::Pin, time::Duration};
-use tonic::{transport::Channel, Streaming};
+use tonic::{transport::Channel, transport::Uri, Streaming};
 
 #[derive(Debug)]
 pub struct Connection {
-    target: String,
+    target: Uri,
     state: State,
 }
 
@@ -22,7 +22,7 @@ enum State {
 
 impl Connection {
     const BACKOFF: Duration = Duration::from_millis(500);
-    pub fn new(target: String) -> Self {
+    pub fn new(target: Uri) -> Self {
         Self {
             target,
             state: State::Disconnected(Duration::from_secs(0)),
@@ -112,34 +112,28 @@ impl Connection {
         }
     }
 
-    pub fn render(&self) -> tui::text::Spans {
+    pub fn render(&self, colors: &crate::view::Colors) -> tui::text::Spans {
         use tui::{
-            style::{Color, Modifier, Style},
+            style::{Color, Modifier},
             text::{Span, Spans},
         };
         let state = match self.state {
             State::Connected { .. } => Span::styled(
                 "(CONNECTED)",
-                Style::default()
-                    .add_modifier(Modifier::BOLD)
-                    .fg(Color::Green),
+                colors.fg(Color::Green).add_modifier(Modifier::BOLD),
             ),
             State::Disconnected(d) if d == Duration::from_secs(0) => Span::styled(
                 "(CONNECTING)",
-                Style::default()
-                    .add_modifier(Modifier::BOLD)
-                    .fg(Color::Yellow),
+                colors.fg(Color::Yellow).add_modifier(Modifier::BOLD),
             ),
             State::Disconnected(d) => Span::styled(
                 format!("(RECONNECTING IN {:?})", d),
-                Style::default()
-                    .add_modifier(Modifier::BOLD)
-                    .fg(Color::Yellow),
+                colors.fg(Color::Yellow).add_modifier(Modifier::BOLD),
             ),
         };
         Spans::from(vec![
             Span::raw("connection: "),
-            Span::raw(self.target.clone()),
+            Span::raw(self.target.to_string()),
             Span::raw(" "),
             state,
         ])

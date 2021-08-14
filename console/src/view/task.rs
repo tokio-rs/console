@@ -33,6 +33,7 @@ impl TaskView {
 
     pub(crate) fn render<B: tui::backend::Backend>(
         &mut self,
+        colors: &view::Colors,
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
         now: SystemTime,
@@ -102,7 +103,7 @@ impl TaskView {
         let attrs = Spans::from(vec![bold("ID: "), Span::raw(task.id().to_string())]);
         let target = Spans::from(vec![bold("Target: "), Span::raw(task.target())]);
 
-        let mut total = vec![bold("Total Time: "), dur(task.total(now))];
+        let mut total = vec![bold("Total Time: "), dur(colors, task.total(now))];
 
         // TODO(eliza): maybe surface how long the task has been completed, as well?
         if task.is_completed() {
@@ -111,8 +112,8 @@ impl TaskView {
 
         let total = Spans::from(total);
 
-        let busy = Spans::from(vec![bold("Busy: "), dur(task.busy(now))]);
-        let idle = Spans::from(vec![bold("Idle: "), dur(task.idle(now))]);
+        let busy = Spans::from(vec![bold("Busy: "), dur(colors, task.busy(now))]);
+        let idle = Spans::from(vec![bold("Idle: "), dur(colors, task.idle(now))]);
 
         let metrics = vec![attrs, target, total, busy, idle];
 
@@ -172,7 +173,7 @@ impl TaskView {
         let fields_widget = Paragraph::new(fields).block(block_for("Fields"));
         let percentiles_widget = Paragraph::new(
             details
-                .map(Details::make_percentiles_widget)
+                .map(|details| details.make_percentiles_widget(colors))
                 .unwrap_or_default(),
         )
         .block(block_for("Poll Times Percentiles"));
@@ -232,7 +233,7 @@ impl Details {
     }
 
     /// Get the important percentile values from the histogram
-    fn make_percentiles_widget(&self) -> Text<'static> {
+    fn make_percentiles_widget(&self, colors: &view::Colors) -> Text<'static> {
         let mut text = Text::default();
         let histogram = self.poll_times_histogram();
         let percentiles = histogram.iter().flat_map(|histogram| {
@@ -242,7 +243,7 @@ impl Details {
             pairs.map(|pair| {
                 Spans::from(vec![
                     bold(format!("p{:>2}: ", pair.0)),
-                    dur(Duration::from_nanos(pair.1)),
+                    dur(colors, Duration::from_nanos(pair.1)),
                 ])
             })
         });
@@ -251,10 +252,10 @@ impl Details {
     }
 }
 
-fn dur(dur: std::time::Duration) -> Span<'static> {
+fn dur(colors: &view::Colors, dur: std::time::Duration) -> Span<'static> {
     const DUR_PRECISION: usize = 4;
     // TODO(eliza): can we not have to use `format!` to make a string here? is
     // there a way to just give TUI a `fmt::Debug` implementation, or does it
     // have to be given a string in order to do layout stuff?
-    view::color_time_units(format!("{:.prec$?}", dur, prec = DUR_PRECISION))
+    colors.time_units(format!("{:.prec$?}", dur, prec = DUR_PRECISION))
 }
