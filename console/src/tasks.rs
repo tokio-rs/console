@@ -40,7 +40,6 @@ pub(crate) struct Task {
     id: u64,
     fields: Vec<Field>,
     formatted_fields: Vec<Vec<Span<'static>>>,
-    kind: &'static str,
     stats: Stats,
     completed_for: usize,
     target: Arc<str>,
@@ -138,10 +137,6 @@ impl State {
             if task.id.is_none() {
                 tracing::warn!(?task, "skipping task with no id");
             }
-            let kind = match task.kind() {
-                proto::tasks::task::Kind::Spawn => "T",
-                proto::tasks::task::Kind::Blocking => "B",
-            };
 
             let meta_id = match task.metadata.as_ref() {
                 Some(id) => id.id,
@@ -178,7 +173,6 @@ impl State {
                 id,
                 fields,
                 formatted_fields,
-                kind,
                 stats,
                 completed_for: 0,
                 target: meta.target.clone(),
@@ -236,10 +230,6 @@ impl State {
 }
 
 impl Task {
-    pub(crate) fn kind(&self) -> &str {
-        self.kind
-    }
-
     pub(crate) fn id(&self) -> u64 {
         self.id
     }
@@ -250,6 +240,11 @@ impl Task {
 
     pub(crate) fn formatted_fields(&self) -> &[Vec<Span<'static>>] {
         &self.formatted_fields
+    }
+
+    /// Returns `true` if this task is currently being polled.
+    pub(crate) fn is_running(&self) -> bool {
+        self.stats.last_poll_started > self.stats.last_poll_ended
     }
 
     pub(crate) fn is_completed(&self) -> bool {
@@ -326,7 +321,6 @@ impl Task {
     fn update(&mut self) {
         let completed = self.stats.total.is_some() && self.completed_for == 0;
         if completed {
-            self.kind = "!";
             self.completed_for = 1;
         }
     }
