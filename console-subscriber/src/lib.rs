@@ -1,4 +1,5 @@
 use console_api as proto;
+use serde::Serialize;
 use tokio::sync::{mpsc, oneshot};
 
 use std::{
@@ -19,6 +20,7 @@ mod aggregator;
 mod builder;
 mod callsites;
 mod init;
+mod record;
 
 use aggregator::Aggregator;
 pub use builder::Builder;
@@ -103,6 +105,7 @@ enum Event {
     },
 }
 
+#[derive(Clone, Copy, Serialize)]
 enum WakeOp {
     Wake,
     WakeByRef,
@@ -134,6 +137,7 @@ impl TasksLayer {
             ?config.publish_interval,
             ?config.retention,
             ?config.server_addr,
+            ?config.recording_path,
             "configured console subscriber"
         );
 
@@ -142,6 +146,7 @@ impl TasksLayer {
 
         let aggregator = Aggregator::new(events, rpcs, &config);
         let flush = aggregator.flush().clone();
+
         let server = Server {
             aggregator: Some(aggregator),
             addr: config.server_addr,
@@ -186,6 +191,7 @@ impl TasksLayer {
 
     fn send(&self, event: Event) {
         use mpsc::error::TrySendError;
+
         match self.tx.try_reserve() {
             Ok(permit) => permit.send(event),
             Err(TrySendError::Closed(_)) => tracing::warn!(

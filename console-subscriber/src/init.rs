@@ -1,7 +1,7 @@
 use crate::TasksLayer;
 use std::thread;
 use tokio::runtime;
-use tracing_subscriber::{fmt, layer::Layered, prelude::*, EnvFilter, Registry};
+use tracing_subscriber::{layer::Layered, prelude::*, EnvFilter, Registry};
 
 type ConsoleSubscriberLayer = Layered<TasksLayer, Layered<EnvFilter, Registry>>;
 
@@ -27,6 +27,7 @@ type ConsoleSubscriberLayer = Layered<TasksLayer, Layered<EnvFilter, Registry>>;
 /// | `TOKIO_CONSOLE_RETENTION_SECS`      | The number of seconds to accumulate completed tracing data                | 3600s (1h)        |
 /// | `TOKIO_CONSOLE_BIND`                | A HOST:PORT description, such as `localhost:1234`                         | `127.0.0.1:6669`  |
 /// | `TOKIO_CONSOLE_PUBLISH_INTERVAL_MS` | The number of milliseconds to wait between sending updates to the console | 1000ms (1s)       |
+/// | `TOKIO_CONSOLE_RECORD_PATH`         | The file path to save a recording                                         | None              |
 /// | `RUST_LOG`                          | Configure the tracing filter. See [`EnvFilter`] for further information   | `tokio=trace`     |
 ///
 /// ## Further customization
@@ -41,9 +42,8 @@ type ConsoleSubscriberLayer = Layered<TasksLayer, Layered<EnvFilter, Registry>>;
 /// //  .with(..potential additional layer..)
 ///     .init();
 /// ```
-
 pub fn init() {
-    build().with(fmt::layer()).init()
+    build().init()
 }
 
 /// Returns a new `tracing` [subscriber] configured with a [`TasksLayer`]
@@ -62,10 +62,7 @@ pub fn init() {
 ///
 /// ## Differences from `init`
 ///
-/// **Note**: In order to support customizing the format `build` does
-/// not attach a [`tracing_subscriber::fmt::layer`], unlike [`init`].
-///
-/// Additionally, you must call
+/// You must call
 /// [`init`][tracing_subscriber::util::SubscriberInitExt::init] on the
 /// final layer in order to register the subscriber.
 ///
