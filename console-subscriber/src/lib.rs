@@ -3,6 +3,7 @@ use serde::Serialize;
 use tokio::sync::{mpsc, oneshot};
 
 use std::{
+    fmt,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
     time::{Duration, SystemTime},
@@ -32,8 +33,19 @@ use crate::aggregator::TaskId;
 pub struct TasksLayer {
     tx: mpsc::Sender<Event>,
     flush: Arc<aggregator::Flush>,
-    spawn_callsites: Callsites,
-    waker_callsites: Callsites,
+
+    /// Set of callsites for spans representing spawned tasks.
+    ///
+    /// For task spans, each runtime these will have like, 1-5 callsites in it, max, so
+    /// 16 is probably fine. For async operations, we may need a bigger callsites array.
+    spawn_callsites: Callsites<16>,
+
+    /// Set of callsites for events representing waker operations.
+    ///
+    /// 32 is probably a reasonable number of waker ops; it's a bit generous if
+    /// there's only one async runtime library in use, but if there are multiple,
+    /// they might all have their own sets of waker ops.
+    waker_callsites: Callsites<32>,
 }
 
 pub struct Server {
@@ -305,6 +317,19 @@ where
             at: SystemTime::now(),
             id,
         });
+    }
+}
+
+impl fmt::Debug for TasksLayer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TasksLayer")
+            // mpsc::Sender debug impl is not very useful
+            .field("tx", &format_args!("<...>"))
+            .field("tx.capacity", &self.tx.capacity())
+            .field("flush", &self.flush)
+            .field("spawn_callsites", &self.spawn_callsites)
+            .field("waker_callsites", &self.waker_callsites)
+            .finish()
     }
 }
 
