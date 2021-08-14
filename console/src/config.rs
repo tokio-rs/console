@@ -27,15 +27,23 @@ pub struct Config {
     pub(crate) env_filter: tracing_subscriber::EnvFilter,
 
     #[clap(flatten)]
-    pub(crate) color_options: Colors,
+    pub(crate) view_options: ViewOptions,
 }
 
-#[derive(Clap, Debug, Copy, Clone)]
+#[derive(Clap, Debug, Clone)]
 #[clap(group = ArgGroup::new("colors").conflicts_with("no-colors"))]
-pub struct Colors {
+pub struct ViewOptions {
     /// Disable ANSI colors entirely.
     #[clap(name = "no-colors", long = "no-colors")]
     no_colors: bool,
+
+    /// Overrides the terminal's default language.
+    #[clap(long = "lang", env = "LANG")]
+    lang: String,
+
+    /// Explicitly use only ASCII characters.
+    #[clap(long = "ascii-only")]
+    ascii_only: bool,
 
     /// Overrides the value of the `COLORTERM` environment variable.
     ///
@@ -106,9 +114,13 @@ impl Config {
     }
 }
 
-// === impl Colors ===
+// === impl ViewOptions ===
 
-impl Colors {
+impl ViewOptions {
+    pub fn is_utf8(&self) -> bool {
+        self.lang.ends_with("UTF-8") && !self.ascii_only
+    }
+
     /// Determines the color palette to use.
     ///
     /// The color palette is determined based on the following (in order):

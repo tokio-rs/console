@@ -67,7 +67,7 @@ impl List {
 
     pub(crate) fn render<B: tui::backend::Backend>(
         &mut self,
-        colors: &view::Colors,
+        styles: &view::Styles,
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
         state: &mut tasks::State,
@@ -91,7 +91,7 @@ impl List {
         self.sort_by.sort(now, &mut self.sorted_tasks);
 
         let dur_cell = |dur: std::time::Duration| -> Cell<'static> {
-            Cell::from(colors.time_units(format!(
+            Cell::from(styles.time_units(format!(
                 "{:>width$.prec$?}",
                 dur,
                 width = DUR_LEN,
@@ -111,7 +111,7 @@ impl List {
 
                 let mut row = Row::new(vec![
                     Cell::from(id_width.update_str(task.id().to_string())),
-                    Cell::from(task.state().render()),
+                    Cell::from(task.state().render(styles)),
                     dur_cell(task.total(now)),
                     dur_cell(task.busy(now)),
                     dur_cell(task.idle(now)),
@@ -126,7 +126,7 @@ impl List {
                     )),
                 ]);
                 if task.completed_for() > 0 {
-                    row = row.style(colors.terminated());
+                    row = row.style(styles.terminated());
                 }
                 Some(row)
             })
@@ -134,11 +134,11 @@ impl List {
 
         let block = Block::default().title(vec![
             text::Span::raw("controls: "),
-            bold("\u{2190}\u{2192}"),
+            bold(styles.if_utf8("\u{2190}\u{2192}", "left, right")),
             text::Span::raw(" = select column (sort), "),
-            bold("\u{2191}\u{2193}"),
+            bold(styles.if_utf8("\u{2191}\u{2193}", "up, down")),
             text::Span::raw(" = scroll, "),
-            bold("enter"),
+            bold(styles.if_utf8("\u{21B5}", "enter")),
             text::Span::raw(" = task details, "),
             bold("i"),
             text::Span::raw(" = invert sort (highest/lowest), "),
@@ -237,18 +237,5 @@ impl List {
                 self.sorted_tasks[selected].clone()
             })
             .unwrap_or_default()
-    }
-}
-
-impl crate::tasks::TaskState {
-    fn render(self) -> &'static str {
-        const STATE_RUNNING: &str = "\u{25B6}";
-        const STATE_IDLE: &str = "\u{23F8}";
-        const STATE_COMPLETED: &str = "\u{23F9}";
-        match self {
-            Self::Running => STATE_RUNNING,
-            Self::Idle => STATE_IDLE,
-            Self::Completed => STATE_COMPLETED,
-        }
     }
 }
