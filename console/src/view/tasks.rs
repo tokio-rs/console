@@ -241,9 +241,9 @@ impl List {
 
 impl crate::tasks::TaskState {
     fn render(self) -> &'static str {
-        const STATE_RUNNING: &'static str = "\u{25B6}";
-        const STATE_IDLE: &'static str = "\u{23F8}";
-        const STATE_COMPLETED: &'static str = "\u{23F9}";
+        const STATE_RUNNING: &str = "\u{25B6}";
+        const STATE_IDLE: &str = "\u{23F8}";
+        const STATE_COMPLETED: &str = "\u{23F9}";
         match self {
             Self::Running => STATE_RUNNING,
             Self::Idle => STATE_IDLE,
