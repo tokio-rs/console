@@ -30,10 +30,11 @@ pub(crate) struct State {
 pub(crate) enum SortBy {
     Tid = 0,
     State = 1,
-    Total = 2,
-    Busy = 3,
-    Idle = 4,
-    Polls = 5,
+    Name = 2,
+    Total = 3,
+    Busy = 4,
+    Idle = 5,
+    Polls = 6,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -54,6 +55,7 @@ pub(crate) struct Task {
     stats: Stats,
     completed_for: usize,
     target: Arc<str>,
+    name: Option<Arc<str>>,
 }
 
 #[derive(Debug, Default)]
@@ -163,16 +165,26 @@ impl State {
                     return None;
                 }
             };
+            let mut name = None;
             let mut fields = task
                 .fields
                 .drain(..)
-                .filter_map(|pb| Field::from_proto(pb, meta))
+                .filter_map(|pb| {
+                    let field = Field::from_proto(pb, meta)?;
+                    // the `task.name` field gets its own column, if it's present.
+                    if &*field.name == Field::NAME {
+                        name = Some(field.value.to_string().into());
+                        return None;
+                    }
+                    Some(field)
+                })
                 .collect::<Vec<_>>();
 
             let formatted_fields = Field::make_formatted(styles, &mut fields);
             let id = task.id?.id;
             let stats = stats_update.remove(&id)?.into();
             let mut task = Task {
+                name,
                 id,
                 fields,
                 formatted_fields,
@@ -239,6 +251,10 @@ impl Task {
 
     pub(crate) fn target(&self) -> &str {
         &self.target
+    }
+
+    pub(crate) fn name(&self) -> &str {
+        self.name.as_ref().map(AsRef::as_ref).unwrap_or_default()
     }
 
     pub(crate) fn formatted_fields(&self) -> &[Vec<Span<'static>>] {
@@ -417,6 +433,9 @@ impl SortBy {
         // tasks.retain(|t| t.upgrade().is_some());
         match self {
             Self::Tid => tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().id)),
+            Self::Name => {
+                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().name.clone()))
+            }
             Self::State => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().state()))
             }
@@ -442,6 +461,7 @@ impl TryFrom<usize> for SortBy {
         match idx {
             idx if idx == Self::Tid as usize => Ok(Self::Tid),
             idx if idx == Self::State as usize => Ok(Self::State),
+            idx if idx == Self::Name as usize => Ok(Self::Name),
             idx if idx == Self::Total as usize => Ok(Self::Total),
             idx if idx == Self::Busy as usize => Ok(Self::Busy),
             idx if idx == Self::Idle as usize => Ok(Self::Idle),

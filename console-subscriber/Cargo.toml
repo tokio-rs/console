@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 
-tokio = { version = "^1.7", features = ["sync", "time", "macros", "tracing"]}
+tokio = { version = "^1.10", features = ["sync", "time", "macros", "tracing"]}
 tokio-stream = "0.1"
 console-api = { path = "../console-api", features = ["transport"]}
 tonic = { version = "0.5", features = ["transport"] }

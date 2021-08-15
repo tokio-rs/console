@@ -21,7 +21,7 @@ pub(crate) struct List {
 
 impl List {
     const HEADER: &'static [&'static str] = &[
-        "TID", "STATE", "TOTAL", "BUSY", "IDLE", "POLLS", "TARGET", "FIELDS",
+        "TID", "STATE", "NAME", "TOTAL", "BUSY", "IDLE", "POLLS", "TARGET", "FIELDS",
     ];
 
     pub(crate) fn update_input(&mut self, event: input::Event) {
@@ -101,10 +101,12 @@ impl List {
 
         // Start out wide enough to display the column headers...
         let mut id_width = view::Width::new(Self::HEADER[0].len() as u16);
-        let mut target_width = view::Width::new(Self::HEADER[6].len() as u16);
+        let mut name_width = view::Width::new(Self::HEADER[2].len() as u16);
+        let mut target_width = view::Width::new(Self::HEADER[7].len() as u16);
         let rows = {
             let id_width = &mut id_width;
             let target_width = &mut target_width;
+            let name_width = &mut name_width;
             self.sorted_tasks.iter().filter_map(move |task| {
                 let task = task.upgrade()?;
                 let task = task.borrow();
@@ -116,6 +118,7 @@ impl List {
                         width = id_width.chars() as usize
                     ))),
                     Cell::from(task.state().render(styles)),
+                    Cell::from(name_width.update_str(task.name().to_string())),
                     dur_cell(task.total(now)),
                     dur_cell(task.busy(now)),
                     dur_cell(task.idle(now)),
@@ -170,6 +173,7 @@ impl List {
         // How many characters wide are the fixed-length non-field columns?
         let fixed_col_width = id_width.chars()
             + STATE_LEN
+            + name_width.chars()
             + DUR_LEN as u16
             + DUR_LEN as u16
             + DUR_LEN as u16
@@ -183,6 +187,7 @@ impl List {
         let widths = &[
             id_width.constraint(),
             layout::Constraint::Length(STATE_LEN),
+            name_width.constraint(),
             layout::Constraint::Length(DUR_LEN as u16),
             layout::Constraint::Length(DUR_LEN as u16),
             layout::Constraint::Length(DUR_LEN as u16),
