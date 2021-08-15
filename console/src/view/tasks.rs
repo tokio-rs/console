@@ -108,7 +108,7 @@ impl List {
             self.sorted_tasks.iter().filter_map(move |task| {
                 let task = task.upgrade()?;
                 let task = task.borrow();
-
+                let is_terminated = task.completed_for() > 0;
                 let mut row = Row::new(vec![
                     Cell::from(id_width.update_str(task.id().to_string())),
                     Cell::from(task.state().render(styles)),
@@ -125,7 +125,7 @@ impl List {
                             .collect::<Vec<_>>(),
                     )),
                 ]);
-                if task.completed_for() > 0 {
+                if is_terminated {
                     row = row.style(styles.terminated());
                 }
                 Some(row)

@@ -72,7 +72,7 @@ async fn main() -> color_eyre::Result<()> {
                     _ => {}
                 }
             },
-            task_update = conn.next_update() => tasks.update_tasks(task_update),
+            task_update = conn.next_update() => tasks.update_tasks(&view.styles, task_update),
             details_update = details_rx.recv() => {
                 if let Some(details_update) = details_update {
                     tasks.update_task_details(details_update);

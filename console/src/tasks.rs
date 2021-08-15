@@ -11,7 +11,10 @@ use std::{
     sync::Arc,
     time::{Duration, SystemTime},
 };
-use tui::text::Span;
+use tui::{
+    style::{Color, Modifier},
+    text::Span,
+};
 
 #[derive(Default, Debug)]
 pub(crate) struct State {
@@ -122,7 +125,7 @@ impl State {
         self.new_tasks.drain(..)
     }
 
-    pub(crate) fn update_tasks(&mut self, update: proto::tasks::TaskUpdate) {
+    pub(crate) fn update_tasks(&mut self, styles: &view::Styles, update: proto::tasks::TaskUpdate) {
         if let Some(now) = update.now {
             self.last_updated_at = Some(now.try_into().unwrap());
         }
@@ -160,21 +163,13 @@ impl State {
                     return None;
                 }
             };
-            let fields = task
+            let mut fields = task
                 .fields
                 .drain(..)
                 .filter_map(|pb| Field::from_proto(pb, meta))
                 .collect::<Vec<_>>();
 
-            let formatted_fields = fields.iter().fold(Vec::default(), |mut acc, f| {
-                acc.push(vec![
-                    view::bold(f.name.to_string()),
-                    Span::from("="),
-                    Span::from(format!("{} ", f.value)),
-                ]);
-                acc
-            });
-
+            let formatted_fields = Field::make_formatted(styles, &mut fields);
             let id = task.id?.id;
             let stats = stats_update.remove(&id)?.into();
             let mut task = Task {
@@ -459,6 +454,9 @@ impl TryFrom<usize> for SortBy {
 // === impl Field ===
 
 impl Field {
+    const SPAWN_LOCATION: &'static str = "spawn.location";
+    const NAME: &'static str = "name";
+
     /// Converts a wire-format `Field` into an internal `Field` representation,
     /// using the provided `Metadata` for the task span that the field came
     /// from.
@@ -521,11 +519,58 @@ impl Field {
             // if the value is an empty string, just skip it.
             .ensure_nonempty()?;
 
-        if &*name == "spawn.location" {
+        if &*name == Field::SPAWN_LOCATION {
             value = value.truncate_registry_path();
         }
 
         Some(Self { name, value })
+    }
+
+    fn make_formatted(styles: &view::Styles, fields: &mut Vec<Field>) -> Vec<Vec<Span<'static>>> {
+        use std::cmp::Ordering;
+
+        let key_style = styles.fg(Color::LightBlue).add_modifier(Modifier::BOLD);
+        let delim_style = styles.fg(Color::LightBlue).add_modifier(Modifier::DIM);
+        let val_style = styles.fg(Color::Yellow);
+
+        fields.sort_unstable_by(|left, right| {
+            if &*left.name == Field::NAME {
+                return Ordering::Less;
+            }
+
+            if &*right.name == Field::NAME {
+                return Ordering::Greater;
+            }
+
+            if &*left.name == Field::SPAWN_LOCATION {
+                return Ordering::Greater;
+            }
+
+            if &*right.name == Field::SPAWN_LOCATION {
+                return Ordering::Less;
+            }
+
+            left.name.cmp(&right.name)
+        });
+
+        let mut formatted = Vec::with_capacity(fields.len());
+        let mut fields = fields.iter();
+        if let Some(field) = fields.next() {
+            formatted.push(vec![
+                Span::styled(field.name.to_string(), key_style),
+                Span::styled("=", delim_style),
+                Span::styled(field.value.to_string(), val_style),
+            ]);
+            for field in fields {
+                formatted.push(vec![
+                    Span::styled(", ", delim_style),
+                    Span::styled(field.name.to_string(), key_style),
+                    Span::styled("=", delim_style),
+                    Span::styled(field.value.to_string(), val_style),
+                ])
+            }
+        }
+        formatted
     }
 }
 
@@ -586,6 +631,7 @@ impl TaskState {
         const COMPLETED_UTF8: &str = "\u{23F9}";
         match self {
             Self::Running => styles.if_utf8(RUNNING_UTF8, ">"),
+
             Self::Idle => styles.if_utf8(IDLE_UTF8, ":"),
             Self::Completed => styles.if_utf8(COMPLETED_UTF8, "!"),
         }

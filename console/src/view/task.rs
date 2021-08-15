@@ -108,7 +108,7 @@ impl TaskView {
         let attrs = Spans::from(vec![
             bold("ID: "),
             Span::raw(format!("{} ", task.id())),
-            bold(task.state().render(styles)),
+            Span::raw(task.state().render(styles)),
         ]);
         let target = Spans::from(vec![bold("Target: "), Span::raw(task.target())]);
         let total = Spans::from(vec![bold("Total Time: "), dur(styles, task.total(now))]);
