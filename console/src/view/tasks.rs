@@ -110,7 +110,11 @@ impl List {
                 let task = task.borrow();
                 let is_terminated = task.completed_for() > 0;
                 let mut row = Row::new(vec![
-                    Cell::from(id_width.update_str(task.id().to_string())),
+                    Cell::from(id_width.update_str(format!(
+                        "{:>width$}",
+                        task.id(),
+                        width = id_width.chars() as usize
+                    ))),
                     Cell::from(task.state().render(styles)),
                     dur_cell(task.total(now)),
                     dur_cell(task.busy(now)),
