@@ -455,7 +455,7 @@ impl TryFrom<usize> for SortBy {
 
 impl Field {
     const SPAWN_LOCATION: &'static str = "spawn.location";
-    const NAME: &'static str = "name";
+    const NAME: &'static str = "task.name";
 
     /// Converts a wire-format `Field` into an internal `Field` representation,
     /// using the provided `Metadata` for the task span that the field came
