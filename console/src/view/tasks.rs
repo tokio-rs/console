@@ -21,7 +21,7 @@ pub(crate) struct List {
 
 impl List {
     const HEADER: &'static [&'static str] = &[
-        "TID", "KIND", "TOTAL", "BUSY", "IDLE", "POLLS", "TARGET", "FIELDS",
+        "TID", "STATE", "TOTAL", "BUSY", "IDLE", "POLLS", "TARGET", "FIELDS",
     ];
 
     pub(crate) fn update_input(&mut self, event: input::Event) {
@@ -79,13 +79,13 @@ impl List {
             return;
         };
 
+        const STATE_LEN: u16 = List::HEADER[1].len() as u16;
         const DUR_LEN: usize = 10;
         // This data is only updated every second, so it doesn't make a ton of
         // sense to have a lot of precision in timestamps (and this makes sure
         // there's room for the unit!)
         const DUR_PRECISION: usize = 4;
         const POLLS_LEN: usize = 5;
-        const KIND_LEN: u16 = 4;
 
         self.sorted_tasks.extend(state.take_new_tasks());
         self.sort_by.sort(now, &mut self.sorted_tasks);
@@ -111,9 +111,7 @@ impl List {
 
                 let mut row = Row::new(vec![
                     Cell::from(id_width.update_str(task.id().to_string())),
-                    // TODO(eliza): is there a way to write a `fmt::Debug` impl
-                    // directly to tui without doing an allocation?
-                    Cell::from(task.kind().to_string()),
+                    Cell::from(task.state().render()),
                     dur_cell(task.total(now)),
                     dur_cell(task.busy(now)),
                     dur_cell(task.idle(now)),
@@ -167,7 +165,7 @@ impl List {
 
         // How many characters wide are the fixed-length non-field columns?
         let fixed_col_width = id_width.chars()
-            + KIND_LEN
+            + STATE_LEN
             + DUR_LEN as u16
             + DUR_LEN as u16
             + DUR_LEN as u16
@@ -180,7 +178,7 @@ impl List {
         let fields_width = frame.size().width - fixed_col_width;
         let widths = &[
             id_width.constraint(),
-            layout::Constraint::Length(KIND_LEN),
+            layout::Constraint::Length(STATE_LEN),
             layout::Constraint::Length(DUR_LEN as u16),
             layout::Constraint::Length(DUR_LEN as u16),
             layout::Constraint::Length(DUR_LEN as u16),
@@ -239,5 +237,18 @@ impl List {
                 self.sorted_tasks[selected].clone()
             })
             .unwrap_or_default()
+    }
+}
+
+impl crate::tasks::TaskState {
+    fn render(self) -> &'static str {
+        const STATE_RUNNING: &str = "\u{25B6}";
+        const STATE_IDLE: &str = "\u{23F8}";
+        const STATE_COMPLETED: &str = "\u{23F9}";
+        match self {
+            Self::Running => STATE_RUNNING,
+            Self::Idle => STATE_IDLE,
+            Self::Completed => STATE_COMPLETED,
+        }
     }
 }
