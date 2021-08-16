@@ -67,6 +67,7 @@ impl List {
 
     pub(crate) fn render<B: tui::backend::Backend>(
         &mut self,
+        colors: &view::Colors,
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
         state: &mut tasks::State,
@@ -89,14 +90,14 @@ impl List {
         self.sorted_tasks.extend(state.take_new_tasks());
         self.sort_by.sort(now, &mut self.sorted_tasks);
 
-        fn dur_cell(dur: std::time::Duration) -> Cell<'static> {
-            Cell::from(view::color_time_units(format!(
+        let dur_cell = |dur: std::time::Duration| -> Cell<'static> {
+            Cell::from(colors.time_units(format!(
                 "{:>width$.prec$?}",
                 dur,
                 width = DUR_LEN,
                 prec = DUR_PRECISION,
             )))
-        }
+        };
 
         // Start out wide enough to display the column headers...
         let mut id_width = view::Width::new(Self::HEADER[0].len() as u16);
@@ -125,7 +126,7 @@ impl List {
                     )),
                 ]);
                 if task.completed_for() > 0 {
-                    row = row.style(Style::default().add_modifier(style::Modifier::DIM));
+                    row = row.style(colors.terminated());
                 }
                 Some(row)
             })
