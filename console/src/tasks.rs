@@ -579,14 +579,14 @@ impl Field {
             formatted.push(vec![
                 Span::styled(field.name.to_string(), key_style),
                 Span::styled("=", delim_style),
-                Span::styled(field.value.to_string(), val_style),
+                Span::styled(format!("{} ", field.value), val_style),
             ]);
             for field in fields {
                 formatted.push(vec![
-                    Span::styled(", ", delim_style),
+                    // Span::styled(", ", delim_style),
                     Span::styled(field.name.to_string(), key_style),
                     Span::styled("=", delim_style),
-                    Span::styled(field.value.to_string(), val_style),
+                    Span::styled(format!("{} ", field.value), val_style),
                 ])
             }
         }
