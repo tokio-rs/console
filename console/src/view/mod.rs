@@ -6,9 +6,11 @@ use tui::{
     text::Span,
 };
 
+mod colors;
 mod mini_histogram;
 mod task;
 mod tasks;
+pub(crate) use self::colors::{Colors, Palette};
 
 pub struct View {
     /// The tasks list is stored separately from the currently selected state,
@@ -20,6 +22,7 @@ pub struct View {
     /// it to remain sorted that way when we return to it.
     list: tasks::List,
     state: ViewState,
+    pub(crate) colors: Colors,
 }
 
 enum ViewState {
@@ -55,6 +58,14 @@ macro_rules! key {
 }
 
 impl View {
+    pub fn new(colors: Colors) -> Self {
+        Self {
+            state: ViewState::TasksList,
+            list: tasks::List::default(),
+            colors,
+        }
+    }
+
     pub(crate) fn update_input(&mut self, event: input::Event, tasks: &State) -> UpdateKind {
         use ViewState::*;
         let mut update_kind = UpdateKind::Other;
@@ -102,13 +113,13 @@ impl View {
     ) {
         match self.state {
             ViewState::TasksList => {
-                self.list.render(frame, area, tasks);
+                self.list.render(&self.colors, frame, area, tasks);
             }
             ViewState::TaskInstance(ref mut view) => {
                 let now = tasks
                     .last_updated_at()
                     .expect("task view implies we've received an update");
-                view.render(frame, area, now);
+                view.render(&self.colors, frame, area, now);
             }
         }
 
@@ -116,35 +127,8 @@ impl View {
     }
 }
 
-impl Default for View {
-    fn default() -> Self {
-        Self {
-            state: ViewState::TasksList,
-            list: tasks::List::default(),
-        }
-    }
-}
-
 pub(crate) fn bold<'a>(text: impl Into<Cow<'a, str>>) -> Span<'a> {
     Span::styled(text, Style::default().add_modifier(style::Modifier::BOLD))
-}
-
-pub(crate) fn color_time_units<'a>(text: impl Into<Cow<'a, str>>) -> Span<'a> {
-    use tui::style::Color::Indexed;
-    let text = text.into();
-    let style = match text.as_ref() {
-        s if s.ends_with("ps") => fg_style(Indexed(40)), // green 3
-        s if s.ends_with("ns") => fg_style(Indexed(41)), // spring green 3
-        s if s.ends_with("µs") || s.ends_with("us") => fg_style(Indexed(42)), // spring green 2
-        s if s.ends_with("ms") => fg_style(Indexed(43)), // cyan 3
-        s if s.ends_with('s') => fg_style(Indexed(44)),  // dark turquoise,
-        _ => Style::default(),
-    };
-    Span::styled(text, style)
-}
-
-fn fg_style(color: style::Color) -> Style {
-    Style::default().fg(color)
 }
 
 impl Width {
