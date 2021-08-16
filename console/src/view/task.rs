@@ -33,7 +33,7 @@ impl TaskView {
 
     pub(crate) fn render<B: tui::backend::Backend>(
         &mut self,
-        colors: &view::Colors,
+        styles: &view::Styles,
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
         now: SystemTime,
@@ -75,45 +75,45 @@ impl TaskView {
             )
             .split(chunks[1]);
 
-        let histogram_area = Layout::default()
-            .direction(layout::Direction::Horizontal)
-            .constraints(
-                [
-                    // 24 chars is long enough for the title "Poll Times Percentiles"
-                    layout::Constraint::Length(24),
-                    layout::Constraint::Min(50),
-                ]
-                .as_ref(),
-            )
-            .split(chunks[2]);
+        // Only split the histogram area in half if we're also drawing a
+        // sparkline (which requires UTF-8 characters).
+        let histogram_area = if styles.utf8 {
+            Layout::default()
+                .direction(layout::Direction::Horizontal)
+                .constraints(
+                    [
+                        // 24 chars is long enough for the title "Poll Times Percentiles"
+                        layout::Constraint::Length(24),
+                        layout::Constraint::Min(50),
+                    ]
+                    .as_ref(),
+                )
+                .split(chunks[2])
+        } else {
+            vec![chunks[2]]
+        };
 
         let percentiles_area = histogram_area[0];
-        let sparkline_area = histogram_area[1];
 
         let fields_area = chunks[3];
 
         let controls = Spans::from(vec![
             Span::raw("controls: "),
-            bold("esc"),
+            bold(styles.if_utf8("\u{238B} esc", "esc")),
             Span::raw(" = return to task list, "),
             bold("q"),
             Span::raw(" = quit"),
         ]);
 
-        let attrs = Spans::from(vec![bold("ID: "), Span::raw(task.id().to_string())]);
+        let attrs = Spans::from(vec![
+            bold("ID: "),
+            Span::raw(format!("{} ", task.id())),
+            bold(task.state().render(styles)),
+        ]);
         let target = Spans::from(vec![bold("Target: "), Span::raw(task.target())]);
-
-        let mut total = vec![bold("Total Time: "), dur(colors, task.total(now))];
-
-        // TODO(eliza): maybe surface how long the task has been completed, as well?
-        if task.is_completed() {
-            total.push(Span::raw(" (completed)"));
-        };
-
-        let total = Spans::from(total);
-
-        let busy = Spans::from(vec![bold("Busy: "), dur(colors, task.busy(now))]);
-        let idle = Spans::from(vec![bold("Idle: "), dur(colors, task.idle(now))]);
+        let total = Spans::from(vec![bold("Total Time: "), dur(styles, task.total(now))]);
+        let busy = Spans::from(vec![bold("Busy: "), dur(styles, task.busy(now))]);
+        let idle = Spans::from(vec![bold("Idle: "), dur(styles, task.idle(now))]);
 
         let metrics = vec![attrs, target, total, busy, idle];
 
@@ -140,50 +140,54 @@ impl TaskView {
 
         let wakeups = Spans::from(wakeups);
 
-        fn block_for(title: &str) -> Block {
-            Block::default().borders(Borders::ALL).title(title)
+        fn block_for<'a>(styles: &view::Styles, title: &'a str) -> Block<'a> {
+            Block::default()
+                .borders(styles.borders(Borders::ALL))
+                .title(title)
         }
 
         let mut fields = Text::default();
         fields.extend(task.formatted_fields().iter().cloned().map(Spans::from));
 
-        // Bit of a deadlock: We cannot know the highest bucket value without determining the number of buckets,
-        // and we cannot determine the number of buckets without knowing the width of the chart area which depends on
-        // the number of digits in the highest bucket value.
-        // So just assume here the number of digits in the highest bucket value is 3.
-        // If we overshoot, there will be empty columns/buckets at the right end of the chart.
-        // If we undershoot, the rightmost 1-2 columns/buckets will be hidden.
-        // We could get the max bucket value from the previous render though...
-        let (chart_data, metadata) = details
-            .map(|d| d.make_chart_data(sparkline_area.width - 3))
-            .unwrap_or_default();
+        // If UTF-8 is disabled we can't draw the histogram sparklne.
+        if styles.utf8 {
+            let sparkline_area = histogram_area[1];
 
-        let histogram_sparkline = MiniHistogram::default()
-            .block(
-                Block::default()
-                    .title("Poll Times Histogram")
-                    .borders(Borders::ALL),
-            )
-            .data(&chart_data)
-            .metadata(metadata)
-            .duration_precision(2);
+            // Bit of a deadlock: We cannot know the highest bucket value without determining the number of buckets,
+            // and we cannot determine the number of buckets without knowing the width of the chart area which depends on
+            // the number of digits in the highest bucket value.
+            // So just assume here the number of digits in the highest bucket value is 3.
+            // If we overshoot, there will be empty columns/buckets at the right end of the chart.
+            // If we undershoot, the rightmost 1-2 columns/buckets will be hidden.
+            // We could get the max bucket value from the previous render though...
+            let (chart_data, metadata) = details
+                .map(|d| d.make_chart_data(sparkline_area.width - 3))
+                .unwrap_or_default();
 
-        let task_widget = Paragraph::new(metrics).block(block_for("Task"));
-        let wakers_widget = Paragraph::new(vec![wakers, wakeups]).block(block_for("Waker"));
-        let fields_widget = Paragraph::new(fields).block(block_for("Fields"));
+            let histogram_sparkline = MiniHistogram::default()
+                .block(block_for(styles, "Poll Times Histogram"))
+                .data(&chart_data)
+                .metadata(metadata)
+                .duration_precision(2);
+
+            frame.render_widget(histogram_sparkline, sparkline_area);
+        }
+
+        let task_widget = Paragraph::new(metrics).block(block_for(styles, "Task"));
+        let wakers_widget = Paragraph::new(vec![wakers, wakeups]).block(block_for(styles, "Waker"));
+        let fields_widget = Paragraph::new(fields).block(block_for(styles, "Fields"));
         let percentiles_widget = Paragraph::new(
             details
-                .map(|details| details.make_percentiles_widget(colors))
+                .map(|details| details.make_percentiles_widget(styles))
                 .unwrap_or_default(),
         )
-        .block(block_for("Poll Times Percentiles"));
+        .block(block_for(styles, "Poll Times Percentiles"));
 
         frame.render_widget(Block::default().title(controls), controls_area);
         frame.render_widget(task_widget, stats_area[0]);
         frame.render_widget(wakers_widget, stats_area[1]);
         frame.render_widget(fields_widget, fields_area);
         frame.render_widget(percentiles_widget, percentiles_area);
-        frame.render_widget(histogram_sparkline, sparkline_area);
     }
 }
 
@@ -233,7 +237,7 @@ impl Details {
     }
 
     /// Get the important percentile values from the histogram
-    fn make_percentiles_widget(&self, colors: &view::Colors) -> Text<'static> {
+    fn make_percentiles_widget(&self, styles: &view::Styles) -> Text<'static> {
         let mut text = Text::default();
         let histogram = self.poll_times_histogram();
         let percentiles = histogram.iter().flat_map(|histogram| {
@@ -243,7 +247,7 @@ impl Details {
             pairs.map(|pair| {
                 Spans::from(vec![
                     bold(format!("p{:>2}: ", pair.0)),
-                    dur(colors, Duration::from_nanos(pair.1)),
+                    dur(styles, Duration::from_nanos(pair.1)),
                 ])
             })
         });
@@ -252,10 +256,10 @@ impl Details {
     }
 }
 
-fn dur(colors: &view::Colors, dur: std::time::Duration) -> Span<'static> {
+fn dur(styles: &view::Styles, dur: std::time::Duration) -> Span<'static> {
     const DUR_PRECISION: usize = 4;
     // TODO(eliza): can we not have to use `format!` to make a string here? is
     // there a way to just give TUI a `fmt::Debug` implementation, or does it
     // have to be given a string in order to do layout stuff?
-    colors.time_units(format!("{:.prec$?}", dur, prec = DUR_PRECISION))
+    styles.time_units(format!("{:.prec$?}", dur, prec = DUR_PRECISION))
 }

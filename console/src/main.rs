@@ -25,10 +25,10 @@ mod view;
 async fn main() -> color_eyre::Result<()> {
     let mut args = config::Config::parse();
     args.trace_init()?;
-    tracing::debug!(?args.target_addr, ?args.color_options);
+    tracing::debug!(?args.target_addr, ?args.view_options);
 
-    let colors = view::Colors::from_config(args.color_options);
-    colors.error_init()?;
+    let styles = view::Styles::from_config(args.view_options);
+    styles.error_init()?;
 
     let target = args.target_addr;
     tracing::info!(?target, "using target addr");
@@ -43,7 +43,7 @@ async fn main() -> color_eyre::Result<()> {
 
     let mut tasks = State::default();
     let mut input = input::EventStream::new();
-    let mut view = view::View::new(colors);
+    let mut view = view::View::new(styles);
 
     loop {
         tokio::select! { biased;
@@ -86,7 +86,7 @@ async fn main() -> color_eyre::Result<()> {
                 .constraints([Constraint::Length(2), Constraint::Percentage(95)].as_ref())
                 .split(f.size());
 
-            let header_block = Block::default().title(conn.render(&view.colors));
+            let header_block = Block::default().title(conn.render(&view.styles));
 
             let text = vec![Spans::from(vec![
                 Span::styled(

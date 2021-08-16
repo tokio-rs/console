@@ -6,11 +6,11 @@ use tui::{
     text::Span,
 };
 
-mod colors;
 mod mini_histogram;
+mod styles;
 mod task;
 mod tasks;
-pub(crate) use self::colors::{Colors, Palette};
+pub(crate) use self::styles::{Palette, Styles};
 
 pub struct View {
     /// The tasks list is stored separately from the currently selected state,
@@ -22,7 +22,7 @@ pub struct View {
     /// it to remain sorted that way when we return to it.
     list: tasks::List,
     state: ViewState,
-    pub(crate) colors: Colors,
+    pub(crate) styles: Styles,
 }
 
 enum ViewState {
@@ -58,11 +58,11 @@ macro_rules! key {
 }
 
 impl View {
-    pub fn new(colors: Colors) -> Self {
+    pub fn new(styles: Styles) -> Self {
         Self {
             state: ViewState::TasksList,
             list: tasks::List::default(),
-            colors,
+            styles,
         }
     }
 
@@ -113,13 +113,13 @@ impl View {
     ) {
         match self.state {
             ViewState::TasksList => {
-                self.list.render(&self.colors, frame, area, tasks);
+                self.list.render(&self.styles, frame, area, tasks);
             }
             ViewState::TaskInstance(ref mut view) => {
                 let now = tasks
                     .last_updated_at()
                     .expect("task view implies we've received an update");
-                view.render(&self.colors, frame, area, now);
+                view.render(&self.styles, frame, area, now);
             }
         }
 

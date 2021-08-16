@@ -112,7 +112,7 @@ impl Connection {
         }
     }
 
-    pub fn render(&self, colors: &crate::view::Colors) -> tui::text::Spans {
+    pub fn render(&self, styles: &crate::view::Styles) -> tui::text::Spans {
         use tui::{
             style::{Color, Modifier},
             text::{Span, Spans},
@@ -120,15 +120,15 @@ impl Connection {
         let state = match self.state {
             State::Connected { .. } => Span::styled(
                 "(CONNECTED)",
-                colors.fg(Color::Green).add_modifier(Modifier::BOLD),
+                styles.fg(Color::Green).add_modifier(Modifier::BOLD),
             ),
             State::Disconnected(d) if d == Duration::from_secs(0) => Span::styled(
                 "(CONNECTING)",
-                colors.fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                styles.fg(Color::Yellow).add_modifier(Modifier::BOLD),
             ),
             State::Disconnected(d) => Span::styled(
                 format!("(RECONNECTING IN {:?})", d),
-                colors.fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                styles.fg(Color::Yellow).add_modifier(Modifier::BOLD),
             ),
         };
         Spans::from(vec![

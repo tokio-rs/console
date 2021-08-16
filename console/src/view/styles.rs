@@ -6,9 +6,10 @@ use tui::{
 };
 
 #[derive(Debug, Clone)]
-pub struct Colors {
+pub struct Styles {
     palette: Palette,
     toggles: config::ColorToggles,
+    pub(crate) utf8: bool,
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
@@ -29,13 +30,14 @@ fn fg_style(color: Color) -> Style {
     Style::default().fg(color)
 }
 
-// === impl Colors ===
+// === impl Config ===
 
-impl Colors {
-    pub fn from_config(config: config::Colors) -> Self {
+impl Styles {
+    pub fn from_config(config: config::ViewOptions) -> Self {
         Self {
             palette: config.determine_palette(),
             toggles: config.toggles(),
+            utf8: config.is_utf8(),
         }
     }
 
@@ -52,10 +54,24 @@ impl Colors {
         builder.install()
     }
 
+    pub fn if_utf8<'a>(&self, utf8: &'a str, ascii: &'a str) -> &'a str {
+        if self.utf8 {
+            utf8
+        } else {
+            ascii
+        }
+    }
+
     pub fn time_units<'a>(&self, text: impl Into<Cow<'a, str>>) -> Span<'a> {
-        let text = text.into();
+        let mut text = text.into();
         if !self.toggles.color_durations {
             return Span::raw(text);
+        }
+
+        if !self.utf8 {
+            if let Some(mu_offset) = text.find("µs") {
+                text.to_mut().replace_range(mu_offset.., "us");
+            }
         }
 
         let style = match self.palette {
@@ -125,6 +141,15 @@ impl Colors {
             // Otherwise, if a previous case didn't match, the color is enabled
             // by the current palette.
             (_, _) => Some(color),
+        }
+    }
+
+    pub fn borders(&self, borders: tui::widgets::Borders) -> tui::widgets::Borders {
+        if self.utf8 {
+            borders
+        } else {
+            // TODO(eliza): configure an ascii-art border set instead?
+            tui::widgets::Borders::NONE
         }
     }
 }
