@@ -6,7 +6,7 @@ use crate::{
 use std::convert::TryFrom;
 use tui::{
     layout,
-    style::{self, Style},
+    style::{self, Color, Style},
     text::{self, Spans},
     widgets::{Block, Cell, Row, Table, TableState},
 };
@@ -153,16 +153,25 @@ impl List {
             text::Span::raw(" = quit"),
         ]);
 
+        let header_style = styles
+            .color(Color::Green)
+            .map(|green| Style::default().bg(green).fg(Color::Black))
+            .unwrap_or_else(|| Style::default().add_modifier(style::Modifier::REVERSED));
+        let selected_style = styles
+            .color(Color::Cyan)
+            .map(|cyan| Style::default().bg(cyan).fg(Color::Black))
+            .unwrap_or_else(|| Style::default().remove_modifier(style::Modifier::REVERSED));
+
         let header = Row::new(Self::HEADER.iter().enumerate().map(|(idx, &value)| {
             let cell = Cell::from(value);
             if idx == self.selected_column {
-                cell.style(Style::default().remove_modifier(style::Modifier::REVERSED))
+                cell.style(selected_style)
             } else {
                 cell
             }
         }))
         .height(1)
-        .style(Style::default().add_modifier(style::Modifier::REVERSED));
+        .style(header_style);
 
         let t = if self.sort_descending {
             Table::new(rows)
