@@ -645,15 +645,17 @@ impl FieldValue {
 }
 
 impl TaskState {
-    pub(crate) fn render(self, styles: &crate::view::Styles) -> &'static str {
+    pub(crate) fn render(self, styles: &crate::view::Styles) -> Span<'static> {
         const RUNNING_UTF8: &str = "\u{25B6}";
         const IDLE_UTF8: &str = "\u{23F8}";
         const COMPLETED_UTF8: &str = "\u{23F9}";
         match self {
-            Self::Running => styles.if_utf8(RUNNING_UTF8, ">"),
+            Self::Running => {
+                Span::styled(styles.if_utf8(RUNNING_UTF8, ">"), styles.fg(Color::Green))
+            }
 
-            Self::Idle => styles.if_utf8(IDLE_UTF8, ":"),
-            Self::Completed => styles.if_utf8(COMPLETED_UTF8, "!"),
+            Self::Idle => Span::raw(styles.if_utf8(IDLE_UTF8, ":")),
+            Self::Completed => Span::raw(styles.if_utf8(COMPLETED_UTF8, "!")),
         }
     }
 }
