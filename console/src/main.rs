@@ -7,9 +7,7 @@ use futures::stream::StreamExt;
 use tokio::sync::{mpsc, watch};
 use tui::{
     layout::{Constraint, Direction, Layout},
-    style::{Modifier, Style},
-    text::{Span, Spans},
-    widgets::{Block, Paragraph, Wrap},
+    widgets::{Paragraph, Wrap},
 };
 
 use crate::view::UpdateKind;
@@ -72,7 +70,7 @@ async fn main() -> color_eyre::Result<()> {
                     _ => {}
                 }
             },
-            task_update = conn.next_update() => tasks.update_tasks(task_update),
+            task_update = conn.next_update() => tasks.update_tasks(&view.styles, task_update),
             details_update = details_rx.recv() => {
                 if let Some(details_update) = details_update {
                     tasks.update_task_details(details_update);
@@ -83,21 +81,10 @@ async fn main() -> color_eyre::Result<()> {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(0)
-                .constraints([Constraint::Length(2), Constraint::Percentage(95)].as_ref())
+                .constraints([Constraint::Length(1), Constraint::Percentage(95)].as_ref())
                 .split(f.size());
 
-            let header_block = Block::default().title(conn.render(&view.styles));
-
-            let text = vec![Spans::from(vec![
-                Span::styled(
-                    format!("{}", tasks.len()),
-                    Style::default().add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(" tasks"),
-            ])];
-            let header = Paragraph::new(text)
-                .block(header_block)
-                .wrap(Wrap { trim: true });
+            let header = Paragraph::new(conn.render(&view.styles)).wrap(Wrap { trim: true });
             f.render_widget(header, chunks[0]);
             view.render(f, chunks[1], &mut tasks);
         })?;

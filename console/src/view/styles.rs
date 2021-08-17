@@ -144,12 +144,14 @@ impl Styles {
         }
     }
 
-    pub fn borders(&self, borders: tui::widgets::Borders) -> tui::widgets::Borders {
+    pub fn border_block(&self) -> tui::widgets::Block<'_> {
         if self.utf8 {
-            borders
+            tui::widgets::Block::default()
+                .borders(tui::widgets::Borders::ALL)
+                .border_type(tui::widgets::BorderType::Rounded)
         } else {
             // TODO(eliza): configure an ascii-art border set instead?
-            tui::widgets::Borders::NONE
+            Default::default()
         }
     }
 }

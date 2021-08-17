@@ -11,7 +11,10 @@ use std::{
     sync::Arc,
     time::{Duration, SystemTime},
 };
-use tui::text::Span;
+use tui::{
+    style::{Color, Modifier},
+    text::Span,
+};
 
 #[derive(Default, Debug)]
 pub(crate) struct State {
@@ -27,10 +30,11 @@ pub(crate) struct State {
 pub(crate) enum SortBy {
     Tid = 0,
     State = 1,
-    Total = 2,
-    Busy = 3,
-    Idle = 4,
-    Polls = 5,
+    Name = 2,
+    Total = 3,
+    Busy = 4,
+    Idle = 5,
+    Polls = 6,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -51,6 +55,7 @@ pub(crate) struct Task {
     stats: Stats,
     completed_for: usize,
     target: Arc<str>,
+    name: Option<Arc<str>>,
 }
 
 #[derive(Debug, Default)]
@@ -109,10 +114,6 @@ pub(crate) enum FieldValue {
 impl State {
     const RETAIN_COMPLETED_FOR: usize = 6;
 
-    pub(crate) fn len(&self) -> usize {
-        self.tasks.len()
-    }
-
     pub(crate) fn last_updated_at(&self) -> Option<SystemTime> {
         self.last_updated_at
     }
@@ -122,7 +123,7 @@ impl State {
         self.new_tasks.drain(..)
     }
 
-    pub(crate) fn update_tasks(&mut self, update: proto::tasks::TaskUpdate) {
+    pub(crate) fn update_tasks(&mut self, styles: &view::Styles, update: proto::tasks::TaskUpdate) {
         if let Some(now) = update.now {
             self.last_updated_at = Some(now.try_into().unwrap());
         }
@@ -160,24 +161,26 @@ impl State {
                     return None;
                 }
             };
-            let fields = task
+            let mut name = None;
+            let mut fields = task
                 .fields
                 .drain(..)
-                .filter_map(|pb| Field::from_proto(pb, meta))
+                .filter_map(|pb| {
+                    let field = Field::from_proto(pb, meta)?;
+                    // the `task.name` field gets its own column, if it's present.
+                    if &*field.name == Field::NAME {
+                        name = Some(field.value.to_string().into());
+                        return None;
+                    }
+                    Some(field)
+                })
                 .collect::<Vec<_>>();
 
-            let formatted_fields = fields.iter().fold(Vec::default(), |mut acc, f| {
-                acc.push(vec![
-                    view::bold(f.name.to_string()),
-                    Span::from("="),
-                    Span::from(format!("{} ", f.value)),
-                ]);
-                acc
-            });
-
+            let formatted_fields = Field::make_formatted(styles, &mut fields);
             let id = task.id?.id;
             let stats = stats_update.remove(&id)?.into();
             let mut task = Task {
+                name,
                 id,
                 fields,
                 formatted_fields,
@@ -246,6 +249,10 @@ impl Task {
         &self.target
     }
 
+    pub(crate) fn name(&self) -> &str {
+        self.name.as_ref().map(AsRef::as_ref).unwrap_or_default()
+    }
+
     pub(crate) fn formatted_fields(&self) -> &[Vec<Span<'static>>] {
         &self.formatted_fields
     }
@@ -297,11 +304,6 @@ impl Task {
     /// Returns the total number of times the task has been polled.
     pub(crate) fn total_polls(&self) -> u64 {
         self.stats.polls
-    }
-
-    /// Returns the number of updates since the task completed
-    pub(crate) fn completed_for(&self) -> usize {
-        self.completed_for
     }
 
     /// Returns the elapsed time since the task was last woken, relative to
@@ -422,6 +424,9 @@ impl SortBy {
         // tasks.retain(|t| t.upgrade().is_some());
         match self {
             Self::Tid => tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().id)),
+            Self::Name => {
+                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().name.clone()))
+            }
             Self::State => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().state()))
             }
@@ -447,6 +452,7 @@ impl TryFrom<usize> for SortBy {
         match idx {
             idx if idx == Self::Tid as usize => Ok(Self::Tid),
             idx if idx == Self::State as usize => Ok(Self::State),
+            idx if idx == Self::Name as usize => Ok(Self::Name),
             idx if idx == Self::Total as usize => Ok(Self::Total),
             idx if idx == Self::Busy as usize => Ok(Self::Busy),
             idx if idx == Self::Idle as usize => Ok(Self::Idle),
@@ -459,6 +465,9 @@ impl TryFrom<usize> for SortBy {
 // === impl Field ===
 
 impl Field {
+    const SPAWN_LOCATION: &'static str = "spawn.location";
+    const NAME: &'static str = "task.name";
+
     /// Converts a wire-format `Field` into an internal `Field` representation,
     /// using the provided `Metadata` for the task span that the field came
     /// from.
@@ -521,11 +530,58 @@ impl Field {
             // if the value is an empty string, just skip it.
             .ensure_nonempty()?;
 
-        if &*name == "spawn.location" {
+        if &*name == Field::SPAWN_LOCATION {
             value = value.truncate_registry_path();
         }
 
         Some(Self { name, value })
+    }
+
+    fn make_formatted(styles: &view::Styles, fields: &mut Vec<Field>) -> Vec<Vec<Span<'static>>> {
+        use std::cmp::Ordering;
+
+        let key_style = styles.fg(Color::LightBlue).add_modifier(Modifier::BOLD);
+        let delim_style = styles.fg(Color::LightBlue).add_modifier(Modifier::DIM);
+        let val_style = styles.fg(Color::Yellow);
+
+        fields.sort_unstable_by(|left, right| {
+            if &*left.name == Field::NAME {
+                return Ordering::Less;
+            }
+
+            if &*right.name == Field::NAME {
+                return Ordering::Greater;
+            }
+
+            if &*left.name == Field::SPAWN_LOCATION {
+                return Ordering::Greater;
+            }
+
+            if &*right.name == Field::SPAWN_LOCATION {
+                return Ordering::Less;
+            }
+
+            left.name.cmp(&right.name)
+        });
+
+        let mut formatted = Vec::with_capacity(fields.len());
+        let mut fields = fields.iter();
+        if let Some(field) = fields.next() {
+            formatted.push(vec![
+                Span::styled(field.name.to_string(), key_style),
+                Span::styled("=", delim_style),
+                Span::styled(format!("{} ", field.value), val_style),
+            ]);
+            for field in fields {
+                formatted.push(vec![
+                    // Span::styled(", ", delim_style),
+                    Span::styled(field.name.to_string(), key_style),
+                    Span::styled("=", delim_style),
+                    Span::styled(format!("{} ", field.value), val_style),
+                ])
+            }
+        }
+        formatted
     }
 }
 
@@ -580,14 +636,16 @@ impl FieldValue {
 }
 
 impl TaskState {
-    pub(crate) fn render(self, styles: &crate::view::Styles) -> &'static str {
+    pub(crate) fn render(self, styles: &crate::view::Styles) -> Span<'static> {
         const RUNNING_UTF8: &str = "\u{25B6}";
         const IDLE_UTF8: &str = "\u{23F8}";
         const COMPLETED_UTF8: &str = "\u{23F9}";
         match self {
-            Self::Running => styles.if_utf8(RUNNING_UTF8, ">"),
-            Self::Idle => styles.if_utf8(IDLE_UTF8, ":"),
-            Self::Completed => styles.if_utf8(COMPLETED_UTF8, "!"),
+            Self::Running => {
+                Span::styled(styles.if_utf8(RUNNING_UTF8, ">"), styles.fg(Color::Green))
+            }
+            Self::Idle => Span::raw(styles.if_utf8(IDLE_UTF8, ":")),
+            Self::Completed => Span::raw(styles.if_utf8(COMPLETED_UTF8, "!")),
         }
     }
 }
