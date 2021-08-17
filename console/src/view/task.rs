@@ -14,7 +14,7 @@ use std::{
 use tui::{
     layout::{self, Layout},
     text::{Span, Spans, Text},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Paragraph},
 };
 
 pub(crate) struct TaskView {
@@ -140,12 +140,6 @@ impl TaskView {
 
         let wakeups = Spans::from(wakeups);
 
-        fn block_for<'a>(styles: &view::Styles, title: &'a str) -> Block<'a> {
-            Block::default()
-                .borders(styles.borders(Borders::ALL))
-                .title(title)
-        }
-
         let mut fields = Text::default();
         fields.extend(task.formatted_fields().iter().cloned().map(Spans::from));
 
@@ -165,7 +159,7 @@ impl TaskView {
                 .unwrap_or_default();
 
             let histogram_sparkline = MiniHistogram::default()
-                .block(block_for(styles, "Poll Times Histogram"))
+                .block(styles.border_block().title("Poll Times Histogram"))
                 .data(&chart_data)
                 .metadata(metadata)
                 .duration_precision(2);
@@ -173,15 +167,16 @@ impl TaskView {
             frame.render_widget(histogram_sparkline, sparkline_area);
         }
 
-        let task_widget = Paragraph::new(metrics).block(block_for(styles, "Task"));
-        let wakers_widget = Paragraph::new(vec![wakers, wakeups]).block(block_for(styles, "Waker"));
-        let fields_widget = Paragraph::new(fields).block(block_for(styles, "Fields"));
+        let task_widget = Paragraph::new(metrics).block(styles.border_block().title("Task"));
+        let wakers_widget =
+            Paragraph::new(vec![wakers, wakeups]).block(styles.border_block().title("Waker"));
+        let fields_widget = Paragraph::new(fields).block(styles.border_block().title("Fields"));
         let percentiles_widget = Paragraph::new(
             details
                 .map(|details| details.make_percentiles_widget(styles))
                 .unwrap_or_default(),
         )
-        .block(block_for(styles, "Poll Times Percentiles"));
+        .block(styles.border_block().title("Poll Times Percentiles"));
 
         frame.render_widget(Block::default().title(controls), controls_area);
         frame.render_widget(task_widget, stats_area[0]);

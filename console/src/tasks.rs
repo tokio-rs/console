@@ -114,10 +114,6 @@ pub(crate) enum FieldValue {
 impl State {
     const RETAIN_COMPLETED_FOR: usize = 6;
 
-    pub(crate) fn len(&self) -> usize {
-        self.tasks.len()
-    }
-
     pub(crate) fn last_updated_at(&self) -> Option<SystemTime> {
         self.last_updated_at
     }
@@ -308,11 +304,6 @@ impl Task {
     /// Returns the total number of times the task has been polled.
     pub(crate) fn total_polls(&self) -> u64 {
         self.stats.polls
-    }
-
-    /// Returns the number of updates since the task completed
-    pub(crate) fn completed_for(&self) -> usize {
-        self.completed_for
     }
 
     /// Returns the elapsed time since the task was last woken, relative to
@@ -653,7 +644,6 @@ impl TaskState {
             Self::Running => {
                 Span::styled(styles.if_utf8(RUNNING_UTF8, ">"), styles.fg(Color::Green))
             }
-
             Self::Idle => Span::raw(styles.if_utf8(IDLE_UTF8, ":")),
             Self::Completed => Span::raw(styles.if_utf8(COMPLETED_UTF8, "!")),
         }
