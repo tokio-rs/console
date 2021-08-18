@@ -39,11 +39,15 @@ toolkit consists of multiple components:
 [`tonic`]: https://lib.rs/crates/tonic
 [Tokio]: https://tokio.rs
 
-## extremely cool and amazing demo
-
-[![asciicast](https://asciinema.org/a/412139.svg)](https://asciinema.org/a/412139?t=44)
+## extremely cool and amazing screenshots
 
 wow! whoa! it's like `top(1)` for tasks!
+
+![task list view](https://user-images.githubusercontent.com/2796466/129774465-7bd2ad2f-f1a3-4830-a8fa-f72667028fa1.png)
+
+viewing details for a single task:
+
+![task details view](https://user-images.githubusercontent.com/2796466/129774524-288c967b-6066-4f98-973d-099b3e6a2c55.png)
 
 ## on the shoulders of giants...
 
