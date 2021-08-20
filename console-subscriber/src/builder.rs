@@ -195,6 +195,7 @@ fn parse_duration(s: &str) -> Result<Duration, Box<dyn std::error::Error>> {
         .or_else(|| s.strip_suffix("minutes"))
     {
         return Ok(s
+            .trim()
             .parse::<u64>()
             .map(|mins| Duration::from_secs(mins * 60))
             .or_else(|_| {
@@ -205,6 +206,7 @@ fn parse_duration(s: &str) -> Result<Duration, Box<dyn std::error::Error>> {
 
     if let Some(s) = s.strip_suffix('h').or_else(|| s.strip_suffix("hours")) {
         return Ok(s
+            .trim()
             .parse::<u64>()
             .map(|hours| Duration::from_secs(hours * 60 * 60))
             .or_else(|_| {
