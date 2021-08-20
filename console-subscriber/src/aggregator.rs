@@ -62,11 +62,7 @@ pub(crate) struct Aggregator {
     /// Map of task IDs to task stats.
     stats: TaskData<Stats>,
 
-    /// A counter for the pretty task IDs.
-    task_id_counter: TaskId,
-
-    /// A table that contains the span ID to pretty task ID mappings.
-    task_id_mappings: HashMap<span::Id, TaskId>,
+    task_ids: TaskIds,
 
     /// A sink to record all events to a file.
     recorder: Option<Recorder>,
@@ -106,6 +102,15 @@ struct TaskData<T> {
 struct Task {
     metadata: &'static Metadata<'static>,
     fields: Vec<proto::Field>,
+}
+
+#[derive(Debug, Default)]
+struct TaskIds {
+    /// A counter for the pretty task IDs.
+    next: TaskId,
+
+    /// A table that contains the span ID to pretty task ID mappings.
+    id_mappings: HashMap<span::Id, TaskId>,
 }
 
 impl Default for Stats {
@@ -153,8 +158,7 @@ impl Aggregator {
                 data: HashMap::<TaskId, (Task, bool)>::new(),
             },
             stats: TaskData::default(),
-            task_id_counter: 0,
-            task_id_mappings: HashMap::new(),
+            task_ids: TaskIds::default(),
             recorder: builder
                 .recording_path
                 .as_ref()
@@ -367,7 +371,7 @@ impl Aggregator {
                 at,
                 fields,
             } => {
-                let task_id = self.get_or_insert_task_id(id);
+                let task_id = self.task_ids.id_for(id);
                 self.tasks.insert(
                     task_id,
                     Task {
@@ -386,7 +390,7 @@ impl Aggregator {
                 );
             }
             Event::Enter { id, at } => {
-                let task_id = self.get_or_insert_task_id(id);
+                let task_id = self.task_ids.id_for(id);
                 let mut stats = self.stats.update_or_default(task_id);
                 if stats.current_polls == 0 {
                     stats.last_poll_started = Some(at);
@@ -399,7 +403,7 @@ impl Aggregator {
             }
 
             Event::Exit { id, at } => {
-                let task_id = self.get_or_insert_task_id(id);
+                let task_id = self.task_ids.id_for(id);
                 let mut stats = self.stats.update_or_default(task_id);
                 stats.current_polls -= 1;
                 if stats.current_polls == 0 {
@@ -416,12 +420,12 @@ impl Aggregator {
             }
 
             Event::Close { id, at } => {
-                let task_id = self.get_or_insert_task_id(id);
+                let task_id = self.task_ids.id_for(id);
                 self.stats.update_or_default(task_id).closed_at = Some(at);
             }
 
             Event::Waker { id, op, at } => {
-                let task_id = self.get_or_insert_task_id(id);
+                let task_id = self.task_ids.id_for(id);
                 // It's possible for wakers to exist long after a task has
                 // finished. We don't want those cases to create a "new"
                 // task that isn't closed, just to insert some waker stats.
@@ -454,18 +458,6 @@ impl Aggregator {
                         }
                     }
                 }
-            }
-        }
-    }
-
-    fn get_or_insert_task_id(&mut self, span_id: span::Id) -> TaskId {
-        match self.task_id_mappings.entry(span_id) {
-            Entry::Occupied(entry) => *entry.get(),
-            Entry::Vacant(entry) => {
-                let task_id = self.task_id_counter;
-                entry.insert(task_id);
-                self.task_id_counter = self.task_id_counter.wrapping_add(1);
-                task_id
             }
         }
     }
@@ -650,6 +642,22 @@ impl Task {
             metadata: Some(self.metadata.into()),
             parents: Vec::new(), // TODO: implement parents nicely
             fields: self.fields.clone(),
+        }
+    }
+}
+
+// === impl TaskIds ===
+
+impl TaskIds {
+    fn id_for(&mut self, span_id: span::Id) -> TaskId {
+        match self.id_mappings.entry(span_id) {
+            Entry::Occupied(entry) => *entry.get(),
+            Entry::Vacant(entry) => {
+                let task_id = self.next;
+                entry.insert(task_id);
+                self.next = self.next.wrapping_add(1);
+                task_id
+            }
         }
     }
 }
