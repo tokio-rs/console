@@ -8,7 +8,6 @@ use futures::FutureExt;
 use std::{
     collections::{hash_map::Entry, HashMap},
     convert::TryInto,
-    ops::{Deref, DerefMut},
     sync::{
         atomic::{AtomicBool, Ordering::*},
         Arc,
@@ -23,6 +22,9 @@ use hdrhistogram::{
 };
 
 pub type TaskId = u64;
+
+mod task_data;
+use self::task_data::TaskData;
 
 pub(crate) struct Aggregator {
     /// Channel of incoming events emitted by `TaskLayer`s.
@@ -94,11 +96,6 @@ struct Stats {
     poll_times_histogram: Histogram<u64>,
 }
 
-#[derive(Default)]
-struct TaskData<T> {
-    data: HashMap<TaskId, (T, bool)>,
-}
-
 struct Task {
     metadata: &'static Metadata<'static>,
     fields: Vec<proto::Field>,
@@ -154,10 +151,8 @@ impl Aggregator {
             details_watchers: HashMap::new(),
             all_metadata: Vec::new(),
             new_metadata: Vec::new(),
-            tasks: TaskData {
-                data: HashMap::<TaskId, (Task, bool)>::new(),
-            },
-            stats: TaskData::default(),
+            tasks: TaskData::new(),
+            stats: TaskData::new(),
             task_ids: TaskIds::default(),
             recorder: builder
                 .recording_path
@@ -468,7 +463,7 @@ impl Aggregator {
         let task_ids = &mut self.task_ids;
         let has_watchers = !self.watchers.is_empty();
         let now = SystemTime::now();
-        let stats_len_0 = stats.data.len();
+        let stats_len_0 = stats.len();
         let retention = self.retention;
 
         // drop stats for closed tasks if they have been updated
@@ -478,18 +473,18 @@ impl Aggregator {
             "dropping closed tasks..."
         );
 
-        stats.data.retain(|id, (stats, dirty)| {
+        stats.retain(|id, stats, dirty| {
             if let Some(closed) = stats.closed_at {
                 let closed_for = now.duration_since(closed).unwrap_or_default();
                 let should_drop =
                     // if there are any clients watching, retain all dirty tasks regardless of age
-                    (*dirty && has_watchers)
+                    (dirty && has_watchers)
                     || closed_for > retention;
                 tracing::trace!(
                     stats.id = ?id,
                     stats.closed_at = ?closed,
                     stats.closed_for = ?closed_for,
-                    stats.dirty = *dirty,
+                    stats.dirty = dirty,
                     should_drop,
                 );
                 return !should_drop;
@@ -497,12 +492,12 @@ impl Aggregator {
 
             true
         });
-        let stats_len_1 = stats.data.len();
+        let stats_len_1 = stats.len();
 
         // drop closed tasks which no longer have stats.
-        let tasks_len_0 = tasks.data.len();
-        tasks.data.retain(|id, (_, _)| stats.data.contains_key(id));
-        let tasks_len_1 = tasks.data.len();
+        let tasks_len_0 = tasks.len();
+        tasks.retain(|id, _, _| stats.contains(id));
+        let tasks_len_1 = tasks.len();
         let dropped_stats = stats_len_0 - stats_len_1;
 
         task_ids.retain_only(&*tasks);
@@ -540,67 +535,6 @@ impl Flush {
             // someone else already did it, that's fine...
             tracing::trace!("flush already triggered");
         }
-    }
-}
-
-impl<T> TaskData<T> {
-    fn update_or_default(&mut self, id: TaskId) -> Updating<'_, T>
-    where
-        T: Default,
-    {
-        Updating(self.data.entry(id).or_default())
-    }
-
-    fn update(&mut self, id: &TaskId) -> Option<Updating<'_, T>> {
-        self.data.get_mut(id).map(Updating)
-    }
-
-    fn insert(&mut self, id: TaskId, data: T) {
-        self.data.insert(id, (data, true));
-    }
-
-    fn since_last_update(&mut self) -> impl Iterator<Item = (&TaskId, &mut T)> {
-        self.data.iter_mut().filter_map(|(id, (data, dirty))| {
-            if *dirty {
-                *dirty = false;
-                Some((id, data))
-            } else {
-                None
-            }
-        })
-    }
-
-    fn all(&self) -> impl Iterator<Item = (&TaskId, &T)> {
-        self.data.iter().map(|(id, (data, _))| (id, data))
-    }
-
-    fn get(&self, id: &TaskId) -> Option<&T> {
-        self.data.get(id).map(|(data, _)| data)
-    }
-
-    fn contains(&self, id: &TaskId) -> bool {
-        self.data.contains_key(id)
-    }
-}
-
-struct Updating<'a, T>(&'a mut (T, bool));
-
-impl<'a, T> Deref for Updating<'a, T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.0 .0
-    }
-}
-
-impl<'a, T> DerefMut for Updating<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0 .0
-    }
-}
-
-impl<'a, T> Drop for Updating<'a, T> {
-    fn drop(&mut self) {
-        self.0 .1 = true;
     }
 }
 
