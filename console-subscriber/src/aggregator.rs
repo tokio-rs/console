@@ -465,6 +465,7 @@ impl Aggregator {
     fn drop_closed_tasks(&mut self) {
         let tasks = &mut self.tasks;
         let stats = &mut self.stats;
+        let task_ids = &mut self.task_ids;
         let has_watchers = !self.watchers.is_empty();
         let now = SystemTime::now();
         let stats_len_0 = stats.data.len();
@@ -503,6 +504,8 @@ impl Aggregator {
         tasks.data.retain(|id, (_, _)| stats.data.contains_key(id));
         let tasks_len_1 = tasks.data.len();
         let dropped_stats = stats_len_0 - stats_len_1;
+
+        task_ids.retain_only(&*tasks);
 
         if dropped_stats > 0 {
             tracing::debug!(
@@ -573,6 +576,10 @@ impl<T> TaskData<T> {
 
     fn get(&self, id: &TaskId) -> Option<&T> {
         self.data.get(id).map(|(data, _)| data)
+    }
+
+    fn contains(&self, id: &TaskId) -> bool {
+        self.data.contains_key(id)
     }
 }
 
@@ -659,6 +666,12 @@ impl TaskIds {
                 task_id
             }
         }
+    }
+
+    #[inline]
+    fn retain_only<T>(&mut self, tasks: &TaskData<T>) {
+        self.id_mappings
+            .retain(|_, task_id| tasks.contains(task_id));
     }
 }
 
