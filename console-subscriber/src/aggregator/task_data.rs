@@ -1,35 +1,33 @@
 use super::TaskId;
 use std::{
+    any::type_name,
     collections::HashMap,
+    hash::Hash,
     mem,
     ops::{Deref, DerefMut},
 };
 
 pub(crate) struct TaskData<T> {
     data: HashMap<TaskId, (T, bool)>,
-    shrink_every: usize,
-    since_shrink: usize,
+    shrink: Shrink,
 }
 
 pub(crate) struct Updating<'a, T>(&'a mut (T, bool));
 
+#[derive(Debug)]
+pub(crate) struct Shrink {
+    shrink_every: usize,
+    since_shrink: usize,
+    min_bytes: usize,
+}
+
 // === impl TaskData ===
 
 impl<T> TaskData<T> {
-    /// Shrinking every 60 flushes should be roughly every minute.
-    pub(crate) const DEFAULT_SHRINK_INTERVAL: usize = 60;
-
-    // APPROXIMATE memory used per entry. This is a lower-bound, not an accurate
-    // size measurement, since the hashmap may use additional heap memory beyond
-    // the size of a key + value pair.
-    const APPROX_ENTRY_SZ: usize =
-        mem::size_of::<T>() + mem::size_of::<TaskId>() + mem::size_of::<bool>();
-
     pub(crate) fn new() -> Self {
         Self {
             data: HashMap::new(),
-            shrink_every: Self::DEFAULT_SHRINK_INTERVAL,
-            since_shrink: 0,
+            shrink: Shrink::default(),
         }
     }
 
@@ -75,10 +73,6 @@ impl<T> TaskData<T> {
         self.data.len()
     }
 
-    fn size_estimate_bytes(&self) -> usize {
-        self.data.capacity() * Self::APPROX_ENTRY_SZ
-    }
-
     pub(crate) fn retain(&mut self, mut f: impl FnMut(&TaskId, &mut T, bool) -> bool) -> bool {
         let len_0 = self.len();
 
@@ -90,38 +84,20 @@ impl<T> TaskData<T> {
         if len_1 == len_0 {
             tracing::trace!(
                 len = len_0,
-                size_estimate_bytes = self.size_estimate_bytes(),
-                data = %std::any::type_name::<T>(),
+                data = %type_name::<T>(),
                 "no closed data was droppable",
             );
             return false;
         }
 
         // If we dropped some data, consider shrinking the hashmap.
-        let should_shrink = self.since_shrink >= self.shrink_every;
         tracing::debug!(
-            dropped = len_0 - len_1,
             len = len_1,
-            should_shrink,
-            since_shrink = self.since_shrink,
-            size_estimate_bytes = self.size_estimate_bytes(),
-            data = %std::any::type_name::<T>(),
-            "dropped closed data",
+            dropped = len_0.saturating_sub(len_1),
+            data = %type_name::<T>(),
+            "dropped closed data"
         );
-
-        if should_shrink {
-            let size_0 = self.size_estimate_bytes();
-            self.since_shrink = 0;
-            self.data.shrink_to_fit();
-            tracing::debug!(
-                freed_bytes = size_0.saturating_sub(self.size_estimate_bytes()),
-                size_estimate_bytes = self.size_estimate_bytes(),
-                "shrank to fit"
-            );
-        } else {
-            self.since_shrink += 1;
-            tracing::trace!(self.since_shrink, size_estimate_bytes = %format_args!("{}B", self.size_estimate_bytes()));
-        }
+        self.shrink.try_shrink_map(&mut self.data);
 
         true
     }
@@ -145,5 +121,92 @@ impl<'a, T> DerefMut for Updating<'a, T> {
 impl<'a, T> Drop for Updating<'a, T> {
     fn drop(&mut self) {
         self.0 .1 = true;
+    }
+}
+
+// === impl Shrink ===
+
+impl Shrink {
+    /// Shrinking every 60 flushes should be roughly every minute.
+    pub(crate) const DEFAULT_SHRINK_INTERVAL: usize = 60;
+
+    /// Don't bother if we'd free less than 4KB of memory.
+    // TODO(eliza): this number was chosen totally arbitrarily; it's the minimum
+    // page size on x86.
+    pub(crate) const DEFAULT_MIN_SIZE_BYTES: usize = 1024 * 4;
+
+    pub(crate) fn try_shrink_map<K, V>(&mut self, map: &mut HashMap<K, V>)
+    where
+        K: Hash + Eq,
+    {
+        if self.should_shrink::<(K, V)>(map.capacity(), map.len()) {
+            map.shrink_to_fit();
+        }
+    }
+
+    pub(crate) fn try_shrink_vec<T>(&mut self, vec: &mut Vec<T>) {
+        if self.should_shrink::<T>(vec.capacity(), vec.len()) {
+            vec.shrink_to_fit();
+        }
+    }
+
+    /// Returns `true` if we should shrink with a capacity of `capacity` Ts and
+    /// an actual length of `len` Ts.
+    fn should_shrink<T>(&mut self, capacity: usize, len: usize) -> bool {
+        // Has the required interval elapsed since the last shrink?
+        self.since_shrink = self.since_shrink.saturating_add(1);
+        if self.since_shrink < self.shrink_every {
+            tracing::trace!(
+                self.since_shrink,
+                self.shrink_every,
+                capacity_bytes = capacity * mem::size_of::<T>(),
+                used_bytes = len * mem::size_of::<T>(),
+                data = %type_name::<T>(),
+                "should_shrink: shrink interval has not elapsed"
+            );
+            return false;
+        }
+
+        // Okay, would we free up at least `min_bytes` by shrinking?
+        let capacity_bytes = capacity * mem::size_of::<T>();
+        let used_bytes = len * mem::size_of::<T>();
+        let diff = capacity_bytes.saturating_sub(used_bytes);
+        if diff < self.min_bytes {
+            tracing::trace!(
+                self.since_shrink,
+                self.shrink_every,
+                self.min_bytes,
+                freed_bytes = diff,
+                capacity_bytes,
+                used_bytes,
+                data = %type_name::<T>(),
+                "should_shrink: would not free sufficient bytes"
+            );
+            return false;
+        }
+
+        // Reset the clock! time to shrink!
+        self.since_shrink = 0;
+        tracing::debug!(
+            self.since_shrink,
+            self.shrink_every,
+            self.min_bytes,
+            freed_bytes = diff,
+            capacity_bytes,
+            used_bytes,
+            data = %type_name::<T>(),
+            "should_shrink: shrinking!"
+        );
+        true
+    }
+}
+
+impl Default for Shrink {
+    fn default() -> Self {
+        Self {
+            since_shrink: 0,
+            shrink_every: Self::DEFAULT_SHRINK_INTERVAL,
+            min_bytes: Self::DEFAULT_MIN_SIZE_BYTES,
+        }
     }
 }
