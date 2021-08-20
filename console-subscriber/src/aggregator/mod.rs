@@ -6,9 +6,8 @@ use tokio::sync::{mpsc, Notify};
 
 use futures::FutureExt;
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::hash_map::Entry,
     convert::TryInto,
-    ops::{Deref, DerefMut},
     sync::{
         atomic::{AtomicBool, Ordering::*},
         Arc,
@@ -23,6 +22,11 @@ use hdrhistogram::{
 };
 
 pub type TaskId = u64;
+
+mod shrink;
+mod task_data;
+use self::shrink::{ShrinkMap, ShrinkVec};
+use self::task_data::TaskData;
 
 pub(crate) struct Aggregator {
     /// Channel of incoming events emitted by `TaskLayer`s.
@@ -41,15 +45,15 @@ pub(crate) struct Aggregator {
     flush_capacity: Arc<Flush>,
 
     /// Currently active RPCs streaming task events.
-    watchers: Vec<Watch<proto::tasks::TaskUpdate>>,
+    watchers: ShrinkVec<Watch<proto::tasks::TaskUpdate>>,
 
     /// Currently active RPCs streaming task details events, by task ID.
-    details_watchers: HashMap<TaskId, Vec<Watch<proto::tasks::TaskDetails>>>,
+    details_watchers: ShrinkMap<TaskId, Vec<Watch<proto::tasks::TaskDetails>>>,
 
     /// *All* metadata for task spans and user-defined spans that we care about.
     ///
     /// This is sent to new clients as part of the initial state.
-    all_metadata: Vec<proto::register_metadata::NewMetadata>,
+    all_metadata: ShrinkVec<proto::register_metadata::NewMetadata>,
 
     /// *New* metadata that was registered since the last state update.
     ///
@@ -62,11 +66,7 @@ pub(crate) struct Aggregator {
     /// Map of task IDs to task stats.
     stats: TaskData<Stats>,
 
-    /// A counter for the pretty task IDs.
-    task_id_counter: TaskId,
-
-    /// A table that contains the span ID to pretty task ID mappings.
-    task_id_mappings: HashMap<span::Id, TaskId>,
+    task_ids: TaskIds,
 
     /// A sink to record all events to a file.
     recorder: Option<Recorder>,
@@ -98,14 +98,18 @@ struct Stats {
     poll_times_histogram: Histogram<u64>,
 }
 
-#[derive(Default)]
-struct TaskData<T> {
-    data: HashMap<TaskId, (T, bool)>,
-}
-
 struct Task {
     metadata: &'static Metadata<'static>,
     fields: Vec<proto::Field>,
+}
+
+#[derive(Debug, Default)]
+struct TaskIds {
+    /// A counter for the pretty task IDs.
+    next: TaskId,
+
+    /// A table that contains the span ID to pretty task ID mappings.
+    id_mappings: ShrinkMap<span::Id, TaskId>,
 }
 
 impl Default for Stats {
@@ -145,16 +149,13 @@ impl Aggregator {
             publish_interval: builder.publish_interval,
             retention: builder.retention,
             events,
-            watchers: Vec::new(),
-            details_watchers: HashMap::new(),
-            all_metadata: Vec::new(),
-            new_metadata: Vec::new(),
-            tasks: TaskData {
-                data: HashMap::<TaskId, (Task, bool)>::new(),
-            },
-            stats: TaskData::default(),
-            task_id_counter: 0,
-            task_id_mappings: HashMap::new(),
+            watchers: Default::default(),
+            details_watchers: Default::default(),
+            all_metadata: Default::default(),
+            new_metadata: Default::default(),
+            tasks: TaskData::new(),
+            stats: TaskData::new(),
+            task_ids: TaskIds::default(),
             recorder: builder
                 .recording_path
                 .as_ref()
@@ -257,7 +258,7 @@ impl Aggregator {
         // Send the initial state --- if this fails, the subscription is already dead
         if subscription.update(&proto::tasks::TaskUpdate {
             new_metadata: Some(proto::RegisterMetadata {
-                metadata: self.all_metadata.clone(),
+                metadata: (*self.all_metadata).clone(),
             }),
             new_tasks,
             stats_update,
@@ -332,12 +333,12 @@ impl Aggregator {
             now: Some(now.into()),
         };
         self.watchers
-            .retain(|watch: &Watch<proto::tasks::TaskUpdate>| watch.update(&update));
+            .retain_and_shrink(|watch: &Watch<proto::tasks::TaskUpdate>| watch.update(&update));
 
         let stats = &self.stats;
         // Assuming there are much fewer task details subscribers than there are
         // stats updates, iterate over `details_watchers` and compact the map.
-        self.details_watchers.retain(|&id, watchers| {
+        self.details_watchers.retain_and_shrink(|&id, watchers| {
             if let Some(task_stats) = stats.get(&id) {
                 let details = proto::tasks::TaskDetails {
                     task_id: Some(id.into()),
@@ -367,7 +368,7 @@ impl Aggregator {
                 at,
                 fields,
             } => {
-                let task_id = self.get_or_insert_task_id(id);
+                let task_id = self.task_ids.id_for(id);
                 self.tasks.insert(
                     task_id,
                     Task {
@@ -386,7 +387,7 @@ impl Aggregator {
                 );
             }
             Event::Enter { id, at } => {
-                let task_id = self.get_or_insert_task_id(id);
+                let task_id = self.task_ids.id_for(id);
                 let mut stats = self.stats.update_or_default(task_id);
                 if stats.current_polls == 0 {
                     stats.last_poll_started = Some(at);
@@ -399,7 +400,7 @@ impl Aggregator {
             }
 
             Event::Exit { id, at } => {
-                let task_id = self.get_or_insert_task_id(id);
+                let task_id = self.task_ids.id_for(id);
                 let mut stats = self.stats.update_or_default(task_id);
                 stats.current_polls -= 1;
                 if stats.current_polls == 0 {
@@ -416,12 +417,12 @@ impl Aggregator {
             }
 
             Event::Close { id, at } => {
-                let task_id = self.get_or_insert_task_id(id);
+                let task_id = self.task_ids.id_for(id);
                 self.stats.update_or_default(task_id).closed_at = Some(at);
             }
 
             Event::Waker { id, op, at } => {
-                let task_id = self.get_or_insert_task_id(id);
+                let task_id = self.task_ids.id_for(id);
                 // It's possible for wakers to exist long after a task has
                 // finished. We don't want those cases to create a "new"
                 // task that isn't closed, just to insert some waker stats.
@@ -458,24 +459,12 @@ impl Aggregator {
         }
     }
 
-    fn get_or_insert_task_id(&mut self, span_id: span::Id) -> TaskId {
-        match self.task_id_mappings.entry(span_id) {
-            Entry::Occupied(entry) => *entry.get(),
-            Entry::Vacant(entry) => {
-                let task_id = self.task_id_counter;
-                entry.insert(task_id);
-                self.task_id_counter = self.task_id_counter.wrapping_add(1);
-                task_id
-            }
-        }
-    }
-
     fn drop_closed_tasks(&mut self) {
         let tasks = &mut self.tasks;
         let stats = &mut self.stats;
+        let task_ids = &mut self.task_ids;
         let has_watchers = !self.watchers.is_empty();
         let now = SystemTime::now();
-        let stats_len_0 = stats.data.len();
         let retention = self.retention;
 
         // drop stats for closed tasks if they have been updated
@@ -485,47 +474,34 @@ impl Aggregator {
             "dropping closed tasks..."
         );
 
-        stats.data.retain(|id, (stats, dirty)| {
+        let mut dropped_stats = false;
+        stats.retain_and_shrink(|id, stats, dirty| {
             if let Some(closed) = stats.closed_at {
                 let closed_for = now.duration_since(closed).unwrap_or_default();
                 let should_drop =
                     // if there are any clients watching, retain all dirty tasks regardless of age
-                    (*dirty && has_watchers)
+                    (dirty && has_watchers)
                     || closed_for > retention;
                 tracing::trace!(
                     stats.id = ?id,
                     stats.closed_at = ?closed,
                     stats.closed_for = ?closed_for,
-                    stats.dirty = *dirty,
+                    stats.dirty = dirty,
                     should_drop,
                 );
+                dropped_stats = should_drop;
                 return !should_drop;
             }
 
             true
         });
-        let stats_len_1 = stats.data.len();
 
-        // drop closed tasks which no longer have stats.
-        let tasks_len_0 = tasks.data.len();
-        tasks.data.retain(|id, (_, _)| stats.data.contains_key(id));
-        let tasks_len_1 = tasks.data.len();
-        let dropped_stats = stats_len_0 - stats_len_1;
+        // If we dropped any stats, drop task static data and IDs as
+        if dropped_stats {
+            // drop closed tasks which no longer have stats.
+            tasks.retain_and_shrink(|id, _, _| stats.contains(id));
 
-        if dropped_stats > 0 {
-            tracing::debug!(
-                tasks.dropped = tasks_len_0 - tasks_len_1,
-                tasks.len = tasks_len_1,
-                stats.dropped = dropped_stats,
-                stats.tasks = stats_len_1,
-                "dropped closed tasks"
-            );
-        } else {
-            tracing::trace!(
-                tasks.len = tasks_len_1,
-                stats.len = stats_len_1,
-                "no closed tasks were droppable"
-            );
+            task_ids.retain_only(&*tasks);
         }
     }
 }
@@ -545,63 +521,6 @@ impl Flush {
             // someone else already did it, that's fine...
             tracing::trace!("flush already triggered");
         }
-    }
-}
-
-impl<T> TaskData<T> {
-    fn update_or_default(&mut self, id: TaskId) -> Updating<'_, T>
-    where
-        T: Default,
-    {
-        Updating(self.data.entry(id).or_default())
-    }
-
-    fn update(&mut self, id: &TaskId) -> Option<Updating<'_, T>> {
-        self.data.get_mut(id).map(Updating)
-    }
-
-    fn insert(&mut self, id: TaskId, data: T) {
-        self.data.insert(id, (data, true));
-    }
-
-    fn since_last_update(&mut self) -> impl Iterator<Item = (&TaskId, &mut T)> {
-        self.data.iter_mut().filter_map(|(id, (data, dirty))| {
-            if *dirty {
-                *dirty = false;
-                Some((id, data))
-            } else {
-                None
-            }
-        })
-    }
-
-    fn all(&self) -> impl Iterator<Item = (&TaskId, &T)> {
-        self.data.iter().map(|(id, (data, _))| (id, data))
-    }
-
-    fn get(&self, id: &TaskId) -> Option<&T> {
-        self.data.get(id).map(|(data, _)| data)
-    }
-}
-
-struct Updating<'a, T>(&'a mut (T, bool));
-
-impl<'a, T> Deref for Updating<'a, T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.0 .0
-    }
-}
-
-impl<'a, T> DerefMut for Updating<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0 .0
-    }
-}
-
-impl<'a, T> Drop for Updating<'a, T> {
-    fn drop(&mut self) {
-        self.0 .1 = true;
     }
 }
 
@@ -651,6 +570,28 @@ impl Task {
             parents: Vec::new(), // TODO: implement parents nicely
             fields: self.fields.clone(),
         }
+    }
+}
+
+// === impl TaskIds ===
+
+impl TaskIds {
+    fn id_for(&mut self, span_id: span::Id) -> TaskId {
+        match self.id_mappings.entry(span_id) {
+            Entry::Occupied(entry) => *entry.get(),
+            Entry::Vacant(entry) => {
+                let task_id = self.next;
+                entry.insert(task_id);
+                self.next = self.next.wrapping_add(1);
+                task_id
+            }
+        }
+    }
+
+    #[inline]
+    fn retain_only<T>(&mut self, tasks: &TaskData<T>) {
+        self.id_mappings
+            .retain(|_, task_id| tasks.contains(task_id));
     }
 }
 
