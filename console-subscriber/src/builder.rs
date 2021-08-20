@@ -120,19 +120,15 @@ impl Builder {
 
     /// Configures this builder from a standard set of environment variables:
     ///
-    /// | **Environment Variable**            | **Purpose**                                                               | **Default Value** |
-    /// |-------------------------------------|---------------------------------------------------------------------------|-------------------|
-    /// | `TOKIO_CONSOLE_RETENTION_SECS`      | The number of seconds to accumulate completed tracing data                | 3600s (1h)        |
-    /// | `TOKIO_CONSOLE_BIND`                | a HOST:PORT description, such as `localhost:1234`                         | `127.0.0.1:6669`  |
-    /// | `TOKIO_CONSOLE_PUBLISH_INTERVAL_MS` | The number of milliseconds to wait between sending updates to the console | 1000ms (1s)       |
-    /// | `TOKIO_CONSOLE_RECORD_PATH`         | The file path to save a recording                                         | None              |
+    /// | **Environment Variable**         | **Purpose**                                                  | **Default Value** |
+    /// |----------------------------------|--------------------------------------------------------------|-------------------|
+    /// | `TOKIO_CONSOLE_RETENTION`        | The duration of seconds to accumulate completed tracing data | 3600s (1h)        |
+    /// | `TOKIO_CONSOLE_BIND`             | a HOST:PORT description, such as `localhost:1234`            | `127.0.0.1:6669`  |
+    /// | `TOKIO_CONSOLE_PUBLISH_INTERVAL` | The duration to wait between sending updates to the console  | 1000ms (1s)       |
+    /// | `TOKIO_CONSOLE_RECORD_PATH`      | The file path to save a recording                            | None              |
     pub fn with_default_env(mut self) -> Self {
-        if let Ok(retention) = std::env::var("TOKIO_CONSOLE_RETENTION_SECS") {
-            self.retention = Duration::from_secs(
-                retention
-                    .parse()
-                    .expect("TOKIO_CONSOLE_RETENTION_SECS must be an integer"),
-            );
+        if let Some(retention) = parse_duration("TOKIO_CONSOLE_RETENTION") {
+            self.retention = retention;
         }
 
         if let Ok(bind) = std::env::var("TOKIO_CONSOLE_BIND") {
@@ -143,12 +139,8 @@ impl Builder {
                 .expect("tokio console could not resolve TOKIO_CONSOLE_BIND");
         }
 
-        if let Ok(interval) = std::env::var("TOKIO_CONSOLE_PUBLISH_INTERVAL_MS") {
-            self.publish_interval = Duration::from_millis(
-                interval
-                    .parse()
-                    .expect("TOKIO_CONSOLE_PUBLISH_INTERVAL_MS must be an integer"),
-            );
+        if let Some(interval) = parse_duration("TOKIO_CONSOLE_PUBLISH_INTERVAL") {
+            self.publish_interval = interval;
         }
 
         if let Ok(path) = std::env::var("TOKIO_CONSOLE_RECORD_PATH") {
@@ -156,5 +148,70 @@ impl Builder {
         }
 
         self
+    }
+}
+
+fn parse_duration(var_name: &str) -> Option<Duration> {
+    fn try_parse(s: &str) -> Result<Duration, Box<dyn std::error::Error>> {
+        let s = s.trim();
+
+        if let Some(s) = s.strip_suffix("ns") {
+            return Ok(Duration::from_nanos(s.trim().parse()?));
+        }
+
+        if let Some(s) = s.strip_suffix("us") {
+            return Ok(Duration::from_micros(s.trim().parse()?));
+        }
+
+        if let Some(s) = s.strip_suffix("ms") {
+            return Ok(Duration::from_millis(s.trim().parse()?));
+        }
+
+        if let Some(s) = s
+            .strip_suffix('s')
+            .or_else(|| s.strip_suffix("sec"))
+            .or_else(|| s.strip_suffix("seconds"))
+        {
+            return Ok(s
+                .trim()
+                .parse::<u64>()
+                .map(Duration::from_secs)
+                .or_else(|_| s.parse::<f64>().map(Duration::from_secs_f64))?);
+        }
+
+        if let Some(s) = s
+            .strip_suffix('m')
+            .or_else(|| s.strip_suffix("min"))
+            .or_else(|| s.strip_suffix("minutes"))
+        {
+            return Ok(s
+                .parse::<u64>()
+                .map(|mins| Duration::from_secs(mins * 60))
+                .or_else(|_| {
+                    s.parse::<f64>()
+                        .map(|mins| Duration::from_secs_f64(mins * 60.0))
+                })?);
+        }
+
+        if let Some(s) = s.strip_suffix('h').or_else(|| s.strip_suffix("hours")) {
+            return Ok(s
+                .parse::<u64>()
+                .map(|hours| Duration::from_secs(hours * 60 * 60))
+                .or_else(|_| {
+                    s.parse::<f64>()
+                        .map(|hours| Duration::from_secs_f64(hours * 60.0 * 60.0))
+                })?);
+        }
+
+        Err("expected an integer followed by one of {`ns`, `us`, `ms`, `s`, `sec`, `m`, `min`, `h`, `hours`}".into())
+    }
+
+    let var = std::env::var(var_name).ok()?;
+    match try_parse(&var) {
+        Ok(dur) => Some(dur),
+        Err(e) => panic!(
+            "failed to parse a duration from `{}={:?}`: {}",
+            var_name, var, e
+        ),
     }
 }
