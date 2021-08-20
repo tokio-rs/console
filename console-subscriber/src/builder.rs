@@ -127,7 +127,7 @@ impl Builder {
     /// | `TOKIO_CONSOLE_PUBLISH_INTERVAL` | The duration to wait between sending updates to the console  | 1000ms (1s)       |
     /// | `TOKIO_CONSOLE_RECORD_PATH`      | The file path to save a recording                            | None              |
     pub fn with_default_env(mut self) -> Self {
-        if let Some(retention) = parse_duration("TOKIO_CONSOLE_RETENTION") {
+        if let Some(retention) = duration_from_env("TOKIO_CONSOLE_RETENTION") {
             self.retention = retention;
         }
 
@@ -139,7 +139,7 @@ impl Builder {
                 .expect("tokio console could not resolve TOKIO_CONSOLE_BIND");
         }
 
-        if let Some(interval) = parse_duration("TOKIO_CONSOLE_PUBLISH_INTERVAL") {
+        if let Some(interval) = duration_from_env("TOKIO_CONSOLE_PUBLISH_INTERVAL") {
             self.publish_interval = interval;
         }
 
@@ -151,67 +151,133 @@ impl Builder {
     }
 }
 
-fn parse_duration(var_name: &str) -> Option<Duration> {
-    fn try_parse(s: &str) -> Result<Duration, Box<dyn std::error::Error>> {
-        let s = s.trim();
-
-        if let Some(s) = s.strip_suffix("ns") {
-            return Ok(Duration::from_nanos(s.trim().parse()?));
-        }
-
-        if let Some(s) = s.strip_suffix("us") {
-            return Ok(Duration::from_micros(s.trim().parse()?));
-        }
-
-        if let Some(s) = s.strip_suffix("ms") {
-            return Ok(Duration::from_millis(s.trim().parse()?));
-        }
-
-        if let Some(s) = s
-            .strip_suffix('s')
-            .or_else(|| s.strip_suffix("sec"))
-            .or_else(|| s.strip_suffix("seconds"))
-        {
-            return Ok(s
-                .trim()
-                .parse::<u64>()
-                .map(Duration::from_secs)
-                .or_else(|_| s.parse::<f64>().map(Duration::from_secs_f64))?);
-        }
-
-        if let Some(s) = s
-            .strip_suffix('m')
-            .or_else(|| s.strip_suffix("min"))
-            .or_else(|| s.strip_suffix("minutes"))
-        {
-            return Ok(s
-                .parse::<u64>()
-                .map(|mins| Duration::from_secs(mins * 60))
-                .or_else(|_| {
-                    s.parse::<f64>()
-                        .map(|mins| Duration::from_secs_f64(mins * 60.0))
-                })?);
-        }
-
-        if let Some(s) = s.strip_suffix('h').or_else(|| s.strip_suffix("hours")) {
-            return Ok(s
-                .parse::<u64>()
-                .map(|hours| Duration::from_secs(hours * 60 * 60))
-                .or_else(|_| {
-                    s.parse::<f64>()
-                        .map(|hours| Duration::from_secs_f64(hours * 60.0 * 60.0))
-                })?);
-        }
-
-        Err("expected an integer followed by one of {`ns`, `us`, `ms`, `s`, `sec`, `m`, `min`, `h`, `hours`}".into())
-    }
-
+fn duration_from_env(var_name: &str) -> Option<Duration> {
     let var = std::env::var(var_name).ok()?;
-    match try_parse(&var) {
+    match parse_duration(&var) {
         Ok(dur) => Some(dur),
         Err(e) => panic!(
             "failed to parse a duration from `{}={:?}`: {}",
             var_name, var, e
         ),
+    }
+}
+
+fn parse_duration(s: &str) -> Result<Duration, Box<dyn std::error::Error>> {
+    let s = s.trim();
+
+    if let Some(s) = s.strip_suffix("ns") {
+        return Ok(Duration::from_nanos(s.trim().parse()?));
+    }
+
+    if let Some(s) = s.strip_suffix("us") {
+        return Ok(Duration::from_micros(s.trim().parse()?));
+    }
+
+    if let Some(s) = s.strip_suffix("ms") {
+        return Ok(Duration::from_millis(s.trim().parse()?));
+    }
+
+    if let Some(s) = s
+        .strip_suffix('s')
+        .or_else(|| s.strip_suffix("sec"))
+        .or_else(|| s.strip_suffix("seconds"))
+    {
+        return Ok(s
+            .trim()
+            .parse::<u64>()
+            .map(Duration::from_secs)
+            .or_else(|_| s.parse::<f64>().map(Duration::from_secs_f64))?);
+    }
+
+    if let Some(s) = s
+        .strip_suffix('m')
+        .or_else(|| s.strip_suffix("min"))
+        .or_else(|| s.strip_suffix("minutes"))
+    {
+        return Ok(s
+            .parse::<u64>()
+            .map(|mins| Duration::from_secs(mins * 60))
+            .or_else(|_| {
+                s.parse::<f64>()
+                    .map(|mins| Duration::from_secs_f64(mins * 60.0))
+            })?);
+    }
+
+    if let Some(s) = s.strip_suffix('h').or_else(|| s.strip_suffix("hours")) {
+        return Ok(s
+            .parse::<u64>()
+            .map(|hours| Duration::from_secs(hours * 60 * 60))
+            .or_else(|_| {
+                s.parse::<f64>()
+                    .map(|hours| Duration::from_secs_f64(hours * 60.0 * 60.0))
+            })?);
+    }
+
+    Err("expected an integer followed by one of {`ns`, `us`, `ms`, `s`, `sec`, `m`, `min`, `h`, `hours`}".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_parse_durations(expected: Duration, inputs: &[&str]) {
+        for input in inputs {
+            println!("trying: parse_duration({:?}) -> {:?}", input, expected);
+            match parse_duration(input) {
+                Err(e) => panic!(
+                    "parse_duration({:?}) -> {} (expected {:?})",
+                    input, e, expected
+                ),
+                Ok(dur) => assert_eq!(
+                    dur, expected,
+                    "parse_duration({:?}) -> {:?} (expected {:?})",
+                    input, dur, expected
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn parse_hours() {
+        test_parse_durations(
+            Duration::from_secs(3 * 60 * 60),
+            &["3h", "3 h", " 3 h", "3 hours", "3hours"],
+        )
+    }
+
+    #[test]
+    fn parse_mins() {
+        test_parse_durations(
+            Duration::from_secs(10 * 60),
+            &[
+                "10m",
+                "10 m",
+                "10 m",
+                "10 minutes",
+                "10minutes",
+                "  10 minutes",
+                "10 min",
+                " 10 min",
+                "10min",
+            ],
+        )
+    }
+
+    #[test]
+    fn parse_secs() {
+        test_parse_durations(
+            Duration::from_secs(10),
+            &[
+                "10s",
+                "10 s",
+                "10 s",
+                "10 seconds",
+                "10seconds",
+                "  10 seconds",
+                "10 sec",
+                " 10 sec",
+                "10sec",
+            ],
+        )
     }
 }
