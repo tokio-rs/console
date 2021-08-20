@@ -6,7 +6,7 @@ use tokio::sync::{mpsc, Notify};
 
 use futures::FutureExt;
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::hash_map::Entry,
     convert::TryInto,
     sync::{
         atomic::{AtomicBool, Ordering::*},
@@ -23,7 +23,9 @@ use hdrhistogram::{
 
 pub type TaskId = u64;
 
+mod shrink;
 mod task_data;
+use self::shrink::{ShrinkMap, ShrinkVec};
 use self::task_data::TaskData;
 
 pub(crate) struct Aggregator {
@@ -43,15 +45,15 @@ pub(crate) struct Aggregator {
     flush_capacity: Arc<Flush>,
 
     /// Currently active RPCs streaming task events.
-    watchers: Vec<Watch<proto::tasks::TaskUpdate>>,
+    watchers: ShrinkVec<Watch<proto::tasks::TaskUpdate>>,
 
     /// Currently active RPCs streaming task details events, by task ID.
-    details_watchers: HashMap<TaskId, Vec<Watch<proto::tasks::TaskDetails>>>,
+    details_watchers: ShrinkMap<TaskId, Vec<Watch<proto::tasks::TaskDetails>>>,
 
     /// *All* metadata for task spans and user-defined spans that we care about.
     ///
     /// This is sent to new clients as part of the initial state.
-    all_metadata: Vec<proto::register_metadata::NewMetadata>,
+    all_metadata: ShrinkVec<proto::register_metadata::NewMetadata>,
 
     /// *New* metadata that was registered since the last state update.
     ///
@@ -107,7 +109,7 @@ struct TaskIds {
     next: TaskId,
 
     /// A table that contains the span ID to pretty task ID mappings.
-    id_mappings: HashMap<span::Id, TaskId>,
+    id_mappings: ShrinkMap<span::Id, TaskId>,
 }
 
 impl Default for Stats {
@@ -147,10 +149,10 @@ impl Aggregator {
             publish_interval: builder.publish_interval,
             retention: builder.retention,
             events,
-            watchers: Vec::new(),
-            details_watchers: HashMap::new(),
-            all_metadata: Vec::new(),
-            new_metadata: Vec::new(),
+            watchers: Default::default(),
+            details_watchers: Default::default(),
+            all_metadata: Default::default(),
+            new_metadata: Default::default(),
             tasks: TaskData::new(),
             stats: TaskData::new(),
             task_ids: TaskIds::default(),
@@ -256,7 +258,7 @@ impl Aggregator {
         // Send the initial state --- if this fails, the subscription is already dead
         if subscription.update(&proto::tasks::TaskUpdate {
             new_metadata: Some(proto::RegisterMetadata {
-                metadata: self.all_metadata.clone(),
+                metadata: (*self.all_metadata).clone(),
             }),
             new_tasks,
             stats_update,
@@ -331,12 +333,12 @@ impl Aggregator {
             now: Some(now.into()),
         };
         self.watchers
-            .retain(|watch: &Watch<proto::tasks::TaskUpdate>| watch.update(&update));
+            .retain_and_shrink(|watch: &Watch<proto::tasks::TaskUpdate>| watch.update(&update));
 
         let stats = &self.stats;
         // Assuming there are much fewer task details subscribers than there are
         // stats updates, iterate over `details_watchers` and compact the map.
-        self.details_watchers.retain(|&id, watchers| {
+        self.details_watchers.retain_and_shrink(|&id, watchers| {
             if let Some(task_stats) = stats.get(&id) {
                 let details = proto::tasks::TaskDetails {
                     task_id: Some(id.into()),
@@ -472,7 +474,8 @@ impl Aggregator {
             "dropping closed tasks..."
         );
 
-        let dropped_stats = stats.retain(|id, stats, dirty| {
+        let mut dropped_stats = false;
+        stats.retain_and_shrink(|id, stats, dirty| {
             if let Some(closed) = stats.closed_at {
                 let closed_for = now.duration_since(closed).unwrap_or_default();
                 let should_drop =
@@ -486,6 +489,7 @@ impl Aggregator {
                     stats.dirty = dirty,
                     should_drop,
                 );
+                dropped_stats = should_drop;
                 return !should_drop;
             }
 
@@ -495,7 +499,7 @@ impl Aggregator {
         // If we dropped any stats, drop task static data and IDs as
         if dropped_stats {
             // drop closed tasks which no longer have stats.
-            tasks.retain(|id, _, _| stats.contains(id));
+            tasks.retain_and_shrink(|id, _, _| stats.contains(id));
 
             task_ids.retain_only(&*tasks);
         }
