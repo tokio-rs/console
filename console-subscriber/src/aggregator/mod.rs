@@ -463,7 +463,6 @@ impl Aggregator {
         let task_ids = &mut self.task_ids;
         let has_watchers = !self.watchers.is_empty();
         let now = SystemTime::now();
-        let stats_len_0 = stats.len();
         let retention = self.retention;
 
         // drop stats for closed tasks if they have been updated
@@ -473,7 +472,7 @@ impl Aggregator {
             "dropping closed tasks..."
         );
 
-        stats.retain(|id, stats, dirty| {
+        let dropped_stats = stats.retain(|id, stats, dirty| {
             if let Some(closed) = stats.closed_at {
                 let closed_for = now.duration_since(closed).unwrap_or_default();
                 let should_drop =
@@ -492,30 +491,13 @@ impl Aggregator {
 
             true
         });
-        let stats_len_1 = stats.len();
 
-        // drop closed tasks which no longer have stats.
-        let tasks_len_0 = tasks.len();
-        tasks.retain(|id, _, _| stats.contains(id));
-        let tasks_len_1 = tasks.len();
-        let dropped_stats = stats_len_0 - stats_len_1;
+        // If we dropped any stats, drop task static data and IDs as
+        if dropped_stats {
+            // drop closed tasks which no longer have stats.
+            tasks.retain(|id, _, _| stats.contains(id));
 
-        task_ids.retain_only(&*tasks);
-
-        if dropped_stats > 0 {
-            tracing::debug!(
-                tasks.dropped = tasks_len_0 - tasks_len_1,
-                tasks.len = tasks_len_1,
-                stats.dropped = dropped_stats,
-                stats.tasks = stats_len_1,
-                "dropped closed tasks"
-            );
-        } else {
-            tracing::trace!(
-                tasks.len = tasks_len_1,
-                stats.len = stats_len_1,
-                "no closed tasks were droppable"
-            );
+            task_ids.retain_only(&*tasks);
         }
     }
 }
