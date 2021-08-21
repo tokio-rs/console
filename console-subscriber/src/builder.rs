@@ -169,8 +169,8 @@ fn parse_duration(s: &str) -> Result<Duration, Box<dyn std::error::Error>> {
         .or_else(|| s.strip_suffix("hour"))
         .or_else(|| s.strip_suffix("hours"))
     {
+        let s = s.trim();
         return Ok(s
-            .trim()
             .parse::<u64>()
             .map(|hours| Duration::from_secs(hours * 60 * 60))
             .or_else(|_| {
@@ -186,8 +186,8 @@ fn parse_duration(s: &str) -> Result<Duration, Box<dyn std::error::Error>> {
         .or_else(|| s.strip_suffix("minute"))
         .or_else(|| s.strip_suffix("minutes"))
     {
+        let s = s.trim();
         return Ok(s
-            .trim()
             .parse::<u64>()
             .map(|mins| Duration::from_secs(mins * 60))
             .or_else(|_| {
@@ -218,8 +218,8 @@ fn parse_duration(s: &str) -> Result<Duration, Box<dyn std::error::Error>> {
         // every other plural and subsecond unit also ends in `s`...
         .or_else(|| s.strip_suffix('s'))
     {
+        let s = s.trim();
         return Ok(s
-            .trim()
             .parse::<u64>()
             .map(Duration::from_secs)
             .or_else(|_| s.parse::<f64>().map(Duration::from_secs_f64))?);
