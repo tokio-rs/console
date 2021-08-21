@@ -292,4 +292,48 @@ mod tests {
             ],
         )
     }
+
+    #[test]
+    fn parse_fractional_hours() {
+        test_parse_durations(
+            Duration::from_millis(1500 * 60 * 60),
+            &["1.5h", "1.5 h", " 1.5 h", "1.5 hours", "1.5hours"],
+        )
+    }
+
+    #[test]
+    fn parse_fractional_mins() {
+        test_parse_durations(
+            Duration::from_millis(1500 * 60),
+            &[
+                "1.5m",
+                "1.5 m",
+                "1.5 m",
+                "1.5 minutes",
+                "1.5 minutes",
+                "  1.5 minutes",
+                "1.5 min",
+                " 1.5 min",
+                "1.5min",
+            ],
+        )
+    }
+
+    #[test]
+    fn parse_fractional_secs() {
+        test_parse_durations(
+            Duration::from_millis(1500),
+            &[
+                "1.5s",
+                "1.5 s",
+                "1.5 s",
+                "1.5 seconds",
+                "1.5 seconds",
+                "  1.5 seconds",
+                "1.5 sec",
+                " 1.5 sec",
+                "1.5sec",
+            ],
+        )
+    }
 }
