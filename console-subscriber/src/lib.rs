@@ -33,6 +33,9 @@ use crate::aggregator::TaskId;
 pub struct TasksLayer {
     tx: mpsc::Sender<Event>,
     flush: Arc<aggregator::Flush>,
+    /// When the channel capacity goes under this number, a flush in the aggregator
+    /// will be triggered.
+    flush_under_capacity: usize,
 
     /// Set of callsites for spans representing spawned tasks.
     ///
@@ -147,6 +150,10 @@ impl TasksLayer {
         let aggregator = Aggregator::new(events, rpcs, &config);
         let flush = aggregator.flush().clone();
 
+        // Conservatively, start to trigger a flush when half the channel is full.
+        // This tries to reduce the chance of losing events to a full channel.
+        let flush_under_capacity = config.event_buffer_capacity / 2;
+
         let server = Server {
             aggregator: Some(aggregator),
             addr: config.server_addr,
@@ -156,6 +163,7 @@ impl TasksLayer {
         let layer = Self {
             tx,
             flush,
+            flush_under_capacity,
             spawn_callsites: Callsites::default(),
             waker_callsites: Callsites::default(),
         };
@@ -170,11 +178,6 @@ impl TasksLayer {
 
     /// By default, completed spans are retained for one hour.
     pub const DEFAULT_RETENTION: Duration = Duration::from_secs(60 * 60);
-    // how much capacity should remain in the buffer before triggering a
-    // flush on capacity?
-    //
-    // chosen by fair die roll, guaranteed to be random :)
-    const FLUSH_AT_CAPACITY: usize = 100;
 
     fn is_spawn(&self, meta: &'static Metadata<'static>) -> bool {
         self.spawn_callsites.contains(meta)
@@ -201,27 +204,12 @@ impl TasksLayer {
                 // this shouldn't happen, since we trigger a flush when
                 // approaching the high water line...but if the executor wait
                 // time is very high, maybe the aggregator task hasn't been
-                // polled yet. so, try to handle it gracefully...
-                tracing::warn!(
-                    "console buffer is full; some task stats may be delayed. \
-                     preemptive flush interval should be adjusted..."
-                );
-                let tx = self.tx.clone();
-                tokio::spawn(async move {
-                    if tx.send(event).await.is_err() {
-                        tracing::debug!("task event channel closed after lag");
-                    }
-                });
+                // polled yet. so... eek?!
             }
         }
 
         let capacity = self.tx.capacity();
-        if capacity <= Self::FLUSH_AT_CAPACITY {
-            tracing::trace!(
-                flush_at = Self::FLUSH_AT_CAPACITY,
-                capacity,
-                "at flush capacity..."
-            );
+        if capacity <= self.flush_under_capacity {
             self.flush.trigger();
         }
     }
@@ -275,17 +263,15 @@ where
             let mut visitor = WakerVisitor { id: None, op: None };
             event.record(&mut visitor);
 
-            match visitor {
-                WakerVisitor {
-                    id: Some(id),
-                    op: Some(op),
-                } => {
-                    self.send(Event::Waker { id, op, at });
-                }
-                _ => {
-                    tracing::warn!("unknown waker event: {:?}", event);
-                }
+            if let WakerVisitor {
+                id: Some(id),
+                op: Some(op),
+            } = visitor
+            {
+                self.send(Event::Waker { id, op, at });
             }
+            // else...
+            // unknown waker event... what to do? can't trace it from here...
         }
     }
 

@@ -516,10 +516,8 @@ impl Flush {
             .is_ok()
         {
             self.should_flush.notify_one();
-            tracing::trace!("flush triggered");
         } else {
             // someone else already did it, that's fine...
-            tracing::trace!("flush already triggered");
         }
     }
 }
