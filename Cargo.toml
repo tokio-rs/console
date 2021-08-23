@@ -7,4 +7,4 @@ members = [
 resolver = "2"
 
 [patch.crates-io]
-tokio = { git = 'https://github.com/zaharidichev/tokio', branch = 'zd/instrument-sleep' }
+tokio = { path = "/home/zaharidichev/dev/tokio/tokio" }

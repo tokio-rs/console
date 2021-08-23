@@ -7,20 +7,29 @@ import "common.proto";
 import "tasks.proto";
 import "resources.proto";
 import "async_ops.proto";
-import "resource_ops.proto";
 
 service Instrument {
     rpc WatchUpdates(InstrumentRequest) returns (stream InstrumentUpdate) {}
     rpc WatchTaskDetails(TaskDetailsRequest) returns (stream tasks.TaskDetails) {}
 }
 
-message  InstrumentRequest{
+// TODO: In the future allow for the request to specify
+// only the data that the caller cares about (i.e. only tasks but no resources)
+message InstrumentRequest {
 }
 
 message TaskDetailsRequest {
     common.SpanId id = 1;
 }
 
+// InstrumentUpdate carries all information regarding tasks, resources, async operations
+// and resoruce operations in one message. There are a couple of reasons to combine all
+// of these into a single message:
+//
+// - we can use one single timestamp for all the data
+// - we can have all the new_metadata in one place
+// - things such as async ops and resouce ops do not make sense
+//   on their own as they have relations to tasks and resources
 message InstrumentUpdate {
     // The system time when this update was recorded.
     //
@@ -37,9 +46,6 @@ message InstrumentUpdate {
     // Async operations state update
     async_ops.AsyncOpUpdate async_op_update = 4;
 
-    // Resource operations state update
-    resource_ops.ResourceOpUpdate resource_op_update = 5;
-
     // Any new span metadata that was registered since the last update.
-    common.RegisterMetadata new_metadata = 6;
+    common.RegisterMetadata new_metadata = 5;
 }

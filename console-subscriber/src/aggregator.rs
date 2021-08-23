@@ -1,10 +1,9 @@
 use crate::{AttributeUpdate, WatchRequest};
 
-use super::{
-    AttributeUpdateOp, AttributeUpdateValue, Event, OpType, Readiness, WakeOp, Watch, WatchKind,
-};
+use super::{AttributeUpdateOp, Event, Readiness, WakeOp, Watch, WatchKind};
 use console_api as proto;
 use proto::resources::resource;
+use proto::resources::stats::Attribute;
 use tokio::sync::{mpsc, Notify};
 
 use futures::FutureExt;
@@ -69,11 +68,21 @@ pub(crate) struct Aggregator {
     /// Map of resource IDs to resource stats.
     resource_stats: IdData<ResourceStats>,
 
+    /// Map of AsyncOp IDs to AsyncOp static data.
     async_ops: IdData<AsyncOp>,
 
+    /// Map of AsyncOp IDs to AsyncOp stats.
     async_op_stats: IdData<AsyncOpStats>,
 
-    resource_ops: IdData<ResourceOp>,
+    /// *All* PollOp events for AsyncOps on Resources.
+    ///
+    /// This is sent to new clients as part of the initial state.
+    all_poll_ops: Vec<proto::resources::PollOp>,
+
+    /// *New* PollOp events that whave occured since the last update
+    ///
+    /// This is emptied on every state update.
+    new_poll_ops: Vec<proto::resources::PollOp>,
 }
 
 #[derive(Debug)]
@@ -82,18 +91,23 @@ pub(crate) struct Flush {
     pub(crate) triggered: AtomicBool,
 }
 
-// An entity that at some point in time can be closed
-// and recycled
+// An entity that at some point in time can be closed.
+// This generally refers to spans that have been closed
+// indicating that a task, async op or a resource is not
+// in use anymore
 trait Closable {
-    fn closed_at(&self) -> &Option<SystemTime>;
+    fn closed_at(&self) -> Option<SystemTime>;
 }
 
 trait ToProto {
-    type Result;
-    fn to_proto(&self) -> Self::Result;
+    type Output;
+    fn to_proto(&self) -> Self::Output;
 }
+
 struct PollStats {
+    // the number of polls in progress
     current_polls: u64,
+    // the total number of polls
     polls: u64,
     first_poll: Option<SystemTime>,
     last_poll_started: Option<SystemTime>,
@@ -109,20 +123,20 @@ struct Resource {
     kind: resource::Kind,
 }
 
-#[derive(Clone)]
-enum AttrValue {
-    Text(String),
-    Numeric { val: u64, unit: String },
+#[derive(Hash, PartialEq, Eq)]
+struct FieldKey {
+    meta_id: u64,
+    field_name: proto::field::Name,
 }
 
 #[derive(Default)]
 struct ResourceStats {
     created_at: Option<SystemTime>,
     closed_at: Option<SystemTime>,
-    attributes: HashMap<String, AttrValue>,
+    attributes: HashMap<FieldKey, Attribute>,
 }
 
-// Represent static data for tasks
+/// Represents static data for tasks
 struct Task {
     id: span::Id,
     metadata: &'static Metadata<'static>,
@@ -154,18 +168,9 @@ struct AsyncOp {
 struct AsyncOpStats {
     created_at: Option<SystemTime>,
     closed_at: Option<SystemTime>,
-    latest_poll_op: Option<proto::MetaId>,
     resource_id: Option<span::Id>,
     task_id: Option<span::Id>,
     poll_stats: PollStats,
-}
-
-struct ResourceOp {
-    id: proto::MetaId,
-    metadata: &'static Metadata<'static>,
-    resource_id: span::Id,
-    op_name: String,
-    op_type: OpType,
 }
 
 struct IdData<T> {
@@ -173,20 +178,20 @@ struct IdData<T> {
 }
 
 impl Closable for ResourceStats {
-    fn closed_at(&self) -> &Option<SystemTime> {
-        &self.closed_at
+    fn closed_at(&self) -> Option<SystemTime> {
+        self.closed_at
     }
 }
 
 impl Closable for TaskStats {
-    fn closed_at(&self) -> &Option<SystemTime> {
-        &self.closed_at
+    fn closed_at(&self) -> Option<SystemTime> {
+        self.closed_at
     }
 }
 
 impl Closable for AsyncOpStats {
-    fn closed_at(&self) -> &Option<SystemTime> {
-        &self.closed_at
+    fn closed_at(&self) -> Option<SystemTime> {
+        self.closed_at
     }
 }
 
@@ -201,6 +206,7 @@ impl PollStats {
         }
         self.current_polls += 1;
     }
+
     fn update_on_span_exit(&mut self, timestamp: SystemTime) {
         self.current_polls -= 1;
         if self.current_polls == 0 {
@@ -273,7 +279,8 @@ impl Aggregator {
             resource_stats: IdData::default(),
             async_ops: IdData::default(),
             async_op_stats: IdData::default(),
-            resource_ops: IdData::default(),
+            all_poll_ops: Vec::default(),
+            new_poll_ops: Vec::default(),
         }
     }
 
@@ -351,27 +358,12 @@ impl Aggregator {
         // been sent off.
         let now = SystemTime::now();
         let has_watchers = !self.watchers.is_empty();
-        drop_closed(
-            now,
-            &mut self.tasks,
-            &mut self.task_stats,
-            self.retention,
-            has_watchers,
-        );
-        drop_closed(
-            now,
-            &mut self.resources,
-            &mut self.resource_stats,
-            self.retention,
-            has_watchers,
-        );
-        drop_closed(
-            now,
-            &mut self.async_ops,
-            &mut self.async_op_stats,
-            self.retention,
-            has_watchers,
-        );
+        self.tasks
+            .drop_closed(&mut self.task_stats, now, self.retention, has_watchers);
+        self.resources
+            .drop_closed(&mut self.resource_stats, now, self.retention, has_watchers);
+        self.async_ops
+            .drop_closed(&mut self.async_op_stats, now, self.retention, has_watchers);
     }
 
     /// Add the task subscription to the watchers after sending the first update
@@ -386,37 +378,27 @@ impl Aggregator {
             task_update: Some(proto::tasks::TaskUpdate {
                 new_tasks: self
                     .tasks
-                    .as_proto(Include::All)
-                    .values()
-                    .cloned()
+                    .all()
+                    .map(|(_, value)| value.to_proto())
                     .collect(),
                 stats_update: self.task_stats.as_proto(Include::All),
             }),
             resource_update: Some(proto::resources::ResourceUpdate {
                 new_resources: self
                     .resources
-                    .as_proto(Include::All)
-                    .values()
-                    .cloned()
+                    .all()
+                    .map(|(_, value)| value.to_proto())
                     .collect(),
                 stats_update: self.resource_stats.as_proto(Include::All),
+                new_poll_ops: self.all_poll_ops.clone(),
             }),
             async_op_update: Some(proto::async_ops::AsyncOpUpdate {
                 new_async_ops: self
                     .async_ops
-                    .as_proto(Include::All)
-                    .values()
-                    .cloned()
+                    .all()
+                    .map(|(_, value)| value.to_proto())
                     .collect(),
                 stats_update: self.async_op_stats.as_proto(Include::All),
-            }),
-            resource_op_update: Some(proto::resource_ops::ResourceOpUpdate {
-                new_resource_ops: self
-                    .resource_ops
-                    .as_proto(Include::All)
-                    .values()
-                    .cloned()
-                    .collect(),
             }),
             now: Some(now.into()),
             new_metadata: Some(proto::RegisterMetadata {
@@ -477,6 +459,12 @@ impl Aggregator {
             None
         };
 
+        let new_poll_ops = if !self.new_poll_ops.is_empty() {
+            std::mem::take(&mut self.new_poll_ops)
+        } else {
+            Vec::default()
+        };
+
         let now = SystemTime::now();
         let update = proto::instrument::InstrumentUpdate {
             now: Some(now.into()),
@@ -484,37 +472,27 @@ impl Aggregator {
             task_update: Some(proto::tasks::TaskUpdate {
                 new_tasks: self
                     .tasks
-                    .as_proto(Include::UpdatedOnly)
-                    .values()
-                    .cloned()
+                    .since_last_update()
+                    .map(|(_, value)| value.to_proto())
                     .collect(),
                 stats_update: self.task_stats.as_proto(Include::UpdatedOnly),
             }),
             resource_update: Some(proto::resources::ResourceUpdate {
                 new_resources: self
                     .resources
-                    .as_proto(Include::UpdatedOnly)
-                    .values()
-                    .cloned()
+                    .since_last_update()
+                    .map(|(_, value)| value.to_proto())
                     .collect(),
                 stats_update: self.resource_stats.as_proto(Include::UpdatedOnly),
+                new_poll_ops,
             }),
             async_op_update: Some(proto::async_ops::AsyncOpUpdate {
                 new_async_ops: self
                     .async_ops
-                    .as_proto(Include::UpdatedOnly)
-                    .values()
-                    .cloned()
+                    .since_last_update()
+                    .map(|(_, value)| value.to_proto())
                     .collect(),
                 stats_update: self.async_op_stats.as_proto(Include::UpdatedOnly),
-            }),
-            resource_op_update: Some(proto::resource_ops::ResourceOpUpdate {
-                new_resource_ops: self
-                    .resource_ops
-                    .as_proto(Include::UpdatedOnly)
-                    .values()
-                    .cloned()
-                    .collect(),
             }),
         };
 
@@ -603,11 +581,10 @@ impl Aggregator {
                     task_stats.closed_at = Some(at);
                 }
 
-                // TODO: When resources and async ops are closed we need to also mark
-                // the corresponding resource ops as closed, so they can be dropped later
                 if let Some(mut resource_stats) = self.resource_stats.update(&id) {
                     resource_stats.closed_at = Some(at);
                 }
+
                 if let Some(mut async_op_stats) = self.async_op_stats.update(&id) {
                     async_op_stats.closed_at = Some(at);
                 }
@@ -675,63 +652,58 @@ impl Aggregator {
                 );
             }
 
-            Event::ResourceOp {
+            Event::PollOp {
                 metadata,
                 at,
                 resource_id,
                 op_name,
-                op_type,
+                async_op_id,
+                task_id,
+                readiness,
+            } => {
+                let mut async_op_stats = self.async_op_stats.update_or_default(async_op_id.clone());
+                async_op_stats.poll_stats.polls += 1;
+                async_op_stats.task_id.get_or_insert(task_id.clone());
+                async_op_stats
+                    .resource_id
+                    .get_or_insert(resource_id.clone());
+
+                if matches!(readiness, Readiness::Pending)
+                    && async_op_stats.poll_stats.first_poll.is_none()
+                {
+                    async_op_stats.poll_stats.first_poll = Some(at);
+                }
+
+                let poll_op = proto::resources::PollOp {
+                    metadata: Some(metadata.into()),
+                    resource_id: Some(resource_id.into()),
+                    name: op_name,
+                    task_id: Some(task_id.into()),
+                    async_op_id: Some(async_op_id.into()),
+                    readiness: match readiness {
+                        Readiness::Pending => proto::Readiness::Pending,
+                        Readiness::Ready => proto::Readiness::Ready,
+                    } as i32,
+                };
+
+                self.all_poll_ops.push(poll_op.clone());
+                self.new_poll_ops.push(poll_op);
+            }
+
+            Event::StateUpdate {
+                resource_id,
+                update,
                 ..
             } => {
-                match op_type.clone() {
-                    OpType::StateUpdate(attr_updates) => {
-                        if let Some(mut stats) = self.resource_stats.update(&resource_id) {
-                            for upd in attr_updates {
-                                match stats.attributes.get_mut(&upd.name) {
-                                    Some(attr) => attr.update(&upd.val),
-                                    None => {
-                                        stats.attributes.insert(upd.name.clone(), upd.val.into());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    OpType::Poll {
-                        async_op_id,
-                        task_id,
-                        readiness,
-                    } => {
-                        // TODO: make it less hacky. Ideally we want to store
-                        // these in a vec that gets cleaned periodically and allows
-                        // us to send only the new ones much like the IdData map.
-                        let mut async_op_stats = self.async_op_stats.update_or_default(async_op_id);
-                        async_op_stats.poll_stats.polls += 1;
-                        async_op_stats.latest_poll_op = Some(metadata.into());
-                        if async_op_stats.task_id.is_none() {
-                            async_op_stats.task_id = Some(task_id);
-                        }
-                        if async_op_stats.resource_id.is_none() {
-                            async_op_stats.resource_id = Some(resource_id.clone());
-                        }
-
-                        if let Readiness::Pending = readiness {
-                            if async_op_stats.poll_stats.first_poll.is_none() {
-                                async_op_stats.poll_stats.first_poll = Some(at);
-                            }
+                if let Some(mut stats) = self.resource_stats.update(&resource_id) {
+                    let upd_key = (&update.val).into();
+                    match stats.attributes.get_mut(&upd_key) {
+                        Some(attr) => update_attribute(attr, update),
+                        None => {
+                            stats.attributes.insert(upd_key, update.into());
                         }
                     }
                 }
-                let id = span::Id::from_u64(metadata as *const _ as u64);
-                self.resource_ops.insert(
-                    id,
-                    ResourceOp {
-                        id: metadata.into(),
-                        metadata,
-                        resource_id,
-                        op_name,
-                        op_type,
-                    },
-                );
             }
 
             Event::AsyncResourceOp {
@@ -820,7 +792,7 @@ impl<T> IdData<T> {
         self.data.get(id).map(|(data, _)| data)
     }
 
-    fn as_proto(&mut self, include: Include) -> HashMap<u64, T::Result>
+    fn as_proto(&mut self, include: Include) -> HashMap<u64, T::Output>
     where
         T: ToProto,
     {
@@ -833,6 +805,70 @@ impl<T> IdData<T> {
                 .all()
                 .map(|(id, d)| (id.into_u64(), d.to_proto()))
                 .collect(),
+        }
+    }
+
+    fn drop_closed<R: Closable>(
+        &mut self,
+        stats: &mut IdData<R>,
+        now: SystemTime,
+        retention: Duration,
+        has_watchers: bool,
+    ) {
+        let _span = tracing::debug_span!(
+            "drop_closed",
+            entity = %std::any::type_name::<T>(),
+            stats = %std::any::type_name::<R>(),
+        )
+        .entered();
+
+        // drop closed entities
+        tracing::trace!(?retention, has_watchers, "dropping closed");
+
+        let stats_len_0 = stats.data.len();
+        stats.data.retain(|id, (stats, dirty)| {
+            if let Some(closed) = stats.closed_at() {
+                let closed_for = now.duration_since(closed).unwrap_or_default();
+                let should_drop =
+                        // if there are any clients watching, retain all dirty tasks regardless of age
+                        (*dirty && has_watchers)
+                        || closed_for > retention;
+                tracing::trace!(
+                    stats.id = ?id,
+                    stats.closed_at = ?closed,
+                    stats.closed_for = ?closed_for,
+                    stats.dirty = *dirty,
+                    should_drop,
+                );
+                return !should_drop;
+            }
+
+            true
+        });
+
+        let stats_len_1 = stats.data.len();
+
+        // drop closed entities which no longer have stats.
+        let entities_len_0 = self.data.len();
+        self.data.retain(|id, (_, _)| stats.data.contains_key(id));
+        let entities_len_1 = self.data.len();
+        let dropped_stats = stats_len_0 - stats_len_1;
+
+        let stats_len_1 = stats.data.len();
+        if dropped_stats > 0 {
+            tracing::debug!(
+                tasks.dropped = entities_len_0 - entities_len_1,
+                tasks.len = entities_len_1,
+                stats.dropped = dropped_stats,
+                stats.tasks = stats_len_1,
+                "dropped closed entities"
+            );
+        } else {
+            tracing::trace!(
+                entities.len = entities_len_1,
+                stats.len = stats_len_1,
+                "no closed entities were droppable"
+            );
         }
     }
 }
@@ -878,9 +914,9 @@ impl<T: Clone> Watch<T> {
 }
 
 impl ToProto for PollStats {
-    type Result = proto::PollStats;
+    type Output = proto::PollStats;
 
-    fn to_proto(&self) -> Self::Result {
+    fn to_proto(&self) -> Self::Output {
         proto::PollStats {
             polls: self.polls,
             first_poll: self.first_poll.map(Into::into),
@@ -892,9 +928,9 @@ impl ToProto for PollStats {
 }
 
 impl ToProto for Task {
-    type Result = proto::tasks::Task;
+    type Output = proto::tasks::Task;
 
-    fn to_proto(&self) -> Self::Result {
+    fn to_proto(&self) -> Self::Output {
         proto::tasks::Task {
             id: Some(self.id.clone().into()),
             // TODO: more kinds of tasks...
@@ -907,14 +943,13 @@ impl ToProto for Task {
 }
 
 impl ToProto for TaskStats {
-    type Result = proto::tasks::Stats;
+    type Output = proto::tasks::Stats;
 
-    fn to_proto(&self) -> Self::Result {
+    fn to_proto(&self) -> Self::Output {
         proto::tasks::Stats {
             poll_stats: Some(self.poll_stats.to_proto()),
             created_at: self.created_at.map(Into::into),
-            total_time: total_time(self.created_at.as_ref(), self.closed_at.as_ref())
-                .map(Into::into),
+            total_time: total_time(self.created_at, self.closed_at).map(Into::into),
             wakes: self.wakes,
             waker_clones: self.waker_clones,
             waker_drops: self.waker_drops,
@@ -924,9 +959,9 @@ impl ToProto for TaskStats {
 }
 
 impl ToProto for Resource {
-    type Result = proto::resources::Resource;
+    type Output = proto::resources::Resource;
 
-    fn to_proto(&self) -> Self::Result {
+    fn to_proto(&self) -> Self::Output {
         proto::resources::Resource {
             id: Some(self.id.clone().into()),
             kind: Some(self.kind.clone()),
@@ -937,28 +972,22 @@ impl ToProto for Resource {
 }
 
 impl ToProto for ResourceStats {
-    type Result = proto::resources::Stats;
+    type Output = proto::resources::Stats;
 
-    fn to_proto(&self) -> Self::Result {
-        let attributes = self
-            .attributes
-            .values()
-            .cloned()
-            .map(|attr| attr.to_proto())
-            .collect();
+    fn to_proto(&self) -> Self::Output {
+        let attributes = self.attributes.values().cloned().collect();
         proto::resources::Stats {
             created_at: self.created_at.map(Into::into),
-            total_time: total_time(self.created_at.as_ref(), self.closed_at.as_ref())
-                .map(Into::into),
+            total_time: total_time(self.created_at, self.closed_at).map(Into::into),
             attributes,
         }
     }
 }
 
 impl ToProto for AsyncOp {
-    type Result = proto::async_ops::AsyncOp;
+    type Output = proto::async_ops::AsyncOp;
 
-    fn to_proto(&self) -> Self::Result {
+    fn to_proto(&self) -> Self::Output {
         proto::async_ops::AsyncOp {
             id: Some(self.id.clone().into()),
             metadata: Some(self.metadata.into()),
@@ -968,154 +997,40 @@ impl ToProto for AsyncOp {
 }
 
 impl ToProto for AsyncOpStats {
-    type Result = proto::async_ops::Stats;
+    type Output = proto::async_ops::Stats;
 
-    fn to_proto(&self) -> Self::Result {
+    fn to_proto(&self) -> Self::Output {
         proto::async_ops::Stats {
             poll_stats: Some(self.poll_stats.to_proto()),
             created_at: self.created_at.map(Into::into),
-            total_time: total_time(self.created_at.as_ref(), self.closed_at.as_ref())
-                .map(Into::into),
+            total_time: total_time(self.created_at, self.closed_at).map(Into::into),
 
-            latest_poll_op: self.latest_poll_op.clone(),
             resource_id: self.resource_id.clone().map(Into::into),
             task_id: self.task_id.clone().map(Into::into),
         }
     }
 }
 
-impl ToProto for ResourceOp {
-    type Result = proto::resource_ops::ResourceOp;
-
-    fn to_proto(&self) -> Self::Result {
-        proto::resource_ops::ResourceOp {
-            id: Some(self.id.clone()),
-            metadata: Some(self.metadata.into()),
-            op_type: Some(self.op_type.to_proto()),
-            resource_id: Some(self.resource_id.clone().into()),
-            name: self.op_name.clone(),
+impl From<&proto::Field> for FieldKey {
+    fn from(field: &proto::Field) -> Self {
+        let meta_id = field
+            .metadata_id
+            .as_ref()
+            .expect("field misses metadata id")
+            .id;
+        let field_name = field.name.clone().expect("field misses name");
+        FieldKey {
+            meta_id,
+            field_name,
         }
     }
 }
 
-impl ToProto for OpType {
-    type Result = proto::resource_ops::OpType;
-
-    fn to_proto(&self) -> Self::Result {
-        use console_api::resource_ops::op_type::OpType as PbOpType;
-        use proto::resource_ops::op_type::poll::Readiness as PbReadiness;
-        use proto::resource_ops::op_type::Poll as PbPoll;
-        use proto::resource_ops::op_type::StateUpdate as PbStateUpdate;
-
-        match self {
-            OpType::Poll {
-                async_op_id,
-                task_id,
-                readiness,
-            } => proto::resource_ops::OpType {
-                op_type: Some(PbOpType::Poll(PbPoll {
-                    task_id: Some(task_id.clone().into()),
-                    async_op_id: Some(async_op_id.clone().into()),
-                    readiness: match readiness {
-                        Readiness::Pending => PbReadiness::Pending,
-                        Readiness::Ready => PbReadiness::Ready,
-                    } as i32,
-                })),
-            },
-            OpType::StateUpdate(attrs) => proto::resource_ops::OpType {
-                op_type: Some(PbOpType::StateUpdate(PbStateUpdate {
-                    updates: attrs.iter().map(ToProto::to_proto).collect(),
-                })),
-            },
-        }
-    }
-}
-
-impl ToProto for AttributeUpdate {
-    type Result = proto::resource_ops::op_type::state_update::AttributeUpdate;
-    fn to_proto(&self) -> Self::Result {
-        use console_api::resource_ops::op_type::state_update::attribute_update::Update as PbUpdate;
-        use proto::resource_ops::op_type::state_update::attribute_update::numeric;
-        use proto::resource_ops::op_type::state_update::attribute_update::Numeric as PbNumeric;
-        use proto::resource_ops::op_type::state_update::AttributeUpdate as PbAttrUpdate;
-
-        match &self.val {
-            AttributeUpdateValue::Text(val) => PbAttrUpdate {
-                name: self.name.clone(),
-                update: Some(PbUpdate::Text(val.clone())),
-            },
-
-            AttributeUpdateValue::Numeric { val, op, unit } => {
-                let val = *val;
-                let unit = unit.clone();
-                let op = match op {
-                    AttributeUpdateOp::Add => numeric::Op::Add,
-                    AttributeUpdateOp::Sub => numeric::Op::Sub,
-                    AttributeUpdateOp::Ovr => numeric::Op::Ovr,
-                } as i32;
-                PbAttrUpdate {
-                    name: self.name.clone(),
-                    update: Some(PbUpdate::Numeric(PbNumeric { val, op, unit })),
-                }
-            }
-        }
-    }
-}
-
-impl ToProto for AttrValue {
-    type Result = proto::resources::stats::AttrValue;
-
-    fn to_proto(&self) -> Self::Result {
-        use proto::resources::stats::attr_value::Numeric;
-        use proto::resources::stats::attr_value::Val;
-        use proto::resources::stats::AttrValue as PbAttrValue;
-
-        match self {
-            AttrValue::Text(t) => PbAttrValue {
-                val: Some(Val::Text(t.clone())),
-            },
-            AttrValue::Numeric { val, unit } => PbAttrValue {
-                val: Some(Val::Numeric(Numeric {
-                    val: *val,
-                    unit: unit.clone(),
-                })),
-            },
-        }
-    }
-}
-
-impl AttrValue {
-    fn update(&mut self, update: &AttributeUpdateValue) {
-        match (self, update) {
-            (AttrValue::Text(t), AttributeUpdateValue::Text(upd)) => {
-                *t = upd.clone();
-            }
-            (
-                AttrValue::Numeric { ref mut val, .. },
-                AttributeUpdateValue::Numeric { val: upd, op, .. },
-            ) => match op {
-                AttributeUpdateOp::Add => {
-                    let new_val = *val + upd;
-                    *val = new_val;
-                }
-                AttributeUpdateOp::Ovr => {
-                    *val = *upd;
-                }
-                AttributeUpdateOp::Sub => {
-                    let new_val = *val - upd;
-                    *val = new_val;
-                }
-            },
-            _ => panic!("trying to update attributes of different type"),
-        }
-    }
-}
-
-impl From<AttributeUpdateValue> for AttrValue {
-    fn from(upd: AttributeUpdateValue) -> Self {
-        match upd {
-            AttributeUpdateValue::Text(t) => AttrValue::Text(t),
-            AttributeUpdateValue::Numeric { val, unit, .. } => AttrValue::Numeric { val, unit },
+impl From<AttributeUpdate> for Attribute {
+    fn from(upd: AttributeUpdate) -> Self {
+        Attribute {
+            value: Some(upd.val),
+            unit: upd.unit,
         }
     }
 }
@@ -1127,66 +1042,46 @@ fn serialize_histogram(histogram: &Histogram<u64>) -> Result<Vec<u8>, V2Serializ
     Ok(buf)
 }
 
-fn total_time(created_at: Option<&SystemTime>, closed_at: Option<&SystemTime>) -> Option<Duration> {
-    closed_at.and_then(|end| created_at.and_then(|start| end.duration_since(*start).ok()))
+fn total_time(created_at: Option<SystemTime>, closed_at: Option<SystemTime>) -> Option<Duration> {
+    let end = closed_at?;
+    let start = created_at?;
+    end.duration_since(start).ok()
 }
 
-/// Drops all tasks, resources and ops that are not alive anymore
-fn drop_closed<T, R: Closable>(
-    now: SystemTime,
-    entities: &mut IdData<T>,
-    stats: &mut IdData<R>,
-    retention: Duration,
-    has_watchers: bool,
-) {
-    // drop stats for closed tasks if they have been updated
-    tracing::trace!(?retention, has_watchers, "dropping closed entities...");
+fn update_attribute(attribute: &mut Attribute, update: AttributeUpdate) {
+    use proto::field::Value::*;
+    let attribute_val = attribute.value.as_mut().and_then(|a| a.value.as_mut());
+    let update_val = update.val.value;
 
-    let stats_len_0 = stats.data.len();
-    stats.data.retain(|id, (stats, dirty)| {
-        if let Some(closed) = stats.closed_at() {
-            let closed_for = now.duration_since(*closed).unwrap_or_default();
-            let should_drop =
-                    // if there are any clients watching, retain all dirty tasks regardless of age
-                    (*dirty && has_watchers)
-                    || closed_for > retention;
-            tracing::trace!(
-                stats.id = ?id,
-                stats.closed_at = ?closed,
-                stats.closed_for = ?closed_for,
-                stats.dirty = *dirty,
-                should_drop,
+    match (attribute_val, update_val) {
+        (Some(BoolVal(v)), Some(BoolVal(upd))) => *v = upd,
+
+        (Some(StrVal(v)), Some(StrVal(upd))) => *v = upd,
+
+        (Some(DebugVal(v)), Some(DebugVal(upd))) => *v = upd,
+
+        (Some(U64Val(v)), Some(U64Val(upd))) => match update.op {
+            AttributeUpdateOp::Add => *v += upd,
+
+            AttributeUpdateOp::Sub => *v -= upd,
+
+            AttributeUpdateOp::Ovr => *v = upd,
+        },
+
+        (Some(I64Val(v)), Some(I64Val(upd))) => match update.op {
+            AttributeUpdateOp::Add => *v += upd,
+
+            AttributeUpdateOp::Sub => *v -= upd,
+
+            AttributeUpdateOp::Ovr => *v = upd,
+        },
+
+        (val, update) => {
+            tracing::warn!(
+                "attribute {:?} cannot be updated by update {:?}",
+                val,
+                update
             );
-            return !should_drop;
         }
-
-        true
-    });
-
-    let stats_len_1 = stats.data.len();
-
-    // drop closed entities which no longer have stats.
-    let entities_len_0 = entities.data.len();
-    entities
-        .data
-        .retain(|id, (_, _)| stats.data.contains_key(id));
-    let entities_len_1 = entities.data.len();
-    let dropped_stats = stats_len_0 - stats_len_1;
-
-    let stats_len_1 = stats.data.len();
-    if dropped_stats > 0 {
-        tracing::debug!(
-            tasks.dropped = entities_len_0 - entities_len_1,
-            tasks.len = entities_len_1,
-            stats.dropped = dropped_stats,
-            stats.tasks = stats_len_1,
-            "dropped closed entities"
-        );
-    } else {
-        tracing::trace!(
-            entities.len = entities_len_1,
-            stats.len = stats_len_1,
-            "no closed entities were droppable"
-        );
     }
 }

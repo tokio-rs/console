@@ -1,63 +1,124 @@
-use super::{AttributeUpdate, AttributeUpdateOp, AttributeUpdateValue, Readiness, WakeOp};
+//! These visitors are respondible for extracing the relevan
+//! fields from tracing metadata and producing the parts
+//! needed to construct `Event` instances.
+
+use super::{AttributeUpdate, AttributeUpdateOp, Readiness, WakeOp};
 use console_api as proto;
+use proto::field::Name as PbFieldName;
+use proto::field::Value as PbFieldValue;
 use proto::resources::resource;
-use std::collections::HashMap;
 use tracing_core::{
     field::{self, Visit},
     span,
 };
 
+/// Used to extract the fields needed to construct
+/// an Event::Resource from the metadata of a tracing span
+/// that has the following shape:
+///
+/// tracing::trace_span!(
+///     "runtime.resource",
+///     concrete_type = "Sleep",
+///     kind = "timer",
+/// );
+///
+/// Fields:
+/// concrete_type - indicates the concrete rust type for this resource
+/// kind - indicates the type of resource (i.e. timer, sync, io )
 #[derive(Default)]
 pub(crate) struct ResourceVisitor {
     concrete_type: Option<String>,
     kind: Option<resource::Kind>,
 }
 
+/// Used to extract all fields from the metadata
+/// of a tracing span
 pub(crate) struct FieldVisitor {
     fields: Vec<proto::Field>,
     meta_id: proto::MetaId,
 }
 
+/// Used to extract the fields needed to construct
+/// an Event::AsyncOp from the metadata of a tracing span
+/// that has the following shape:
+///
+/// tracing::trace_span!(
+///     "runtime.resource.async_op",
+///     source = "Sleep::new_timeout",
+/// );
+///
+/// Fields:
+/// source - the method which has created an instance of this async operation
 #[derive(Default)]
 pub(crate) struct AsyncOpVisitor {
     source: Option<String>,
 }
 
+/// Used to extract the fields needed to construct
+/// an Event::Waker from the metadata of a tracing span
+/// that has the following shape:
+///
+/// tracing::trace!(
+///     target: "tokio::task::waker",
+///     op = "waker.clone",
+///     task.id = id.into_u64(),
+/// );
+///
+/// Fields:
+/// task.id - the id of the task this waker will wake
+/// op - the operation associated with this waker event
 #[derive(Default)]
 pub(crate) struct WakerVisitor {
     id: Option<span::Id>,
     op: Option<WakeOp>,
 }
 
+/// Used to extract the fields needed to construct
+/// an Event::PollOp from the metadata of a tracing event
+/// that has the following shape:
+///
+/// tracing::trace!(
+///     target: "tokio::resource::poll_op",
+///     op_name = "poll_elapsed",
+///     readiness = "pending"
+/// );
+///
+/// Fields:
+/// op_name - the name of this resource poll operation
+/// readiness - the result of invoking this poll op, describing its readiness
 #[derive(Default)]
-pub(crate) struct ResourceOpVisitor {
+pub(crate) struct PollOpVisitor {
     op_name: Option<String>,
-    op_type: Option<String>,
     readiness: Option<Readiness>,
-    state_text_attrs: HashMap<String, String>,
-    state_numeric_attrs: HashMap<String, NumericStateAttr>,
 }
 
-#[derive(Debug)]
-pub(crate) enum ResourceOpData {
-    Poll {
-        op_name: String,
-        readiness: Readiness,
-    },
-    StateUpdate {
-        op_name: String,
-        attrs: Vec<AttributeUpdate>,
-    },
-}
-
-#[derive(Default, Debug)]
-struct NumericStateAttr {
-    val: Option<u64>,
-    op: Option<String>,
+/// Used to extract the fields needed to construct
+/// an Event::StateUpdate from the metadata of a tracing event
+/// that has the following shape:
+///
+/// tracing::trace!(
+///     target: "tokio::resource::state_update",
+///     duration = "attribute_name",
+///     value = 10,
+///     unit = "ms",
+///     op = "ovr",
+/// );
+///
+/// Fields:
+/// attribute_name - a field value for a field that has the name of the resource attribute being updated
+/// value - the value for this update
+/// unit - the unit for the value being updated (e.g. ms, s, bytes)
+/// op - the operation that this update performs to the value of the resource attribute (one of: ovr, sub, add)
+#[derive(Default)]
+pub(crate) struct StateUpdateVisitor {
+    name: Option<String>,
+    val: Option<PbFieldValue>,
     unit: Option<String>,
+    op: Option<AttributeUpdateOp>,
 }
 
 impl ResourceVisitor {
+    pub(crate) const RES_SPAN_NAME: &'static str = "runtime.resource";
     const RES_CONCRETE_TYPE_FIELD_NAME: &'static str = "concrete_type";
     const RES_KIND_FIELD_NAME: &'static str = "kind";
     const RES_KIND_TIMER: &'static str = "timer";
@@ -71,16 +132,18 @@ impl Visit for ResourceVisitor {
     fn record_debug(&mut self, _: &field::Field, _: &dyn std::fmt::Debug) {}
 
     fn record_str(&mut self, field: &tracing_core::Field, value: &str) {
-        if field.name() == Self::RES_CONCRETE_TYPE_FIELD_NAME {
-            self.concrete_type = Some(value.to_string());
-        } else if field.name() == Self::RES_KIND_FIELD_NAME {
-            let kind = Some(match value {
-                Self::RES_KIND_TIMER => {
-                    resource::kind::Kind::Known(resource::kind::Known::Timer as i32)
-                }
-                other => resource::kind::Kind::Other(other.to_string()),
-            });
-            self.kind = Some(resource::Kind { kind });
+        match field.name() {
+            Self::RES_CONCRETE_TYPE_FIELD_NAME => self.concrete_type = Some(value.to_string()),
+            Self::RES_KIND_FIELD_NAME => {
+                let kind = Some(match value {
+                    Self::RES_KIND_TIMER => {
+                        resource::kind::Kind::Known(resource::kind::Known::Timer as i32)
+                    }
+                    other => resource::kind::Kind::Other(other.to_string()),
+                });
+                self.kind = Some(resource::Kind { kind });
+            }
+            _ => {}
         }
     }
 }
@@ -140,6 +203,7 @@ impl Visit for FieldVisitor {
 }
 
 impl AsyncOpVisitor {
+    pub(crate) const ASYNC_OP_SPAN_NAME: &'static str = "runtime.resource.async_op";
     const ASYNC_OP_SRC_FIELD_NAME: &'static str = "source";
 
     pub(crate) fn result(self) -> Option<String> {
@@ -193,167 +257,113 @@ impl Visit for WakerVisitor {
     }
 }
 
-impl ResourceOpVisitor {
+impl PollOpVisitor {
+    pub(crate) const POLL_OP_EVENT_NAME: &'static str = "runtime.resource.poll_op";
     const OP_NAME_FIELD_NAME: &'static str = "op_name";
-    const OP_TYPE_FIELD_NAME: &'static str = "op_type";
     const OP_READINESS_FIELD_NAME: &'static str = "readiness";
-
-    const OP_TYPE_STATE_UPDATE: &'static str = "state_update";
-    const OP_TYPE_POLL: &'static str = "poll";
     const OP_READINESS_READY: &'static str = "ready";
     const OP_READINESS_PENDING: &'static str = "pending";
 
-    const OP_STATE_FIELD_PREFIX: &'static str = "state";
-    const OP_STATE_FIELD_TYPE_UNIT: &'static str = "unit";
-    const OP_STATE_FIELD_TYPE_VALUE: &'static str = "value";
-    const OP_STATE_FIELD_TYPE_OP: &'static str = "op";
+    pub(crate) fn result(self) -> Option<(String, Readiness)> {
+        let op_name = self.op_name?;
+        let readiness = self.readiness?;
+        Some((op_name, readiness))
+    }
+}
 
+impl Visit for PollOpVisitor {
+    fn record_debug(&mut self, _: &field::Field, _: &dyn std::fmt::Debug) {}
+
+    fn record_str(&mut self, field: &tracing_core::Field, value: &str) {
+        match field.name() {
+            Self::OP_NAME_FIELD_NAME => {
+                self.op_name = Some(value.to_string());
+            }
+            Self::OP_READINESS_FIELD_NAME => {
+                self.readiness = Some(match value {
+                    Self::OP_READINESS_READY => Readiness::Ready,
+                    Self::OP_READINESS_PENDING => Readiness::Pending,
+                    _ => return,
+                });
+            }
+            _ => {}
+        }
+    }
+}
+
+impl StateUpdateVisitor {
+    pub(crate) const STATE_UPDATE_EVENT_NAME: &'static str = "runtime.resource.state_update";
+    const OP_STATE_FIELD_TYPE_ATTR_NAME: &'static str = "attribute_name";
+    const OP_STATE_FIELD_TYPE_VALUE: &'static str = "value";
+    const OP_STATE_FIELD_TYPE_UNIT: &'static str = "unit";
+    const OP_STATE_FIELD_TYPE_OP: &'static str = "op";
     const UPDATE_OP_ADD: &'static str = "add";
     const UPDATE_OP_SUB: &'static str = "sub";
     const UPDATE_OP_OVR: &'static str = "ovr";
 
-    pub(crate) fn result(self) -> Option<ResourceOpData> {
-        if let Some(op_name) = self.op_name {
-            if let Some(op_type) = self.op_type {
-                if op_type == Self::OP_TYPE_POLL {
-                    if let Some(readiness) = self.readiness {
-                        return Some(ResourceOpData::Poll { op_name, readiness });
-                    }
-                    return None;
-                } else if op_type == Self::OP_TYPE_STATE_UPDATE {
-                    let numeric_updates =
-                        self.state_numeric_attrs
-                            .into_iter()
-                            .filter_map(|(attr_name, attr)| {
-                                if let NumericStateAttr {
-                                    val: Some(val),
-                                    op: Some(op),
-                                    unit: Some(unit),
-                                } = attr
-                                {
-                                    let op = match op.as_str() {
-                                        Self::UPDATE_OP_ADD => Some(AttributeUpdateOp::Add),
-                                        Self::UPDATE_OP_SUB => Some(AttributeUpdateOp::Sub),
-                                        Self::UPDATE_OP_OVR => Some(AttributeUpdateOp::Ovr),
-                                        _ => None,
-                                    };
+    pub(crate) fn result(self, metadata_id: proto::MetaId) -> Option<AttributeUpdate> {
+        let name = self.name?;
+        let value = self.val?;
+        let op = self.op?;
 
-                                    return op.map(|op| AttributeUpdate {
-                                        name: attr_name,
-                                        val: AttributeUpdateValue::Numeric { val, op, unit },
-                                    });
-                                }
-                                None
-                            });
-
-                    let text_updates =
-                        self.state_text_attrs.into_iter().map(|(attr_name, attr)| {
-                            AttributeUpdate {
-                                name: attr_name,
-                                val: AttributeUpdateValue::Text(attr),
-                            }
-                        });
-
-                    let attrs = numeric_updates.chain(text_updates).collect();
-                    return Some(ResourceOpData::StateUpdate { op_name, attrs });
-                }
-            }
-        }
-        None
-    }
-}
-
-struct MatchPart {
-    attr_name: String,
-    part_type: MatchPartType,
-}
-
-enum MatchPartType {
-    OpType(String),
-    Unit(String),
-    Text(String),
-}
-
-impl Visit for ResourceOpVisitor {
-    fn record_debug(&mut self, _: &field::Field, _: &dyn std::fmt::Debug) {}
-
-    fn record_str(&mut self, field: &tracing_core::Field, value: &str) {
-        let extract_partial_attr = || -> Option<MatchPart> {
-            let mut parts = field.name().split('_');
-            let p0 = parts.next();
-            let p1 = parts.next();
-            let p2 = parts.next();
-            if let (Some(p0), Some(p1), Some(p2)) = (p0, p1, p2) {
-                if p0 == Self::OP_STATE_FIELD_PREFIX {
-                    if p2 == Self::OP_STATE_FIELD_TYPE_UNIT {
-                        return Some(MatchPart {
-                            attr_name: p1.into(),
-                            part_type: MatchPartType::Unit(value.into()),
-                        });
-                    } else if p2 == Self::OP_STATE_FIELD_TYPE_VALUE {
-                        return Some(MatchPart {
-                            attr_name: p1.into(),
-                            part_type: MatchPartType::Text(value.into()),
-                        });
-                    } else if p2 == Self::OP_STATE_FIELD_TYPE_OP {
-                        return Some(MatchPart {
-                            attr_name: p1.into(),
-                            part_type: MatchPartType::OpType(value.into()),
-                        });
-                    }
-                }
-            }
-            None
+        let val = proto::Field {
+            metadata_id: Some(metadata_id),
+            name: Some(PbFieldName::StrName(name)),
+            value: Some(value),
         };
 
-        if field.name() == Self::OP_NAME_FIELD_NAME {
-            self.op_name = Some(value.to_string());
-            return;
-        } else if field.name() == Self::OP_TYPE_FIELD_NAME {
-            self.op_type = Some(value.to_string());
-            return;
-        } else if field.name() == Self::OP_READINESS_FIELD_NAME {
-            self.readiness = Some(match value {
-                Self::OP_READINESS_READY => Readiness::Ready,
-                Self::OP_READINESS_PENDING => Readiness::Pending,
-                _ => return,
-            });
-            return;
-        }
+        Some(AttributeUpdate {
+            val,
+            op,
+            unit: self.unit,
+        })
+    }
+}
 
-        if let Some(match_part) = extract_partial_attr() {
-            match match_part.part_type {
-                MatchPartType::Text(t) => {
-                    self.state_text_attrs.insert(match_part.attr_name, t);
-                }
-                MatchPartType::OpType(op_type) => {
-                    let attr = self
-                        .state_numeric_attrs
-                        .entry(match_part.attr_name)
-                        .or_default();
-                    attr.op = Some(op_type);
-                }
-                MatchPartType::Unit(unit) => {
-                    let attr = self
-                        .state_numeric_attrs
-                        .entry(match_part.attr_name)
-                        .or_default();
-                    attr.unit = Some(unit);
-                }
-            }
+impl Visit for StateUpdateVisitor {
+    fn record_debug(&mut self, _: &field::Field, _: &dyn std::fmt::Debug) {}
+
+    fn record_i64(&mut self, field: &field::Field, value: i64) {
+        if field.name() == Self::OP_STATE_FIELD_TYPE_VALUE {
+            self.val = Some(PbFieldValue::I64Val(value));
         }
     }
 
-    fn record_u64(&mut self, field: &tracing_core::Field, value: u64) {
-        let mut parts = field.name().split('_');
-        let p0 = parts.next();
-        let p1 = parts.next();
-        let p2 = parts.next();
-        if let (Some(p0), Some(p1), Some(p2)) = (p0, p1, p2) {
-            if p0 == Self::OP_STATE_FIELD_PREFIX && p2 == Self::OP_STATE_FIELD_TYPE_VALUE {
-                let attr = self.state_numeric_attrs.entry(p1.into()).or_default();
-                attr.val = Some(value)
+    fn record_u64(&mut self, field: &field::Field, value: u64) {
+        if field.name() == Self::OP_STATE_FIELD_TYPE_VALUE {
+            self.val = Some(PbFieldValue::U64Val(value));
+        }
+    }
+
+    fn record_bool(&mut self, field: &field::Field, value: bool) {
+        if field.name() == Self::OP_STATE_FIELD_TYPE_VALUE {
+            self.val = Some(PbFieldValue::BoolVal(value));
+        }
+    }
+
+    fn record_str(&mut self, field: &field::Field, value: &str) {
+        if value == Self::OP_STATE_FIELD_TYPE_ATTR_NAME {
+            self.name = Some(field.name().to_string());
+            return;
+        }
+
+        match field.name() {
+            Self::OP_STATE_FIELD_TYPE_UNIT => self.unit = Some(value.to_string()),
+
+            Self::OP_STATE_FIELD_TYPE_OP => {
+                match value {
+                    Self::UPDATE_OP_ADD => self.op = Some(AttributeUpdateOp::Add),
+                    Self::UPDATE_OP_SUB => self.op = Some(AttributeUpdateOp::Sub),
+                    Self::UPDATE_OP_OVR => self.op = Some(AttributeUpdateOp::Ovr),
+                    _ => {}
+                };
             }
+
+            Self::OP_STATE_FIELD_TYPE_VALUE => {
+                self.val = Some(PbFieldValue::StrVal(value.to_string()));
+            }
+
+            _ => {}
         }
     }
 }

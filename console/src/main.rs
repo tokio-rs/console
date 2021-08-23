@@ -3,6 +3,7 @@ use console_api::tasks::TaskDetails;
 use tasks::State;
 
 use futures::stream::StreamExt;
+use std::convert::TryInto;
 use tokio::sync::{mpsc, watch};
 use tui::{
     layout::{Constraint, Direction, Layout},
@@ -73,7 +74,7 @@ async fn main() -> color_eyre::Result<()> {
                 }
             },
             instrument_update = conn.next_update() => {
-                let now = instrument_update.now.map(Into::into);
+                let now = instrument_update.now.map(|v| v.try_into().unwrap());
                 if let Some(task_update) = instrument_update.task_update {
                     tasks.update_tasks(task_update, instrument_update.new_metadata, now);
                 }

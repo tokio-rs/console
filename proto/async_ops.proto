@@ -10,13 +10,13 @@ import "common.proto";
 // An AsyncOp state update.
 //
 // An async operation is a an operation that is associated with a resource
-// This could be a a read or write on a tcp stream or a receive operation on
-// a chan.
+// This could, for example, be a a read or write on a TCP stream or a receive operation on
+// a channel.
 message AsyncOpUpdate {
-    // A list of new async operation that were created since the last `AsyncOpUpdate`
+    // A list of new async operations that were created since the last `AsyncOpUpdate`
     // was sent. Note that the fact that an async operation has been created
     // does not mean that is has been polled or is being polled. This information
-    // is refelcted in the Stats of the operation.
+    // is reflected in the Stats of the operation.
     repeated AsyncOp new_async_ops = 1;
     // Any async op stats that have changed since the last update.
     map<uint64, Stats> stats_update = 2;
@@ -41,24 +41,20 @@ message AsyncOp {
 
 
 message Stats {
-    // Timestamp of when the async op created spawned.
+    // Timestamp of when the async op has been created.
     google.protobuf.Timestamp created_at = 1;
-
     // The amount of time this op has *existed*, regardless of whether or not
     // it was being polled.
     //
     // Subtracting `poll_stats.busy_time` from `total_time` calculates the resource's idle
     // time, the amount of time it has spent *waiting* to be polled.
     google.protobuf.Duration total_time = 2;
-    // The id of the latest `ResourceOp` with type `Poll` that was invoked within the context
-    // of this async op
-    common.MetaId latest_poll_op = 3;
     // The resource Id this `AsyncOp` is associated with. Note that both
     // `resource_id` and `task_id` can be None if this async op has not been polled yet
-    common.SpanId resource_id = 4;
+    common.SpanId resource_id = 3;
     // The Id of the task that is awaiting on this op.
-    common.SpanId task_id = 5;
-    // Contains op poll statistics.
-    common.PollStats poll_stats = 7;
+    common.SpanId task_id = 4;
+    // Contains the operation poll stats.
+    common.PollStats poll_stats = 5;
 }
 

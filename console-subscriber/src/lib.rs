@@ -28,11 +28,11 @@ use aggregator::Aggregator;
 pub use builder::Builder;
 use callsites::Callsites;
 use stack::SpanStack;
-use visitors::{
-    AsyncOpVisitor, FieldVisitor, ResourceOpData, ResourceOpVisitor, ResourceVisitor, WakerVisitor,
-};
+use visitors::{AsyncOpVisitor, FieldVisitor, ResourceVisitor, WakerVisitor};
 
 pub use init::{build, init};
+
+use crate::visitors::{PollOpVisitor, StateUpdateVisitor};
 
 pub struct TasksLayer {
     current_spans: ThreadLocal<RefCell<SpanStack>>,
@@ -42,7 +42,8 @@ pub struct TasksLayer {
     waker_callsites: Callsites,
     resource_callsites: Callsites,
     async_op_callsites: Callsites,
-    resource_op_callsites: Callsites,
+    poll_op_callsites: Callsites,
+    state_update_callsites: Callsites,
 }
 
 pub struct Server {
@@ -98,12 +99,20 @@ enum Event {
         concrete_type: String,
         kind: resource::Kind,
     },
-    ResourceOp {
+    PollOp {
         metadata: &'static Metadata<'static>,
         at: SystemTime,
         resource_id: span::Id,
         op_name: String,
-        op_type: OpType,
+        async_op_id: span::Id,
+        task_id: span::Id,
+        readiness: Readiness,
+    },
+    StateUpdate {
+        metadata: &'static Metadata<'static>,
+        at: SystemTime,
+        resource_id: span::Id,
+        update: AttributeUpdate,
     },
     AsyncResourceOp {
         id: span::Id,
@@ -119,30 +128,11 @@ enum Readiness {
     Ready,
 }
 
-#[derive(Clone, Debug)]
-enum OpType {
-    Poll {
-        async_op_id: span::Id,
-        task_id: span::Id,
-        readiness: Readiness,
-    },
-    StateUpdate(Vec<AttributeUpdate>),
-}
-
 #[derive(Debug, Clone)]
 struct AttributeUpdate {
-    name: String,
-    val: AttributeUpdateValue,
-}
-
-#[derive(Debug, Clone)]
-enum AttributeUpdateValue {
-    Text(String),
-    Numeric {
-        val: u64,
-        op: AttributeUpdateOp,
-        unit: String,
-    },
+    val: proto::Field,
+    op: AttributeUpdateOp,
+    unit: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -205,7 +195,8 @@ impl TasksLayer {
             waker_callsites: Callsites::default(),
             resource_callsites: Callsites::default(),
             async_op_callsites: Callsites::default(),
-            resource_op_callsites: Callsites::default(),
+            poll_op_callsites: Callsites::default(),
+            state_update_callsites: Callsites::default(),
             current_spans: ThreadLocal::new(),
         };
         (layer, server)
@@ -237,10 +228,6 @@ impl TasksLayer {
         self.async_op_callsites.contains(meta)
     }
 
-    fn is_resource_op(&self, meta: &'static Metadata<'static>) -> bool {
-        self.resource_op_callsites.contains(meta)
-    }
-
     fn is_id_spawned<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
     where
         S: Subscriber + for<'a> LookupSpan<'a>,
@@ -268,36 +255,24 @@ impl TasksLayer {
             .unwrap_or(false)
     }
 
-    fn is_id_resource_op<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
-    where
-        S: Subscriber + for<'a> LookupSpan<'a>,
-    {
-        cx.span(id)
-            .map(|span| self.is_resource_op(span.metadata()))
-            .unwrap_or(false)
-    }
-
     fn is_id_tracked<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
     where
         S: Subscriber + for<'a> LookupSpan<'a>,
     {
-        self.is_id_async_op(id, cx)
-            || self.is_id_resource(id, cx)
-            || self.is_id_spawned(id, cx)
-            || self.is_id_resource_op(id, cx)
+        self.is_id_async_op(id, cx) || self.is_id_resource(id, cx) || self.is_id_spawned(id, cx)
     }
 
     fn first_entered<P>(&self, stack: &SpanStack, p: P) -> Option<span::Id>
     where
         P: Fn(&span::Id) -> bool,
     {
-        return stack
+        stack
             .stack()
             .iter()
             .rev()
             .find(|id| p(id.id()))
             .map(|id| id.id())
-            .cloned();
+            .cloned()
     }
 
     fn send(&self, event: Event) {
@@ -354,12 +329,18 @@ where
             || meta.target() == "tokio::task::waker"
         {
             self.waker_callsites.insert(meta);
-        } else if meta.name() == "runtime.resource" {
+        } else if meta.name() == ResourceVisitor::RES_SPAN_NAME {
             self.resource_callsites.insert(meta);
-        } else if meta.name() == "runtime.async_op" {
+        } else if meta.name() == AsyncOpVisitor::ASYNC_OP_SPAN_NAME {
             self.async_op_callsites.insert(meta);
-        } else if meta.target() == "tokio::resource::op" {
-            self.resource_op_callsites.insert(meta);
+        } else if meta.name() == PollOpVisitor::POLL_OP_EVENT_NAME
+            || meta.target() == "tokio::resource::poll_op"
+        {
+            self.poll_op_callsites.insert(meta);
+        } else if meta.name() == StateUpdateVisitor::STATE_UPDATE_EVENT_NAME
+            || meta.target() == "tokio::resource::state_update"
+        {
+            self.state_update_callsites.insert(meta);
         }
         self.send(Event::Metadata(meta));
         subscriber::Interest::always()
@@ -420,56 +401,63 @@ where
                 Some((id, op)) => self.send(Event::Waker { id, op, at }),
                 None => tracing::warn!("unknown waker event: {:?}", event),
             }
-        } else if self.resource_op_callsites.contains(event.metadata()) {
+        } else if self.poll_op_callsites.contains(event.metadata()) {
             match ctx.current_span().id() {
                 Some(resource_id) if self.is_id_resource(resource_id, &ctx) => {
-                    let mut resource_op_visitor = ResourceOpVisitor::default();
-                    event.record(&mut resource_op_visitor);
-                    let res = resource_op_visitor.result();
-                    let op_data = match res {
-                        Some(ResourceOpData::Poll { op_name, readiness }) => self
-                            .current_spans
-                            .get()
-                            .and_then(|stack| {
-                                let stack = stack.borrow();
-                                let task_id =
-                                    self.first_entered(&stack, |id| self.is_id_spawned(id, &ctx));
+                    let mut poll_op_visitor = PollOpVisitor::default();
+                    event.record(&mut poll_op_visitor);
+                    if let Some((op_name, readiness)) = poll_op_visitor.result() {
+                        let task_and_async_op_ids = self.current_spans.get().and_then(|stack| {
+                            let stack = stack.borrow();
+                            let task_id =
+                                self.first_entered(&stack, |id| self.is_id_spawned(id, &ctx))?;
+                            let async_op_id =
+                                self.first_entered(&stack, |id| self.is_id_async_op(id, &ctx))?;
+                            Some((task_id, async_op_id))
+                        });
 
-                                let async_op_id =
-                                    self.first_entered(&stack, |id| self.is_id_async_op(id, &ctx));
-
-                                task_id.zip(async_op_id)
-                            })
-                            .map(|(task_id, async_op_id)| {
-                                let op_type = OpType::Poll {
+                        match task_and_async_op_ids {
+                            Some((task_id, async_op_id)) => {
+                                let at = SystemTime::now();
+                                self.send(Event::PollOp {
+                                    metadata,
+                                    at,
+                                    resource_id: resource_id.clone(),
+                                    op_name,
                                     async_op_id,
                                     task_id,
                                     readiness,
-                                };
-
-                                (op_name, op_type)
-                            }),
-                        Some(ResourceOpData::StateUpdate { op_name, attrs }) => {
-                            Some((op_name, OpType::StateUpdate(attrs)))
+                                });
+                            }
+                            None => {
+                                tracing::warn!("poll op event should be emitted in the context of an async op and task spans: {:?}", event);
+                            }
                         }
-                        None => None,
-                    };
-
-                    if let Some((op_name, op_type)) = op_data {
-                        let at = SystemTime::now();
-                        self.send(Event::ResourceOp {
-                            metadata,
-                            at,
-                            resource_id: resource_id.clone(),
-                            op_name,
-                            op_type,
-                        });
-                    } else {
-                        tracing::warn!("resource op event has invalid format: {:?}", event);
                     }
                 }
                 _ => tracing::warn!(
-                    "resource op event should be emitted in the context of a resource span: {:?}",
+                    "poll op event should be emitted in the context of a resource span: {:?}",
+                    event
+                ),
+            }
+        } else if self.state_update_callsites.contains(event.metadata()) {
+            match ctx.current_span().id() {
+                Some(resource_id) if self.is_id_resource(resource_id, &ctx) => {
+                    let mut state_update_visitor = StateUpdateVisitor::default();
+                    event.record(&mut state_update_visitor);
+                    let meta_id = event.metadata().into();
+                    if let Some(update) = state_update_visitor.result(meta_id) {
+                        let at = SystemTime::now();
+                        self.send(Event::StateUpdate {
+                            metadata,
+                            at,
+                            resource_id: resource_id.clone(),
+                            update,
+                        });
+                    }
+                }
+                _ => tracing::warn!(
+                    "state update event should be emitted in the context of a resource span: {:?}",
                     event
                 ),
             }

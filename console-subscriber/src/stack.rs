@@ -1,5 +1,10 @@
 use tracing_core::span::Id;
 
+// This has been copied from tracing-subscriber. Once the library adds
+// the ability to iterate over entered spans, this code will
+// no longer be needed here
+//
+// https://github.com/tokio-rs/tracing/blob/master/tracing-subscriber/src/registry/stack.rs
 #[derive(Debug, Clone)]
 pub(crate) struct ContextId {
     id: Id,

@@ -118,3 +118,9 @@ message PollStats {
     // not reflecting any inprogress polls.
     google.protobuf.Duration busy_time = 6;
 }
+
+// Indicates the readiness of a pollable entity (i.e task, resource))
+enum Readiness {
+    READY = 0;
+    PENDING = 1;
+}

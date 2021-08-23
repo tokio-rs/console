@@ -1,4 +1,5 @@
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 tonic::include_proto!("rs.tokio.console.common");
 
@@ -188,3 +189,15 @@ impl From<&dyn std::fmt::Debug> for field::Value {
         field::Value::DebugVal(format!("{:?}", val))
     }
 }
+
+#[allow(clippy::derive_hash_xor_eq)]
+impl Hash for field::Name {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            field::Name::NameIdx(idx) => idx.hash(state),
+            field::Name::StrName(s) => s.hash(state),
+        }
+    }
+}
+
+impl Eq for field::Name {}
