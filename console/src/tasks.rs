@@ -11,7 +11,10 @@ use std::{
     sync::Arc,
     time::{Duration, SystemTime},
 };
-use tui::text::Span;
+use tui::{
+    style::{Color, Modifier},
+    text::Span,
+};
 
 #[derive(Default, Debug)]
 pub(crate) struct State {
@@ -26,10 +29,19 @@ pub(crate) struct State {
 #[repr(usize)]
 pub(crate) enum SortBy {
     Tid = 0,
-    Total = 2,
-    Busy = 3,
-    Idle = 4,
-    Polls = 5,
+    State = 1,
+    Name = 2,
+    Total = 3,
+    Busy = 4,
+    Idle = 5,
+    Polls = 6,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub(crate) enum TaskState {
+    Completed,
+    Idle,
+    Running,
 }
 
 pub(crate) type TaskRef = Weak<RefCell<Task>>;
@@ -38,13 +50,12 @@ pub(crate) type DetailsRef = Rc<RefCell<Option<Details>>>;
 #[derive(Debug)]
 pub(crate) struct Task {
     id: u64,
-    id_hex: String,
     fields: Vec<Field>,
     formatted_fields: Vec<Vec<Span<'static>>>,
-    kind: &'static str,
     stats: Stats,
     completed_for: usize,
     target: Arc<str>,
+    name: Option<Arc<str>>,
 }
 
 #[derive(Debug, Default)]
@@ -58,6 +69,7 @@ pub(crate) struct Details {
 pub(crate) struct Metadata {
     field_names: Vec<Arc<str>>,
     target: Arc<str>,
+    id: u64,
     //TODO: add more metadata as needed
 }
 
@@ -102,10 +114,6 @@ pub(crate) enum FieldValue {
 impl State {
     const RETAIN_COMPLETED_FOR: usize = 6;
 
-    pub(crate) fn len(&self) -> usize {
-        self.tasks.len()
-    }
-
     pub(crate) fn last_updated_at(&self) -> Option<SystemTime> {
         self.last_updated_at
     }
@@ -117,6 +125,7 @@ impl State {
 
     pub(crate) fn update_tasks(
         &mut self,
+        styles: &view::Styles,
         update: proto::tasks::TaskUpdate,
         new_metadata: Option<proto::RegisterMetadata>,
         now: Option<SystemTime>,
@@ -129,7 +138,7 @@ impl State {
             let metas = new_metadata.metadata.into_iter().filter_map(|meta| {
                 let id = meta.id?.id;
                 let metadata = meta.metadata?;
-                Some((id, metadata.into()))
+                Some((id, Metadata::from_proto(metadata, id)))
             });
             self.metas.extend(metas);
         }
@@ -143,10 +152,6 @@ impl State {
             if task.id.is_none() {
                 tracing::warn!(?task, "skipping task with no id");
             }
-            let kind = match task.kind() {
-                proto::tasks::task::Kind::Spawn => "T",
-                proto::tasks::task::Kind::Blocking => "B",
-            };
 
             let meta_id = match task.metadata.as_ref() {
                 Some(id) => id.id,
@@ -162,44 +167,29 @@ impl State {
                     return None;
                 }
             };
-            let fields: Vec<Field> = task
+            let mut name = None;
+            let mut fields = task
                 .fields
                 .drain(..)
-                .filter_map(|f| {
-                    let field_name = f.name.as_ref()?;
-                    let name: Option<Arc<str>> = match field_name {
-                        proto::field::Name::StrName(n) => Some(n.clone().into()),
-                        proto::field::Name::NameIdx(idx) => {
-                            debug_assert_eq!(
-                                f.metadata_id.map(|m| m.id),
-                                Some(meta_id),
-                                "malformed field name: metadata ID mismatch!"
-                            );
-                            meta.field_names.get(*idx as usize).cloned()
-                        }
-                    };
-                    let value = f.value.as_ref().expect("no value").clone().into();
-                    name.map(|name| Field { name, value })
+                .filter_map(|pb| {
+                    let field = Field::from_proto(pb, meta)?;
+                    // the `task.name` field gets its own column, if it's present.
+                    if &*field.name == Field::NAME {
+                        name = Some(field.value.to_string().into());
+                        return None;
+                    }
+                    Some(field)
                 })
-                .collect();
+                .collect::<Vec<_>>();
 
-            let formatted_fields = fields.iter().fold(Vec::default(), |mut acc, f| {
-                acc.push(vec![
-                    view::bold(f.name.to_string()),
-                    Span::from("="),
-                    Span::from(format!("{} ", f.value)),
-                ]);
-                acc
-            });
-
+            let formatted_fields = Field::make_formatted(styles, &mut fields);
             let id = task.id?.id;
             let stats = stats_update.remove(&id)?.into();
             let mut task = Task {
+                name,
                 id,
-                id_hex: format!("{:x}", id),
                 fields,
                 formatted_fields,
-                kind,
                 stats,
                 completed_for: 0,
                 target: meta.target.clone(),
@@ -257,28 +247,41 @@ impl State {
 }
 
 impl Task {
-    pub(crate) fn kind(&self) -> &str {
-        self.kind
-    }
-
     pub(crate) fn id(&self) -> u64 {
         self.id
-    }
-
-    pub(crate) fn id_hex(&self) -> &str {
-        &self.id_hex
     }
 
     pub(crate) fn target(&self) -> &str {
         &self.target
     }
 
+    pub(crate) fn name(&self) -> &str {
+        self.name.as_ref().map(AsRef::as_ref).unwrap_or_default()
+    }
+
     pub(crate) fn formatted_fields(&self) -> &[Vec<Span<'static>>] {
         &self.formatted_fields
     }
 
+    /// Returns `true` if this task is currently being polled.
+    pub(crate) fn is_running(&self) -> bool {
+        self.stats.last_poll_started > self.stats.last_poll_ended
+    }
+
     pub(crate) fn is_completed(&self) -> bool {
         self.stats.total.is_some()
+    }
+
+    pub(crate) fn state(&self) -> TaskState {
+        if self.is_completed() {
+            return TaskState::Completed;
+        }
+
+        if self.is_running() {
+            return TaskState::Running;
+        }
+
+        TaskState::Idle
     }
 
     pub(crate) fn total(&self, since: SystemTime) -> Duration {
@@ -307,11 +310,6 @@ impl Task {
     /// Returns the total number of times the task has been polled.
     pub(crate) fn total_polls(&self) -> u64 {
         self.stats.polls
-    }
-
-    /// Returns the number of updates since the task completed
-    pub(crate) fn completed_for(&self) -> usize {
-        self.completed_for
     }
 
     /// Returns the elapsed time since the task was last woken, relative to
@@ -351,7 +349,6 @@ impl Task {
     fn update(&mut self) {
         let completed = self.stats.total.is_some() && self.completed_for == 0;
         if completed {
-            self.kind = "!";
             self.completed_for = 1;
         }
     }
@@ -401,11 +398,12 @@ impl From<proto::tasks::Stats> for Stats {
     }
 }
 
-impl From<proto::Metadata> for Metadata {
-    fn from(pb: proto::Metadata) -> Self {
+impl Metadata {
+    fn from_proto(pb: proto::Metadata, id: u64) -> Self {
         Self {
             field_names: pb.field_names.into_iter().map(|n| n.into()).collect(),
             target: pb.target.into(),
+            id,
         }
     }
 }
@@ -433,6 +431,12 @@ impl SortBy {
         // tasks.retain(|t| t.upgrade().is_some());
         match self {
             Self::Tid => tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().id)),
+            Self::Name => {
+                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().name.clone()))
+            }
+            Self::State => {
+                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().state()))
+            }
             Self::Total => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().total(now)))
             }
@@ -454,6 +458,8 @@ impl TryFrom<usize> for SortBy {
     fn try_from(idx: usize) -> Result<Self, Self::Error> {
         match idx {
             idx if idx == Self::Tid as usize => Ok(Self::Tid),
+            idx if idx == Self::State as usize => Ok(Self::State),
+            idx if idx == Self::Name as usize => Ok(Self::Name),
             idx if idx == Self::Total as usize => Ok(Self::Total),
             idx if idx == Self::Busy as usize => Ok(Self::Busy),
             idx if idx == Self::Idle as usize => Ok(Self::Idle),
@@ -462,6 +468,131 @@ impl TryFrom<usize> for SortBy {
         }
     }
 }
+
+// === impl Field ===
+
+impl Field {
+    const SPAWN_LOCATION: &'static str = "spawn.location";
+    const NAME: &'static str = "task.name";
+
+    /// Converts a wire-format `Field` into an internal `Field` representation,
+    /// using the provided `Metadata` for the task span that the field came
+    /// from.
+    ///
+    /// If the field is invalid or it has a string value which is empty, this
+    /// returns `None`.
+    fn from_proto(
+        proto::Field {
+            name,
+            metadata_id,
+            value,
+        }: proto::Field,
+        meta: &Metadata,
+    ) -> Option<Self> {
+        use proto::field::Name;
+        let name: Arc<str> = match name? {
+            Name::StrName(n) => n.into(),
+            Name::NameIdx(idx) => {
+                let meta_id = metadata_id.map(|m| m.id);
+                if meta_id != Some(meta.id) {
+                    tracing::warn!(
+                        task.meta_id = meta.id,
+                        field.meta.id = ?meta_id,
+                        field.name_index = idx,
+                        ?meta,
+                        "skipping malformed field name (metadata id mismatch)"
+                    );
+                    debug_assert_eq!(
+                        meta_id,
+                        Some(meta.id),
+                        "malformed field name: metadata ID mismatch! (name idx={}; metadata={:#?})",
+                        idx,
+                        meta,
+                    );
+                    return None;
+                }
+                match meta.field_names.get(idx as usize).cloned() {
+                    Some(name) => name,
+                    None => {
+                        tracing::warn!(
+                            task.meta_id = meta.id,
+                            field.meta.id = ?meta_id,
+                            field.name_index = idx,
+                            ?meta,
+                            "missing field name for index"
+                        );
+                        return None;
+                    }
+                }
+            }
+        };
+
+        debug_assert!(
+            value.is_some(),
+            "missing field value for field `{:?}` (metadata={:#?})",
+            name,
+            meta,
+        );
+        let mut value = FieldValue::from(value?)
+            // if the value is an empty string, just skip it.
+            .ensure_nonempty()?;
+
+        if &*name == Field::SPAWN_LOCATION {
+            value = value.truncate_registry_path();
+        }
+
+        Some(Self { name, value })
+    }
+
+    fn make_formatted(styles: &view::Styles, fields: &mut Vec<Field>) -> Vec<Vec<Span<'static>>> {
+        use std::cmp::Ordering;
+
+        let key_style = styles.fg(Color::LightBlue).add_modifier(Modifier::BOLD);
+        let delim_style = styles.fg(Color::LightBlue).add_modifier(Modifier::DIM);
+        let val_style = styles.fg(Color::Yellow);
+
+        fields.sort_unstable_by(|left, right| {
+            if &*left.name == Field::NAME {
+                return Ordering::Less;
+            }
+
+            if &*right.name == Field::NAME {
+                return Ordering::Greater;
+            }
+
+            if &*left.name == Field::SPAWN_LOCATION {
+                return Ordering::Greater;
+            }
+
+            if &*right.name == Field::SPAWN_LOCATION {
+                return Ordering::Less;
+            }
+
+            left.name.cmp(&right.name)
+        });
+
+        let mut formatted = Vec::with_capacity(fields.len());
+        let mut fields = fields.iter();
+        if let Some(field) = fields.next() {
+            formatted.push(vec![
+                Span::styled(field.name.to_string(), key_style),
+                Span::styled("=", delim_style),
+                Span::styled(format!("{} ", field.value), val_style),
+            ]);
+            for field in fields {
+                formatted.push(vec![
+                    // Span::styled(", ", delim_style),
+                    Span::styled(field.name.to_string(), key_style),
+                    Span::styled("=", delim_style),
+                    Span::styled(format!("{} ", field.value), val_style),
+                ])
+            }
+        }
+        formatted
+    }
+}
+
+// === impl FieldValue ===
 
 impl fmt::Display for FieldValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -474,5 +605,54 @@ impl fmt::Display for FieldValue {
         }
 
         Ok(())
+    }
+}
+
+impl FieldValue {
+    /// Truncates paths including `.cargo/registry`.
+    fn truncate_registry_path(self) -> Self {
+        use once_cell::sync::OnceCell;
+        use regex::Regex;
+        use std::borrow::Cow;
+
+        static REGEX: OnceCell<Regex> = OnceCell::new();
+        let regex = REGEX.get_or_init(|| {
+            Regex::new(r#".*/\.cargo/registry/src/[^/]*/"#).expect("failed to compile regex")
+        });
+
+        let s = match self {
+            FieldValue::Str(s) | FieldValue::Debug(s) => s,
+            f => return f,
+        };
+
+        let s = match regex.replace(&s, "<cargo>/") {
+            Cow::Owned(s) => s,
+            // String was not modified, return the original.
+            Cow::Borrowed(_) => s,
+        };
+        FieldValue::Debug(s)
+    }
+
+    /// If `self` is an empty string, returns `None`. Otherwise, returns `Some(self)`.
+    fn ensure_nonempty(self) -> Option<Self> {
+        match self {
+            FieldValue::Debug(s) | FieldValue::Str(s) if s.is_empty() => None,
+            val => Some(val),
+        }
+    }
+}
+
+impl TaskState {
+    pub(crate) fn render(self, styles: &crate::view::Styles) -> Span<'static> {
+        const RUNNING_UTF8: &str = "\u{25B6}";
+        const IDLE_UTF8: &str = "\u{23F8}";
+        const COMPLETED_UTF8: &str = "\u{23F9}";
+        match self {
+            Self::Running => {
+                Span::styled(styles.if_utf8(RUNNING_UTF8, ">"), styles.fg(Color::Green))
+            }
+            Self::Idle => Span::raw(styles.if_utf8(IDLE_UTF8, ":")),
+            Self::Completed => Span::raw(styles.if_utf8(COMPLETED_UTF8, "!")),
+        }
     }
 }

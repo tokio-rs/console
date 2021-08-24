@@ -1,15 +1,15 @@
 use console_api as proto;
-use proto::{resources::resource, SpanId};
-
-use tokio::sync::{mpsc, oneshot};
-
+use proto::resources::resource;
+use serde::Serialize;
 use std::{
     cell::RefCell,
+    fmt,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
     time::{Duration, SystemTime},
 };
 use thread_local::ThreadLocal;
+use tokio::sync::{mpsc, oneshot};
 use tracing_core::{
     span,
     subscriber::{self, Subscriber},
@@ -21,6 +21,7 @@ mod aggregator;
 mod builder;
 mod callsites;
 mod init;
+mod record;
 mod stack;
 mod visitors;
 
@@ -32,18 +33,31 @@ use visitors::{AsyncOpVisitor, FieldVisitor, ResourceVisitor, WakerVisitor};
 
 pub use init::{build, init};
 
+use crate::aggregator::Id;
 use crate::visitors::{PollOpVisitor, StateUpdateVisitor};
 
 pub struct TasksLayer {
     current_spans: ThreadLocal<RefCell<SpanStack>>,
     tx: mpsc::Sender<Event>,
     flush: Arc<aggregator::Flush>,
-    spawn_callsites: Callsites,
-    waker_callsites: Callsites,
-    resource_callsites: Callsites,
-    async_op_callsites: Callsites,
-    poll_op_callsites: Callsites,
-    state_update_callsites: Callsites,
+
+    /// Set of callsites for spans representing spawned tasks.
+    ///
+    /// For task spans, each runtime these will have like, 1-5 callsites in it, max, so
+    /// 16 is probably fine. For async operations, we may need a bigger callsites array.
+    spawn_callsites: Callsites<16>,
+
+    /// Set of callsites for events representing waker operations.
+    ///
+    /// 32 is probably a reasonable number of waker ops; it's a bit generous if
+    /// there's only one async runtime library in use, but if there are multiple,
+    /// they might all have their own sets of waker ops.
+    waker_callsites: Callsites<32>,
+
+    resource_callsites: Callsites<32>,
+    async_op_callsites: Callsites<32>,
+    poll_op_callsites: Callsites<32>,
+    state_update_callsites: Callsites<32>,
 }
 
 pub struct Server {
@@ -61,7 +75,7 @@ enum WatchKind {
 }
 
 struct WatchRequest<T> {
-    id: SpanId,
+    id: Id,
     stream_sender: oneshot::Sender<mpsc::Receiver<Result<T, tonic::Status>>>,
     buffer: usize,
 }
@@ -127,7 +141,6 @@ enum Readiness {
     Pending,
     Ready,
 }
-
 #[derive(Debug, Clone)]
 struct AttributeUpdate {
     val: proto::Field,
@@ -142,7 +155,7 @@ enum AttributeUpdateOp {
     Sub,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Copy, Serialize)]
 enum WakeOp {
     Wake,
     WakeByRef,
@@ -174,6 +187,7 @@ impl TasksLayer {
             ?config.publish_interval,
             ?config.retention,
             ?config.server_addr,
+            ?config.recording_path,
             "configured console subscriber"
         );
 
@@ -182,6 +196,7 @@ impl TasksLayer {
 
         let aggregator = Aggregator::new(events, rpcs, &config);
         let flush = aggregator.flush().clone();
+
         let server = Server {
             aggregator: Some(aggregator),
             addr: config.server_addr,
@@ -277,6 +292,7 @@ impl TasksLayer {
 
     fn send(&self, event: Event) {
         use mpsc::error::TrySendError;
+
         match self.tx.try_reserve() {
             Ok(permit) => permit.send(event),
             Err(TrySendError::Closed(_)) => tracing::warn!(
@@ -507,6 +523,19 @@ where
     }
 }
 
+impl fmt::Debug for TasksLayer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TasksLayer")
+            // mpsc::Sender debug impl is not very useful
+            .field("tx", &format_args!("<...>"))
+            .field("tx.capacity", &self.tx.capacity())
+            .field("flush", &self.flush)
+            .field("spawn_callsites", &self.spawn_callsites)
+            .field("waker_callsites", &self.waker_callsites)
+            .finish()
+    }
+}
+
 impl Server {
     // XXX(eliza): why is `SocketAddr::new` not `const`???
     pub const DEFAULT_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
@@ -577,7 +606,7 @@ impl proto::instrument::instrument_server::Instrument for Server {
         // Check with the aggregator task to request a stream if the task exists.
         let (stream_sender, stream_recv) = oneshot::channel();
         permit.send(WatchKind::TaskDetail(WatchRequest {
-            id: task_id.clone(),
+            id: task_id.into(),
             stream_sender,
             buffer: self.client_buffer,
         }));

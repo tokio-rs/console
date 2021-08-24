@@ -2,18 +2,18 @@ use color_eyre::{eyre::eyre, Help, SectionExt};
 use console_api::tasks::TaskDetails;
 use tasks::State;
 
+use clap::Clap;
 use futures::stream::StreamExt;
 use std::convert::TryInto;
 use tokio::sync::{mpsc, watch};
 use tui::{
     layout::{Constraint, Direction, Layout},
-    style::{Modifier, Style},
-    text::{Span, Spans},
-    widgets::{Block, Paragraph, Wrap},
+    widgets::{Paragraph, Wrap},
 };
 
 use crate::view::UpdateKind;
 
+mod config;
 mod conn;
 mod input;
 mod tasks;
@@ -22,14 +22,15 @@ mod view;
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
+    let mut args = config::Config::parse();
+    args.trace_init()?;
+    tracing::debug!(?args.target_addr, ?args.view_options);
 
-    let mut args = std::env::args();
-    args.next(); // drop the first arg (the name of the binary)
-    let target = args.next().unwrap_or_else(|| {
-        eprintln!("using default address (http://127.0.0.1:6669)");
-        String::from("http://127.0.0.1:6669")
-    });
+    let styles = view::Styles::from_config(args.view_options);
+    styles.error_init()?;
+
+    let target = args.target_addr;
+    tracing::info!(?target, "using target addr");
 
     let (mut terminal, _cleanup) = term::init_crossterm()?;
     terminal.clear()?;
@@ -41,7 +42,7 @@ async fn main() -> color_eyre::Result<()> {
 
     let mut tasks = State::default();
     let mut input = input::EventStream::new();
-    let mut view = view::View::default();
+    let mut view = view::View::new(styles);
 
     loop {
         tokio::select! { biased;
@@ -76,7 +77,7 @@ async fn main() -> color_eyre::Result<()> {
             instrument_update = conn.next_update() => {
                 let now = instrument_update.now.map(|v| v.try_into().unwrap());
                 if let Some(task_update) = instrument_update.task_update {
-                    tasks.update_tasks(task_update, instrument_update.new_metadata, now);
+                    tasks.update_tasks(&view.styles, task_update, instrument_update.new_metadata, now);
                 }
             }
             details_update = details_rx.recv() => {
@@ -89,21 +90,10 @@ async fn main() -> color_eyre::Result<()> {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(0)
-                .constraints([Constraint::Length(2), Constraint::Percentage(95)].as_ref())
+                .constraints([Constraint::Length(1), Constraint::Percentage(95)].as_ref())
                 .split(f.size());
 
-            let header_block = Block::default().title(conn.render());
-
-            let text = vec![Spans::from(vec![
-                Span::styled(
-                    format!("{}", tasks.len()),
-                    Style::default().add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(" tasks"),
-            ])];
-            let header = Paragraph::new(text)
-                .block(header_block)
-                .wrap(Wrap { trim: true });
+            let header = Paragraph::new(conn.render(&view.styles)).wrap(Wrap { trim: true });
             f.render_widget(header, chunks[0]);
             view.render(f, chunks[1], &mut tasks);
         })?;

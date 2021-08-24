@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-static HELP: &'static str = r#"
+static HELP: &str = r#"
 Example console-instrumented app
 
 USAGE:
@@ -21,13 +21,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     for opt in std::env::args().skip(1) {
         match &*opt {
             "blocks" => {
-                tokio::spawn(double_sleepy(1, 10));
+                tokio::task::Builder::new()
+                    .name("blocks")
+                    .spawn(double_sleepy(1, 10));
             }
             "coma" => {
-                tokio::spawn(std::future::pending::<()>());
+                tokio::task::Builder::new()
+                    .name("coma")
+                    .spawn(std::future::pending::<()>());
             }
             "burn" => {
-                tokio::spawn(burn(1, 10));
+                tokio::task::Builder::new().name("burn").spawn(burn(1, 10));
             }
             "help" | "-h" => {
                 eprintln!("{}", HELP);
@@ -41,8 +45,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     }
 
-    let task1 = tokio::spawn(spawn_tasks(1, 10));
-    let task2 = tokio::spawn(spawn_tasks(10, 30));
+    let task1 = tokio::task::Builder::new()
+        .name("task1")
+        .spawn(spawn_tasks(1, 10));
+    let task2 = tokio::task::Builder::new()
+        .name("task2")
+        .spawn(spawn_tasks(10, 30));
 
     let result = tokio::try_join! {
         task1,
@@ -57,7 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 async fn spawn_tasks(min: u64, max: u64) {
     loop {
         for i in min..max {
-            tokio::spawn(wait(i));
+            tokio::task::Builder::new().name("wait").spawn(wait(i));
             tokio::time::sleep(Duration::from_secs(max) - Duration::from_secs(i)).await;
         }
     }

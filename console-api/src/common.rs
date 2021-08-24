@@ -201,3 +201,19 @@ impl Hash for field::Name {
 }
 
 impl Eq for field::Name {}
+
+// === IDs ===
+
+impl From<u64> for Id {
+    fn from(id: u64) -> Self {
+        Id { id }
+    }
+}
+
+impl From<Id> for u64 {
+    fn from(id: Id) -> Self {
+        id.id
+    }
+}
+
+impl Copy for Id {}

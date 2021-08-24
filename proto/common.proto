@@ -4,6 +4,10 @@ package rs.tokio.console.common;
 import "google/protobuf/timestamp/timestamp.proto";
 import "google/protobuf/duration.proto";
 
+message Id {
+    uint64 id = 1;
+}
+
 /// A Rust source code location.
 message Location {
     // The file path

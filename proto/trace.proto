@@ -30,7 +30,7 @@ message TraceEvent {
     message RegisterThreads {
         map<uint64, string> names = 1;
     }
-    
+
     message Enter {
         common.SpanId span_id = 1;
         uint64 thread_id = 2;

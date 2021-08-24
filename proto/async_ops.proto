@@ -27,7 +27,7 @@ message AsyncOp {
     //
     // This uniquely identifies this op across all *currently live*
     // ones.
-    common.SpanId id = 1;
+    common.Id id = 1;
     // The numeric ID of the op's `Metadata`.
     //
     // This identifies the `Metadata` that describes the `tracing` span
@@ -51,9 +51,9 @@ message Stats {
     google.protobuf.Duration total_time = 2;
     // The resource Id this `AsyncOp` is associated with. Note that both
     // `resource_id` and `task_id` can be None if this async op has not been polled yet
-    common.SpanId resource_id = 3;
+    common.Id resource_id = 3;
     // The Id of the task that is awaiting on this op.
-    common.SpanId task_id = 4;
+    common.Id task_id = 4;
     // Contains the operation poll stats.
     common.PollStats poll_stats = 5;
 }

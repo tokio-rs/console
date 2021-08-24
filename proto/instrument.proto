@@ -14,12 +14,13 @@ service Instrument {
 }
 
 // TODO: In the future allow for the request to specify
-// only the data that the caller cares about (i.e. only tasks but no resources)
+// only the data that the caller cares about (i.e. only
+// tasks but no resources)
 message InstrumentRequest {
 }
 
 message TaskDetailsRequest {
-    common.SpanId id = 1;
+    common.Id id = 1;
 }
 
 // InstrumentUpdate carries all information regarding tasks, resources, async operations

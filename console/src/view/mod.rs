@@ -1,5 +1,5 @@
 use crate::{input, tasks::State};
-use std::borrow::Cow;
+use std::{borrow::Cow, cmp};
 use tui::{
     layout,
     style::{self, Style},
@@ -7,8 +7,10 @@ use tui::{
 };
 
 mod mini_histogram;
+mod styles;
 mod task;
 mod tasks;
+pub(crate) use self::styles::{Palette, Styles};
 
 pub struct View {
     /// The tasks list is stored separately from the currently selected state,
@@ -20,7 +22,9 @@ pub struct View {
     /// it to remain sorted that way when we return to it.
     list: tasks::List,
     state: ViewState,
+    pub(crate) styles: Styles,
 }
+
 enum ViewState {
     /// The table list of all tasks.
     TasksList,
@@ -39,6 +43,11 @@ pub(crate) enum UpdateKind {
     Other,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub(crate) struct Width {
+    curr: u16,
+}
+
 macro_rules! key {
     ($code:ident) => {
         input::Event::Key(input::KeyEvent {
@@ -49,6 +58,14 @@ macro_rules! key {
 }
 
 impl View {
+    pub fn new(styles: Styles) -> Self {
+        Self {
+            state: ViewState::TasksList,
+            list: tasks::List::default(),
+            styles,
+        }
+    }
+
     pub(crate) fn update_input(&mut self, event: input::Event, tasks: &State) -> UpdateKind {
         use ViewState::*;
         let mut update_kind = UpdateKind::Other;
@@ -96,13 +113,13 @@ impl View {
     ) {
         match self.state {
             ViewState::TasksList => {
-                self.list.render(frame, area, tasks);
+                self.list.render(&self.styles, frame, area, tasks);
             }
             ViewState::TaskInstance(ref mut view) => {
                 let now = tasks
                     .last_updated_at()
                     .expect("task view implies we've received an update");
-                view.render(frame, area, now);
+                view.render(&self.styles, frame, area, now);
             }
         }
 
@@ -110,15 +127,26 @@ impl View {
     }
 }
 
-impl Default for View {
-    fn default() -> Self {
-        Self {
-            state: ViewState::TasksList,
-            list: tasks::List::default(),
-        }
-    }
-}
-
 pub(crate) fn bold<'a>(text: impl Into<Cow<'a, str>>) -> Span<'a> {
     Span::styled(text, Style::default().add_modifier(style::Modifier::BOLD))
+}
+
+impl Width {
+    pub(crate) fn new(curr: u16) -> Self {
+        Self { curr }
+    }
+
+    pub(crate) fn update_str<S: AsRef<str>>(&mut self, s: S) -> S {
+        let len = s.as_ref().len();
+        self.curr = cmp::max(self.curr, len as u16);
+        s
+    }
+
+    pub(crate) fn constraint(&self) -> layout::Constraint {
+        layout::Constraint::Length(self.curr)
+    }
+
+    pub(crate) fn chars(&self) -> u16 {
+        self.curr
+    }
 }

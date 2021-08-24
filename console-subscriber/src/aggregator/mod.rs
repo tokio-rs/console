@@ -1,6 +1,5 @@
-use crate::{AttributeUpdate, WatchRequest};
-
 use super::{AttributeUpdateOp, Event, Readiness, WakeOp, Watch, WatchKind};
+use crate::{record::Recorder, AttributeUpdate, WatchRequest};
 use console_api as proto;
 use proto::resources::resource;
 use proto::resources::stats::Attribute;
@@ -8,9 +7,8 @@ use tokio::sync::{mpsc, Notify};
 
 use futures::FutureExt;
 use std::{
-    collections::HashMap,
+    collections::{hash_map::Entry, HashMap, HashSet},
     convert::TryInto,
-    ops::{Deref, DerefMut},
     sync::{
         atomic::{AtomicBool, Ordering::*},
         Arc,
@@ -23,6 +21,13 @@ use hdrhistogram::{
     serialization::{Serializer, V2SerializeError, V2Serializer},
     Histogram,
 };
+
+pub type Id = u64;
+
+mod shrink;
+mod task_data;
+use self::shrink::{ShrinkMap, ShrinkVec};
+use self::task_data::{IdData, Include};
 
 pub(crate) struct Aggregator {
     /// Channel of incoming events emitted by `TaskLayer`s.
@@ -41,15 +46,15 @@ pub(crate) struct Aggregator {
     flush_capacity: Arc<Flush>,
 
     /// Currently active RPCs streaming task events.
-    watchers: Vec<Watch<proto::instrument::InstrumentUpdate>>,
+    watchers: ShrinkVec<Watch<proto::instrument::InstrumentUpdate>>,
 
     /// Currently active RPCs streaming task details events, by task ID.
-    details_watchers: HashMap<span::Id, Vec<Watch<proto::tasks::TaskDetails>>>,
+    details_watchers: ShrinkMap<Id, Vec<Watch<proto::tasks::TaskDetails>>>,
 
     /// *All* metadata for task spans and user-defined spans that we care about.
     ///
     /// This is sent to new clients as part of the initial state.
-    all_metadata: Vec<proto::register_metadata::NewMetadata>,
+    all_metadata: ShrinkVec<proto::register_metadata::NewMetadata>,
 
     /// *New* metadata that was registered since the last state update.
     ///
@@ -77,12 +82,17 @@ pub(crate) struct Aggregator {
     /// *All* PollOp events for AsyncOps on Resources.
     ///
     /// This is sent to new clients as part of the initial state.
-    all_poll_ops: Vec<proto::resources::PollOp>,
+    all_poll_ops: ShrinkVec<proto::resources::PollOp>,
 
     /// *New* PollOp events that whave occured since the last update
     ///
     /// This is emptied on every state update.
-    new_poll_ops: Vec<proto::resources::PollOp>,
+    new_poll_ops: ShrinkVec<proto::resources::PollOp>,
+
+    task_ids: Ids,
+
+    /// A sink to record all events to a file.
+    recorder: Option<Recorder>,
 }
 
 #[derive(Debug)]
@@ -95,13 +105,22 @@ pub(crate) struct Flush {
 // This generally refers to spans that have been closed
 // indicating that a task, async op or a resource is not
 // in use anymore
-trait Closable {
+pub(crate) trait Closable {
     fn closed_at(&self) -> Option<SystemTime>;
 }
 
-trait ToProto {
+pub(crate) trait ToProto {
     type Output;
     fn to_proto(&self) -> Self::Output;
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct Ids {
+    /// A counter for the pretty task IDs.
+    next: Id,
+
+    /// A table that contains the span ID to pretty ID mappings.
+    id_mappings: ShrinkMap<span::Id, Id>,
 }
 
 struct PollStats {
@@ -117,7 +136,7 @@ struct PollStats {
 
 // Represent static data for resources
 struct Resource {
-    id: span::Id,
+    id: Id,
     metadata: &'static Metadata<'static>,
     concrete_type: String,
     kind: resource::Kind,
@@ -138,7 +157,7 @@ struct ResourceStats {
 
 /// Represents static data for tasks
 struct Task {
-    id: span::Id,
+    id: Id,
     metadata: &'static Metadata<'static>,
     fields: Vec<proto::Field>,
 }
@@ -159,7 +178,7 @@ struct TaskStats {
 }
 
 struct AsyncOp {
-    id: span::Id,
+    id: Id,
     metadata: &'static Metadata<'static>,
     source: String,
 }
@@ -168,13 +187,9 @@ struct AsyncOp {
 struct AsyncOpStats {
     created_at: Option<SystemTime>,
     closed_at: Option<SystemTime>,
-    resource_id: Option<span::Id>,
-    task_id: Option<span::Id>,
+    resource_id: Option<Id>,
+    task_id: Option<Id>,
     poll_stats: PollStats,
-}
-
-struct IdData<T> {
-    data: HashMap<span::Id, (T, bool)>,
 }
 
 impl Closable for ResourceStats {
@@ -269,18 +284,23 @@ impl Aggregator {
             publish_interval: builder.publish_interval,
             retention: builder.retention,
             events,
-            watchers: Vec::new(),
-            details_watchers: HashMap::new(),
-            all_metadata: Vec::new(),
-            new_metadata: Vec::new(),
+            watchers: Default::default(),
+            details_watchers: Default::default(),
+            all_metadata: Default::default(),
+            new_metadata: Default::default(),
             tasks: IdData::default(),
             task_stats: IdData::default(),
             resources: IdData::default(),
             resource_stats: IdData::default(),
             async_ops: IdData::default(),
             async_op_stats: IdData::default(),
-            all_poll_ops: Vec::default(),
-            new_poll_ops: Vec::default(),
+            all_poll_ops: Default::default(),
+            new_poll_ops: Default::default(),
+            task_ids: Ids::default(),
+            recorder: builder
+                .recording_path
+                .as_ref()
+                .map(|path| Recorder::new(path).expect("creating recorder")),
         }
     }
 
@@ -334,7 +354,13 @@ impl Aggregator {
             // channel is almost full.
             while let Some(event) = self.events.recv().now_or_never() {
                 match event {
-                    Some(event) => self.update_state(event),
+                    Some(event) => {
+                        // always be recording...
+                        if let Some(ref recorder) = self.recorder {
+                            recorder.record(&event);
+                        }
+                        self.update_state(event)
+                    }
                     // The channel closed, no more events will be emitted...time
                     // to stop aggregating.
                     None => {
@@ -358,12 +384,27 @@ impl Aggregator {
         // been sent off.
         let now = SystemTime::now();
         let has_watchers = !self.watchers.is_empty();
-        self.tasks
-            .drop_closed(&mut self.task_stats, now, self.retention, has_watchers);
-        self.resources
-            .drop_closed(&mut self.resource_stats, now, self.retention, has_watchers);
-        self.async_ops
-            .drop_closed(&mut self.async_op_stats, now, self.retention, has_watchers);
+        self.tasks.drop_closed(
+            &mut self.task_stats,
+            now,
+            self.retention,
+            has_watchers,
+            &mut self.task_ids,
+        );
+        self.resources.drop_closed(
+            &mut self.resource_stats,
+            now,
+            self.retention,
+            has_watchers,
+            &mut self.task_ids,
+        );
+        self.async_ops.drop_closed(
+            &mut self.async_op_stats,
+            now,
+            self.retention,
+            has_watchers,
+            &mut self.task_ids,
+        );
     }
 
     /// Add the task subscription to the watchers after sending the first update
@@ -390,7 +431,7 @@ impl Aggregator {
                     .map(|(_, value)| value.to_proto())
                     .collect(),
                 stats_update: self.resource_stats.as_proto(Include::All),
-                new_poll_ops: self.all_poll_ops.clone(),
+                new_poll_ops: (*self.all_poll_ops).clone(),
             }),
             async_op_update: Some(proto::async_ops::AsyncOpUpdate {
                 new_async_ops: self
@@ -402,7 +443,7 @@ impl Aggregator {
             }),
             now: Some(now.into()),
             new_metadata: Some(proto::RegisterMetadata {
-                metadata: self.all_metadata.clone(),
+                metadata: (*self.all_metadata).clone(),
             }),
         };
 
@@ -423,8 +464,7 @@ impl Aggregator {
             buffer,
         } = watch_request;
         tracing::debug!(id = ?id, "new task details subscription");
-        let task_id: span::Id = id.into();
-        if let Some(stats) = self.task_stats.get(&task_id) {
+        if let Some(stats) = self.task_stats.get(&id) {
             let (tx, rx) = mpsc::channel(buffer);
             let subscription = Watch(tx);
             let now = SystemTime::now();
@@ -432,13 +472,13 @@ impl Aggregator {
             // Then send the initial state --- if this fails, the subscription is already dead.
             if stream_sender.send(rx).is_ok()
                 && subscription.update(&proto::tasks::TaskDetails {
-                    task_id: Some(task_id.clone().into()),
+                    task_id: Some(id.into()),
                     now: Some(now.into()),
                     poll_times_histogram: serialize_histogram(&stats.poll_times_histogram).ok(),
                 })
             {
                 self.details_watchers
-                    .entry(task_id)
+                    .entry(id)
                     .or_insert_with(Vec::new)
                     .push(subscription);
             }
@@ -462,7 +502,7 @@ impl Aggregator {
         let new_poll_ops = if !self.new_poll_ops.is_empty() {
             std::mem::take(&mut self.new_poll_ops)
         } else {
-            Vec::default()
+            ShrinkVec::default()
         };
 
         let now = SystemTime::now();
@@ -484,7 +524,7 @@ impl Aggregator {
                     .map(|(_, value)| value.to_proto())
                     .collect(),
                 stats_update: self.resource_stats.as_proto(Include::UpdatedOnly),
-                new_poll_ops,
+                new_poll_ops: (*new_poll_ops).clone(),
             }),
             async_op_update: Some(proto::async_ops::AsyncOpUpdate {
                 new_async_ops: self
@@ -497,15 +537,17 @@ impl Aggregator {
         };
 
         self.watchers
-            .retain(|watch: &Watch<proto::instrument::InstrumentUpdate>| watch.update(&update));
+            .retain_and_shrink(|watch: &Watch<proto::instrument::InstrumentUpdate>| {
+                watch.update(&update)
+            });
 
         let stats = &self.task_stats;
         // Assuming there are much fewer task details subscribers than there are
         // stats updates, iterate over `details_watchers` and compact the map.
-        self.details_watchers.retain(|id, watchers| {
-            if let Some(task_stats) = stats.get(id) {
+        self.details_watchers.retain_and_shrink(|&id, watchers| {
+            if let Some(task_stats) = stats.get(&id) {
                 let details = proto::tasks::TaskDetails {
-                    task_id: Some(id.clone().into()),
+                    task_id: Some(id.into()),
                     now: Some(now.into()),
                     poll_times_histogram: serialize_histogram(&task_stats.poll_times_histogram)
                         .ok(),
@@ -526,6 +568,7 @@ impl Aggregator {
                 self.all_metadata.push(meta.into());
                 self.new_metadata.push(meta.into());
             }
+
             Event::Spawn {
                 id,
                 metadata,
@@ -533,15 +576,17 @@ impl Aggregator {
                 fields,
                 ..
             } => {
+                let id = self.task_ids.id_for(id);
                 self.tasks.insert(
-                    id.clone(),
+                    id,
                     Task {
-                        id: id.clone(),
+                        id,
                         metadata,
                         fields,
                         // TODO: parents
                     },
                 );
+
                 self.task_stats.insert(
                     id,
                     TaskStats {
@@ -550,7 +595,9 @@ impl Aggregator {
                     },
                 );
             }
+
             Event::Enter { id, at } => {
+                let id = self.task_ids.id_for(id);
                 if let Some(mut task_stats) = self.task_stats.update(&id) {
                     task_stats.poll_stats.update_on_span_enter(at);
                 }
@@ -561,6 +608,7 @@ impl Aggregator {
             }
 
             Event::Exit { id, at } => {
+                let id = self.task_ids.id_for(id);
                 if let Some(mut task_stats) = self.task_stats.update(&id) {
                     task_stats.poll_stats.update_on_span_exit(at);
                     if let Some(since_last_poll) = task_stats.poll_stats.since_last_poll(at) {
@@ -577,6 +625,7 @@ impl Aggregator {
             }
 
             Event::Close { id, at } => {
+                let id = self.task_ids.id_for(id);
                 if let Some(mut task_stats) = self.task_stats.update(&id) {
                     task_stats.closed_at = Some(at);
                 }
@@ -591,6 +640,7 @@ impl Aggregator {
             }
 
             Event::Waker { id, op, at } => {
+                let id = self.task_ids.id_for(id);
                 // It's possible for wakers to exist long after a task has
                 // finished. We don't want those cases to create a "new"
                 // task that isn't closed, just to insert some waker stats.
@@ -633,10 +683,11 @@ impl Aggregator {
                 concrete_type,
                 ..
             } => {
+                let id = self.task_ids.id_for(id);
                 self.resources.insert(
-                    id.clone(),
+                    id,
                     Resource {
-                        id: id.clone(),
+                        id,
                         kind,
                         metadata,
                         concrete_type,
@@ -661,12 +712,14 @@ impl Aggregator {
                 task_id,
                 readiness,
             } => {
-                let mut async_op_stats = self.async_op_stats.update_or_default(async_op_id.clone());
+                let async_op_id = self.task_ids.id_for(async_op_id);
+                let resource_id = self.task_ids.id_for(resource_id);
+                let task_id = self.task_ids.id_for(task_id);
+
+                let mut async_op_stats = self.async_op_stats.update_or_default(async_op_id);
                 async_op_stats.poll_stats.polls += 1;
-                async_op_stats.task_id.get_or_insert(task_id.clone());
-                async_op_stats
-                    .resource_id
-                    .get_or_insert(resource_id.clone());
+                async_op_stats.task_id.get_or_insert(task_id);
+                async_op_stats.resource_id.get_or_insert(resource_id);
 
                 if matches!(readiness, Readiness::Pending)
                     && async_op_stats.poll_stats.first_poll.is_none()
@@ -695,6 +748,7 @@ impl Aggregator {
                 update,
                 ..
             } => {
+                let resource_id = self.task_ids.id_for(resource_id);
                 if let Some(mut stats) = self.resource_stats.update(&resource_id) {
                     let upd_key = (&update.val).into();
                     match stats.attributes.get_mut(&upd_key) {
@@ -713,10 +767,11 @@ impl Aggregator {
                 metadata,
                 ..
             } => {
+                let id = self.task_ids.id_for(id);
                 self.async_ops.insert(
-                    id.clone(),
+                    id,
                     AsyncOp {
-                        id: id.clone(),
+                        id,
                         metadata,
                         source,
                     },
@@ -752,156 +807,6 @@ impl Flush {
     }
 }
 
-enum Include {
-    All,
-    UpdatedOnly,
-}
-
-impl<T> IdData<T> {
-    fn update_or_default(&mut self, id: span::Id) -> Updating<'_, T>
-    where
-        T: Default,
-    {
-        Updating(self.data.entry(id).or_default())
-    }
-
-    fn update(&mut self, id: &span::Id) -> Option<Updating<'_, T>> {
-        self.data.get_mut(id).map(Updating)
-    }
-
-    fn insert(&mut self, id: span::Id, data: T) {
-        self.data.insert(id, (data, true));
-    }
-
-    fn since_last_update(&mut self) -> impl Iterator<Item = (&span::Id, &mut T)> {
-        self.data.iter_mut().filter_map(|(id, (data, dirty))| {
-            if *dirty {
-                *dirty = false;
-                Some((id, data))
-            } else {
-                None
-            }
-        })
-    }
-
-    fn all(&self) -> impl Iterator<Item = (&span::Id, &T)> {
-        self.data.iter().map(|(id, (data, _))| (id, data))
-    }
-
-    fn get(&self, id: &span::Id) -> Option<&T> {
-        self.data.get(id).map(|(data, _)| data)
-    }
-
-    fn as_proto(&mut self, include: Include) -> HashMap<u64, T::Output>
-    where
-        T: ToProto,
-    {
-        match include {
-            Include::UpdatedOnly => self
-                .since_last_update()
-                .map(|(id, d)| (id.into_u64(), d.to_proto()))
-                .collect(),
-            Include::All => self
-                .all()
-                .map(|(id, d)| (id.into_u64(), d.to_proto()))
-                .collect(),
-        }
-    }
-
-    fn drop_closed<R: Closable>(
-        &mut self,
-        stats: &mut IdData<R>,
-        now: SystemTime,
-        retention: Duration,
-        has_watchers: bool,
-    ) {
-        let _span = tracing::debug_span!(
-            "drop_closed",
-            entity = %std::any::type_name::<T>(),
-            stats = %std::any::type_name::<R>(),
-        )
-        .entered();
-
-        // drop closed entities
-        tracing::trace!(?retention, has_watchers, "dropping closed");
-
-        let stats_len_0 = stats.data.len();
-        stats.data.retain(|id, (stats, dirty)| {
-            if let Some(closed) = stats.closed_at() {
-                let closed_for = now.duration_since(closed).unwrap_or_default();
-                let should_drop =
-                        // if there are any clients watching, retain all dirty tasks regardless of age
-                        (*dirty && has_watchers)
-                        || closed_for > retention;
-                tracing::trace!(
-                    stats.id = ?id,
-                    stats.closed_at = ?closed,
-                    stats.closed_for = ?closed_for,
-                    stats.dirty = *dirty,
-                    should_drop,
-                );
-                return !should_drop;
-            }
-
-            true
-        });
-
-        let stats_len_1 = stats.data.len();
-
-        // drop closed entities which no longer have stats.
-        let entities_len_0 = self.data.len();
-        self.data.retain(|id, (_, _)| stats.data.contains_key(id));
-        let entities_len_1 = self.data.len();
-        let dropped_stats = stats_len_0 - stats_len_1;
-
-        let stats_len_1 = stats.data.len();
-        if dropped_stats > 0 {
-            tracing::debug!(
-                tasks.dropped = entities_len_0 - entities_len_1,
-                tasks.len = entities_len_1,
-                stats.dropped = dropped_stats,
-                stats.tasks = stats_len_1,
-                "dropped closed entities"
-            );
-        } else {
-            tracing::trace!(
-                entities.len = entities_len_1,
-                stats.len = stats_len_1,
-                "no closed entities were droppable"
-            );
-        }
-    }
-}
-
-impl<T> Default for IdData<T> {
-    fn default() -> Self {
-        IdData {
-            data: HashMap::<span::Id, (T, bool)>::new(),
-        }
-    }
-}
-
-struct Updating<'a, T>(&'a mut (T, bool));
-
-impl<'a, T> Deref for Updating<'a, T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.0 .0
-    }
-}
-
-impl<'a, T> DerefMut for Updating<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0 .0
-    }
-}
-
-impl<'a, T> Drop for Updating<'a, T> {
-    fn drop(&mut self) {
-        self.0 .1 = true;
-    }
-}
-
 impl<T: Clone> Watch<T> {
     fn update(&self, update: &T) -> bool {
         if let Ok(reserve) = self.0.try_reserve() {
@@ -932,7 +837,7 @@ impl ToProto for Task {
 
     fn to_proto(&self) -> Self::Output {
         proto::tasks::Task {
-            id: Some(self.id.clone().into()),
+            id: Some(self.id.into()),
             // TODO: more kinds of tasks...
             kind: proto::tasks::task::Kind::Spawn as i32,
             metadata: Some(self.metadata.into()),
@@ -963,7 +868,7 @@ impl ToProto for Resource {
 
     fn to_proto(&self) -> Self::Output {
         proto::resources::Resource {
-            id: Some(self.id.clone().into()),
+            id: Some(self.id.into()),
             kind: Some(self.kind.clone()),
             metadata: Some(self.metadata.into()),
             concrete_type: self.concrete_type.clone(),
@@ -989,7 +894,7 @@ impl ToProto for AsyncOp {
 
     fn to_proto(&self) -> Self::Output {
         proto::async_ops::AsyncOp {
-            id: Some(self.id.clone().into()),
+            id: Some(self.id.into()),
             metadata: Some(self.metadata.into()),
             source: self.source.clone(),
         }
@@ -1005,8 +910,8 @@ impl ToProto for AsyncOpStats {
             created_at: self.created_at.map(Into::into),
             total_time: total_time(self.created_at, self.closed_at).map(Into::into),
 
-            resource_id: self.resource_id.clone().map(Into::into),
-            task_id: self.task_id.clone().map(Into::into),
+            resource_id: self.resource_id.map(Into::into),
+            task_id: self.task_id.map(Into::into),
         }
     }
 }
@@ -1032,6 +937,27 @@ impl From<AttributeUpdate> for Attribute {
             value: Some(upd.val),
             unit: upd.unit,
         }
+    }
+}
+
+// === impl Ids ===
+
+impl Ids {
+    fn id_for(&mut self, span_id: span::Id) -> Id {
+        match self.id_mappings.entry(span_id) {
+            Entry::Occupied(entry) => *entry.get(),
+            Entry::Vacant(entry) => {
+                let task_id = self.next;
+                entry.insert(task_id);
+                self.next = self.next.wrapping_add(1);
+                task_id
+            }
+        }
+    }
+
+    #[inline]
+    fn remove_all(&mut self, ids: &HashSet<Id>) {
+        self.id_mappings.retain(|_, id| !ids.contains(id));
     }
 }
 
