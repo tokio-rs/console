@@ -87,7 +87,7 @@ pub(crate) struct Aggregator {
     /// *New* PollOp events that whave occured since the last update
     ///
     /// This is emptied on every state update.
-    new_poll_ops: ShrinkVec<proto::resources::PollOp>,
+    new_poll_ops: Vec<proto::resources::PollOp>,
 
     task_ids: Ids,
 
@@ -502,7 +502,7 @@ impl Aggregator {
         let new_poll_ops = if !self.new_poll_ops.is_empty() {
             std::mem::take(&mut self.new_poll_ops)
         } else {
-            ShrinkVec::default()
+            Vec::default()
         };
 
         let now = SystemTime::now();
@@ -524,7 +524,7 @@ impl Aggregator {
                     .map(|(_, value)| value.to_proto())
                     .collect(),
                 stats_update: self.resource_stats.as_proto(Include::UpdatedOnly),
-                new_poll_ops: (*new_poll_ops).clone(),
+                new_poll_ops,
             }),
             async_op_update: Some(proto::async_ops::AsyncOpUpdate {
                 new_async_ops: self
