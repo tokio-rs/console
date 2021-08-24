@@ -24,10 +24,10 @@ use hdrhistogram::{
 
 pub type Id = u64;
 
+mod id_data;
 mod shrink;
-mod task_data;
+use self::id_data::{IdData, Include};
 use self::shrink::{ShrinkMap, ShrinkVec};
-use self::task_data::{IdData, Include};
 
 pub(crate) struct Aggregator {
     /// Channel of incoming events emitted by `TaskLayer`s.

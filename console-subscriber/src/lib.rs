@@ -365,19 +365,16 @@ where
         } else if self.is_resource(metadata) {
             let mut resource_visitor = ResourceVisitor::default();
             attrs.record(&mut resource_visitor);
-            match resource_visitor.result() {
-                Some((concrete_type, kind)) => {
-                    let at = SystemTime::now();
-                    self.send(Event::Resource {
-                        id: id.clone(),
-                        metadata,
-                        at,
-                        concrete_type,
-                        kind,
-                    });
-                }
-                _ => {} // unknown resource span format
-            }
+            if let Some((concrete_type, kind)) = resource_visitor.result() {
+                let at = SystemTime::now();
+                self.send(Event::Resource {
+                    id: id.clone(),
+                    metadata,
+                    at,
+                    concrete_type,
+                    kind,
+                });
+            } // else unknown resource span format
         } else if self.is_async_op(metadata) {
             let mut async_op_visitor = AsyncOpVisitor::default();
             attrs.record(&mut async_op_visitor);
@@ -400,10 +397,10 @@ where
             let at = SystemTime::now();
             let mut visitor = WakerVisitor::default();
             event.record(&mut visitor);
-            match visitor.result() {
-                Some((id, op)) => self.send(Event::Waker { id, op, at }),
-                None => {} // unknown waker event... what to do? can't trace it from here...
+            if let Some((id, op)) = visitor.result() {
+                self.send(Event::Waker { id, op, at });
             }
+            // else unknown waker event... what to do? can't trace it from here...
         } else if self.poll_op_callsites.contains(event.metadata()) {
             match ctx.current_span().id() {
                 Some(resource_id) if self.is_id_resource(resource_id, &ctx) => {
@@ -419,21 +416,19 @@ where
                             Some((task_id, async_op_id))
                         });
 
-                        match task_and_async_op_ids {
-                            Some((task_id, async_op_id)) => {
-                                let at = SystemTime::now();
-                                self.send(Event::PollOp {
-                                    metadata,
-                                    at,
-                                    resource_id: resource_id.clone(),
-                                    op_name,
-                                    async_op_id,
-                                    task_id,
-                                    readiness,
-                                });
-                            }
-                            None => {} // poll op event should be emitted in the context of an async op and task spans
+                        if let Some((task_id, async_op_id)) = task_and_async_op_ids {
+                            let at = SystemTime::now();
+                            self.send(Event::PollOp {
+                                metadata,
+                                at,
+                                resource_id: resource_id.clone(),
+                                op_name,
+                                async_op_id,
+                                task_id,
+                                readiness,
+                            });
                         }
+                        // else poll op event should be emitted in the context of an async op and task spans
                     }
                 }
                 _ => {} // poll op event should be emitted in the context of a resource span
