@@ -57,9 +57,24 @@ pub struct TasksLayer {
     /// they might all have their own sets of waker ops.
     waker_callsites: Callsites<32>,
 
+    /// Set of callsites for spans reprenting resources
+    ///
+    /// TODO: Take some time to determine more reasonable numbers
     resource_callsites: Callsites<32>,
+
+    /// Set of callsites for spans reprensing async operations on resources
+    ///
+    /// TODO: Take some time to determine more reasonable numbers
     async_op_callsites: Callsites<32>,
+
+    /// Set of callsites for events reprensing poll operation invocations on resources
+    ///
+    /// TODO: Take some time to determine more reasonable numbers
     poll_op_callsites: Callsites<32>,
+
+    /// Set of callsites for events reprensing state attribute state updates on resources
+    ///
+    /// TODO: Take some time to determine more reasonable numbers
     state_update_callsites: Callsites<32>,
 }
 

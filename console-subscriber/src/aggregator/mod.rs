@@ -82,6 +82,7 @@ pub(crate) struct Aggregator {
     /// *All* PollOp events for AsyncOps on Resources.
     ///
     /// This is sent to new clients as part of the initial state.
+    // TODO: drop the poll ops for async ops that have been dropped
     all_poll_ops: ShrinkVec<proto::resources::PollOp>,
 
     /// *New* PollOp events that whave occured since the last update
