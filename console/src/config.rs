@@ -55,7 +55,7 @@ pub struct ViewOptions {
         parse(from_str = parse_true_color),
         possible_values = &["24bit", "truecolor"],
     )]
-    truecolor: bool,
+    truecolor: Option<bool>,
 
     /// Explicitly set which color palette to use.
     #[clap(
@@ -142,7 +142,7 @@ impl ViewOptions {
         }
 
         // Does the terminal advertise truecolor support via the COLORTERM env var?
-        if self.truecolor {
+        if self.truecolor.unwrap_or(false) {
             tracing::debug!("millions of colors enabled via `COLORTERM=truecolor`");
             return Palette::All;
         }
