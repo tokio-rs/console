@@ -21,6 +21,7 @@ mod builder;
 mod callsites;
 mod init;
 mod record;
+pub(crate) mod sync;
 
 use aggregator::Aggregator;
 pub use builder::Builder;

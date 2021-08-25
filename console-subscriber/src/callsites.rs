@@ -1,10 +1,8 @@
+use crate::sync::RwLock;
 use std::{
     collections::HashSet,
     fmt, ptr,
-    sync::{
-        atomic::{AtomicPtr, AtomicUsize, Ordering},
-        PoisonError, RwLock,
-    },
+    sync::atomic::{AtomicPtr, AtomicUsize, Ordering},
 };
 use tracing_core::{callsite, Metadata};
 
@@ -39,10 +37,7 @@ impl<const MAX_CALLSITES: usize> Callsites<MAX_CALLSITES> {
         } else {
             // Otherwise, we've filled the callsite array (sad!). Spill over
             // into a hash set.
-            self.spill
-                .write()
-                .unwrap_or_else(PoisonError::into_inner)
-                .insert(callsite.callsite());
+            self.spill.write().insert(callsite.callsite());
         }
     }
 
@@ -79,10 +74,7 @@ impl<const MAX_CALLSITES: usize> Callsites<MAX_CALLSITES> {
 
     #[cold]
     fn check_spill(&self, callsite: &'static Metadata<'static>) -> bool {
-        self.spill
-            .read()
-            .unwrap_or_else(PoisonError::into_inner)
-            .contains(&callsite.callsite())
+        self.spill.read().contains(&callsite.callsite())
     }
 }
 
