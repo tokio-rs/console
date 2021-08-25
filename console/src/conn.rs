@@ -1,5 +1,5 @@
 use console_api::instrument::{
-    instrument_client::InstrumentClient, InstrumentRequest, InstrumentUpdate, TaskDetailsRequest,
+    instrument_client::InstrumentClient, InstrumentRequest, TaskDetailsRequest, Update,
 };
 use console_api::tasks::TaskDetails;
 use futures::stream::StreamExt;
@@ -16,7 +16,7 @@ pub struct Connection {
 enum State {
     Connected {
         client: InstrumentClient<Channel>,
-        stream: Streaming<InstrumentUpdate>,
+        stream: Streaming<Update>,
     },
     Disconnected(Duration),
 }
@@ -60,7 +60,7 @@ impl Connection {
         }
     }
 
-    pub async fn next_update(&mut self) -> InstrumentUpdate {
+    pub async fn next_update(&mut self) -> Update {
         loop {
             match self.state {
                 State::Connected { ref mut stream, .. } => match Pin::new(stream).next().await {

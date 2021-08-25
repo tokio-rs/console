@@ -190,6 +190,10 @@ impl From<&dyn std::fmt::Debug> for field::Value {
     }
 }
 
+// Clippy warns when a type derives `PartialEq` but has a manual `Hash` impl,
+// or vice versa. However, this is unavoidable here, because `prost` generates
+// a struct with `#[derive(PartialEq)]`, but we cannot add`#[derive(Hash)]` to the
+// generated code.
 #[allow(clippy::derive_hash_xor_eq)]
 impl Hash for field::Name {
     fn hash<H: Hasher>(&self, state: &mut H) {

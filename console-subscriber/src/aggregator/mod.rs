@@ -1,4 +1,4 @@
-use super::{AttributeUpdateOp, Event, Readiness, WakeOp, Watch, WatchKind};
+use super::{AttributeUpdateOp, Event, WakeOp, Watch, WatchKind};
 use crate::{record::Recorder, AttributeUpdate, WatchRequest};
 use console_api as proto;
 use proto::resources::resource;
@@ -46,7 +46,7 @@ pub(crate) struct Aggregator {
     flush_capacity: Arc<Flush>,
 
     /// Currently active RPCs streaming task events.
-    watchers: ShrinkVec<Watch<proto::instrument::InstrumentUpdate>>,
+    watchers: ShrinkVec<Watch<proto::instrument::Update>>,
 
     /// Currently active RPCs streaming task details events, by task ID.
     details_watchers: ShrinkMap<Id, Vec<Watch<proto::tasks::TaskDetails>>>,
@@ -90,7 +90,7 @@ pub(crate) struct Aggregator {
     /// This is emptied on every state update.
     new_poll_ops: Vec<proto::resources::PollOp>,
 
-    task_ids: Ids,
+    ids: Ids,
 
     /// A sink to record all events to a file.
     recorder: Option<Recorder>,
@@ -125,9 +125,9 @@ pub(crate) struct Ids {
 }
 
 struct PollStats {
-    // the number of polls in progress
+    /// The number of polls in progress
     current_polls: u64,
-    // the total number of polls
+    /// The total number of polls
     polls: u64,
     first_poll: Option<SystemTime>,
     last_poll_started: Option<SystemTime>,
@@ -143,6 +143,9 @@ struct Resource {
     kind: resource::Kind,
 }
 
+/// Represents a key for a `proto::field::Name`. Because the
+/// proto::field::Name might not be unique we also include the
+/// metadata id in this key
 #[derive(Hash, PartialEq, Eq)]
 struct FieldKey {
     meta_id: u64,
@@ -297,7 +300,7 @@ impl Aggregator {
             async_op_stats: IdData::default(),
             all_poll_ops: Default::default(),
             new_poll_ops: Default::default(),
-            task_ids: Ids::default(),
+            ids: Ids::default(),
             recorder: builder
                 .recording_path
                 .as_ref()
@@ -390,33 +393,30 @@ impl Aggregator {
             now,
             self.retention,
             has_watchers,
-            &mut self.task_ids,
+            &mut self.ids,
         );
         self.resources.drop_closed(
             &mut self.resource_stats,
             now,
             self.retention,
             has_watchers,
-            &mut self.task_ids,
+            &mut self.ids,
         );
         self.async_ops.drop_closed(
             &mut self.async_op_stats,
             now,
             self.retention,
             has_watchers,
-            &mut self.task_ids,
+            &mut self.ids,
         );
     }
 
     /// Add the task subscription to the watchers after sending the first update
-    fn add_instrument_subscription(
-        &mut self,
-        subscription: Watch<proto::instrument::InstrumentUpdate>,
-    ) {
+    fn add_instrument_subscription(&mut self, subscription: Watch<proto::instrument::Update>) {
         tracing::debug!("new instrument subscription");
         let now = SystemTime::now();
         // Send the initial state --- if this fails, the subscription is already dead
-        let update = &proto::instrument::InstrumentUpdate {
+        let update = &proto::instrument::Update {
             task_update: Some(proto::tasks::TaskUpdate {
                 new_tasks: self
                     .tasks
@@ -500,14 +500,10 @@ impl Aggregator {
             None
         };
 
-        let new_poll_ops = if !self.new_poll_ops.is_empty() {
-            std::mem::take(&mut self.new_poll_ops)
-        } else {
-            Vec::default()
-        };
+        let new_poll_ops = std::mem::take(&mut self.new_poll_ops);
 
         let now = SystemTime::now();
-        let update = proto::instrument::InstrumentUpdate {
+        let update = proto::instrument::Update {
             now: Some(now.into()),
             new_metadata,
             task_update: Some(proto::tasks::TaskUpdate {
@@ -538,9 +534,7 @@ impl Aggregator {
         };
 
         self.watchers
-            .retain_and_shrink(|watch: &Watch<proto::instrument::InstrumentUpdate>| {
-                watch.update(&update)
-            });
+            .retain_and_shrink(|watch: &Watch<proto::instrument::Update>| watch.update(&update));
 
         let stats = &self.task_stats;
         // Assuming there are much fewer task details subscribers than there are
@@ -577,7 +571,7 @@ impl Aggregator {
                 fields,
                 ..
             } => {
-                let id = self.task_ids.id_for(id);
+                let id = self.ids.id_for(id);
                 self.tasks.insert(
                     id,
                     Task {
@@ -598,7 +592,7 @@ impl Aggregator {
             }
 
             Event::Enter { id, at } => {
-                let id = self.task_ids.id_for(id);
+                let id = self.ids.id_for(id);
                 if let Some(mut task_stats) = self.task_stats.update(&id) {
                     task_stats.poll_stats.update_on_span_enter(at);
                 }
@@ -609,7 +603,7 @@ impl Aggregator {
             }
 
             Event::Exit { id, at } => {
-                let id = self.task_ids.id_for(id);
+                let id = self.ids.id_for(id);
                 if let Some(mut task_stats) = self.task_stats.update(&id) {
                     task_stats.poll_stats.update_on_span_exit(at);
                     if let Some(since_last_poll) = task_stats.poll_stats.since_last_poll(at) {
@@ -626,7 +620,7 @@ impl Aggregator {
             }
 
             Event::Close { id, at } => {
-                let id = self.task_ids.id_for(id);
+                let id = self.ids.id_for(id);
                 if let Some(mut task_stats) = self.task_stats.update(&id) {
                     task_stats.closed_at = Some(at);
                 }
@@ -641,7 +635,7 @@ impl Aggregator {
             }
 
             Event::Waker { id, op, at } => {
-                let id = self.task_ids.id_for(id);
+                let id = self.ids.id_for(id);
                 // It's possible for wakers to exist long after a task has
                 // finished. We don't want those cases to create a "new"
                 // task that isn't closed, just to insert some waker stats.
@@ -684,7 +678,7 @@ impl Aggregator {
                 concrete_type,
                 ..
             } => {
-                let id = self.task_ids.id_for(id);
+                let id = self.ids.id_for(id);
                 self.resources.insert(
                     id,
                     Resource {
@@ -713,16 +707,16 @@ impl Aggregator {
                 task_id,
                 readiness,
             } => {
-                let async_op_id = self.task_ids.id_for(async_op_id);
-                let resource_id = self.task_ids.id_for(resource_id);
-                let task_id = self.task_ids.id_for(task_id);
+                let async_op_id = self.ids.id_for(async_op_id);
+                let resource_id = self.ids.id_for(resource_id);
+                let task_id = self.ids.id_for(task_id);
 
                 let mut async_op_stats = self.async_op_stats.update_or_default(async_op_id);
                 async_op_stats.poll_stats.polls += 1;
                 async_op_stats.task_id.get_or_insert(task_id);
                 async_op_stats.resource_id.get_or_insert(resource_id);
 
-                if matches!(readiness, Readiness::Pending)
+                if readiness == proto::Readiness::Pending
                     && async_op_stats.poll_stats.first_poll.is_none()
                 {
                     async_op_stats.poll_stats.first_poll = Some(at);
@@ -734,10 +728,7 @@ impl Aggregator {
                     name: op_name,
                     task_id: Some(task_id.into()),
                     async_op_id: Some(async_op_id.into()),
-                    readiness: match readiness {
-                        Readiness::Pending => proto::Readiness::Pending,
-                        Readiness::Ready => proto::Readiness::Ready,
-                    } as i32,
+                    readiness: readiness as i32,
                 };
 
                 self.all_poll_ops.push(poll_op.clone());
@@ -749,13 +740,15 @@ impl Aggregator {
                 update,
                 ..
             } => {
-                let resource_id = self.task_ids.id_for(resource_id);
+                let resource_id = self.ids.id_for(resource_id);
                 if let Some(mut stats) = self.resource_stats.update(&resource_id) {
-                    let upd_key = (&update.val).into();
-                    match stats.attributes.get_mut(&upd_key) {
-                        Some(attr) => update_attribute(attr, update),
-                        None => {
-                            stats.attributes.insert(upd_key, update.into());
+                    let upd_key = (&update.field).into();
+                    match stats.attributes.entry(upd_key) {
+                        Entry::Occupied(ref mut attr) => {
+                            update_attribute(attr.get_mut(), update);
+                        }
+                        Entry::Vacant(attr) => {
+                            attr.insert(update.into());
                         }
                     }
                 }
@@ -768,7 +761,7 @@ impl Aggregator {
                 metadata,
                 ..
             } => {
-                let id = self.task_ids.id_for(id);
+                let id = self.ids.id_for(id);
                 self.async_ops.insert(
                     id,
                     AsyncOp {
@@ -933,7 +926,7 @@ impl From<&proto::Field> for FieldKey {
 impl From<AttributeUpdate> for Attribute {
     fn from(upd: AttributeUpdate) -> Self {
         Attribute {
-            value: Some(upd.val),
+            field: Some(upd.field),
             unit: upd.unit,
         }
     }
@@ -975,8 +968,9 @@ fn total_time(created_at: Option<SystemTime>, closed_at: Option<SystemTime>) -> 
 
 fn update_attribute(attribute: &mut Attribute, update: AttributeUpdate) {
     use proto::field::Value::*;
-    let attribute_val = attribute.value.as_mut().and_then(|a| a.value.as_mut());
-    let update_val = update.val.value;
+    let attribute_val = attribute.field.as_mut().and_then(|a| a.value.as_mut());
+    let update_val = update.field.value;
+    let update_name = update.field.name;
 
     match (attribute_val, update_val) {
         (Some(BoolVal(v)), Some(BoolVal(upd))) => *v = upd,
@@ -986,19 +980,29 @@ fn update_attribute(attribute: &mut Attribute, update: AttributeUpdate) {
         (Some(DebugVal(v)), Some(DebugVal(upd))) => *v = upd,
 
         (Some(U64Val(v)), Some(U64Val(upd))) => match update.op {
-            AttributeUpdateOp::Add => *v += upd,
+            Some(AttributeUpdateOp::Add) => *v += upd,
 
-            AttributeUpdateOp::Sub => *v -= upd,
+            Some(AttributeUpdateOp::Sub) => *v -= upd,
 
-            AttributeUpdateOp::Ovr => *v = upd,
+            Some(AttributeUpdateOp::Override) => *v = upd,
+
+            None => tracing::warn!(
+                "numeric attribute update {:?} needs to have an op field",
+                update_name
+            ),
         },
 
         (Some(I64Val(v)), Some(I64Val(upd))) => match update.op {
-            AttributeUpdateOp::Add => *v += upd,
+            Some(AttributeUpdateOp::Add) => *v += upd,
 
-            AttributeUpdateOp::Sub => *v -= upd,
+            Some(AttributeUpdateOp::Sub) => *v -= upd,
 
-            AttributeUpdateOp::Ovr => *v = upd,
+            Some(AttributeUpdateOp::Override) => *v = upd,
+
+            None => tracing::warn!(
+                "numeric attribute update {:?} needs to have an op field",
+                update_name
+            ),
         },
 
         (val, update) => {

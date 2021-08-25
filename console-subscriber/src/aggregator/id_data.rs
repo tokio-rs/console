@@ -3,14 +3,6 @@ use std::collections::{HashMap, HashSet};
 use std::ops::{Deref, DerefMut};
 use std::time::{Duration, SystemTime};
 
-impl<T> Default for IdData<T> {
-    fn default() -> Self {
-        IdData {
-            data: ShrinkMap::<Id, (T, bool)>::new(),
-        }
-    }
-}
-
 pub(crate) struct IdData<T> {
     data: ShrinkMap<Id, (T, bool)>,
 }
@@ -23,6 +15,14 @@ pub(crate) enum Include {
 }
 
 // === impl IdData ===
+
+impl<T> Default for IdData<T> {
+    fn default() -> Self {
+        IdData {
+            data: ShrinkMap::<Id, (T, bool)>::new(),
+        }
+    }
+}
 
 impl<T> IdData<T> {
     pub(crate) fn update_or_default(&mut self, id: Id) -> Updating<'_, T>

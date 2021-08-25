@@ -2,10 +2,8 @@
 //! fields from tracing metadata and producing the parts
 //! needed to construct `Event` instances.
 
-use super::{AttributeUpdate, AttributeUpdateOp, Readiness, WakeOp};
+use super::{AttributeUpdate, AttributeUpdateOp, WakeOp};
 use console_api as proto;
-use proto::field::Name as PbFieldName;
-use proto::field::Value as PbFieldValue;
 use proto::resources::resource;
 use tracing_core::{
     field::{self, Visit},
@@ -78,7 +76,7 @@ pub(crate) struct WakerVisitor {
 /// that has the following shape:
 ///
 /// tracing::trace!(
-///     target: "tokio::resource::poll_op",
+///     target: "runtime::resource::poll_op",
 ///     op_name = "poll_elapsed",
 ///     readiness = "pending"
 /// );
@@ -89,7 +87,7 @@ pub(crate) struct WakerVisitor {
 #[derive(Default)]
 pub(crate) struct PollOpVisitor {
     op_name: Option<String>,
-    readiness: Option<Readiness>,
+    readiness: Option<proto::Readiness>,
 }
 
 /// Used to extract the fields needed to construct
@@ -97,11 +95,10 @@ pub(crate) struct PollOpVisitor {
 /// that has the following shape:
 ///
 /// tracing::trace!(
-///     target: "tokio::resource::state_update",
-///     duration = "attribute_name",
-///     value = 10,
-///     unit = "ms",
-///     op = "ovr",
+///     target: "runtime::resource::state_update",
+///     duration = duration,
+///     duration.unit = "ms",
+///     duration.op = "override",
 /// );
 ///
 /// Fields:
@@ -109,10 +106,9 @@ pub(crate) struct PollOpVisitor {
 /// value - the value for this update
 /// unit - the unit for the value being updated (e.g. ms, s, bytes)
 /// op - the operation that this update performs to the value of the resource attribute (one of: ovr, sub, add)
-#[derive(Default)]
 pub(crate) struct StateUpdateVisitor {
-    name: Option<String>,
-    val: Option<PbFieldValue>,
+    meta_id: proto::MetaId,
+    field: Option<proto::Field>,
     unit: Option<String>,
     op: Option<AttributeUpdateOp>,
 }
@@ -258,13 +254,13 @@ impl Visit for WakerVisitor {
 }
 
 impl PollOpVisitor {
-    pub(crate) const POLL_OP_EVENT_NAME: &'static str = "runtime.resource.poll_op";
+    pub(crate) const POLL_OP_EVENT_TARGET: &'static str = "runtime::resource::poll_op";
     const OP_NAME_FIELD_NAME: &'static str = "op_name";
     const OP_READINESS_FIELD_NAME: &'static str = "readiness";
     const OP_READINESS_READY: &'static str = "ready";
     const OP_READINESS_PENDING: &'static str = "pending";
 
-    pub(crate) fn result(self) -> Option<(String, Readiness)> {
+    pub(crate) fn result(self) -> Option<(String, proto::Readiness)> {
         let op_name = self.op_name?;
         let readiness = self.readiness?;
         Some((op_name, readiness))
@@ -281,8 +277,8 @@ impl Visit for PollOpVisitor {
             }
             Self::OP_READINESS_FIELD_NAME => {
                 self.readiness = Some(match value {
-                    Self::OP_READINESS_READY => Readiness::Ready,
-                    Self::OP_READINESS_PENDING => Readiness::Pending,
+                    Self::OP_READINESS_READY => proto::Readiness::Ready,
+                    Self::OP_READINESS_PENDING => proto::Readiness::Pending,
                     _ => return,
                 });
             }
@@ -292,78 +288,76 @@ impl Visit for PollOpVisitor {
 }
 
 impl StateUpdateVisitor {
-    pub(crate) const STATE_UPDATE_EVENT_NAME: &'static str = "runtime.resource.state_update";
-    const OP_STATE_FIELD_TYPE_ATTR_NAME: &'static str = "attribute_name";
-    const OP_STATE_FIELD_TYPE_VALUE: &'static str = "value";
-    const OP_STATE_FIELD_TYPE_UNIT: &'static str = "unit";
-    const OP_STATE_FIELD_TYPE_OP: &'static str = "op";
-    const UPDATE_OP_ADD: &'static str = "add";
-    const UPDATE_OP_SUB: &'static str = "sub";
-    const UPDATE_OP_OVR: &'static str = "ovr";
+    pub(crate) const STATE_UPDATE_EVENT_TARGET: &'static str = "runtime::resource::state_update";
 
-    pub(crate) fn result(self, metadata_id: proto::MetaId) -> Option<AttributeUpdate> {
-        let name = self.name?;
-        let value = self.val?;
-        let op = self.op?;
+    const STATE_OP_SUFFIX: &'static str = ".op";
+    const STATE_UNIT_SUFFIX: &'static str = ".unit";
 
-        let val = proto::Field {
-            metadata_id: Some(metadata_id),
-            name: Some(PbFieldName::StrName(name)),
-            value: Some(value),
-        };
+    const OP_ADD: &'static str = "add";
+    const OP_SUB: &'static str = "sub";
+    const OP_OVERRIDE: &'static str = "override";
 
+    pub(crate) fn new(meta_id: proto::MetaId) -> Self {
+        StateUpdateVisitor {
+            meta_id,
+            field: None,
+            unit: None,
+            op: None,
+        }
+    }
+
+    pub(crate) fn result(self) -> Option<AttributeUpdate> {
         Some(AttributeUpdate {
-            val,
-            op,
+            field: self.field?,
+            op: self.op,
             unit: self.unit,
         })
     }
 }
 
 impl Visit for StateUpdateVisitor {
-    fn record_debug(&mut self, _: &field::Field, _: &dyn std::fmt::Debug) {}
+    fn record_debug(&mut self, field: &field::Field, value: &dyn std::fmt::Debug) {
+        self.field = Some(proto::Field {
+            name: Some(field.name().into()),
+            value: Some(value.into()),
+            metadata_id: Some(self.meta_id.clone()),
+        });
+    }
 
     fn record_i64(&mut self, field: &field::Field, value: i64) {
-        if field.name() == Self::OP_STATE_FIELD_TYPE_VALUE {
-            self.val = Some(PbFieldValue::I64Val(value));
-        }
+        self.field = Some(proto::Field {
+            name: Some(field.name().into()),
+            value: Some(value.into()),
+            metadata_id: Some(self.meta_id.clone()),
+        });
     }
 
     fn record_u64(&mut self, field: &field::Field, value: u64) {
-        if field.name() == Self::OP_STATE_FIELD_TYPE_VALUE {
-            self.val = Some(PbFieldValue::U64Val(value));
-        }
+        self.field = Some(proto::Field {
+            name: Some(field.name().into()),
+            value: Some(value.into()),
+            metadata_id: Some(self.meta_id.clone()),
+        });
     }
 
     fn record_bool(&mut self, field: &field::Field, value: bool) {
-        if field.name() == Self::OP_STATE_FIELD_TYPE_VALUE {
-            self.val = Some(PbFieldValue::BoolVal(value));
-        }
+        self.field = Some(proto::Field {
+            name: Some(field.name().into()),
+            value: Some(value.into()),
+            metadata_id: Some(self.meta_id.clone()),
+        });
     }
 
     fn record_str(&mut self, field: &field::Field, value: &str) {
-        if value == Self::OP_STATE_FIELD_TYPE_ATTR_NAME {
-            self.name = Some(field.name().to_string());
-            return;
-        }
-
-        match field.name() {
-            Self::OP_STATE_FIELD_TYPE_UNIT => self.unit = Some(value.to_string()),
-
-            Self::OP_STATE_FIELD_TYPE_OP => {
-                match value {
-                    Self::UPDATE_OP_ADD => self.op = Some(AttributeUpdateOp::Add),
-                    Self::UPDATE_OP_SUB => self.op = Some(AttributeUpdateOp::Sub),
-                    Self::UPDATE_OP_OVR => self.op = Some(AttributeUpdateOp::Ovr),
-                    _ => {}
-                };
-            }
-
-            Self::OP_STATE_FIELD_TYPE_VALUE => {
-                self.val = Some(PbFieldValue::StrVal(value.to_string()));
-            }
-
-            _ => {}
+        if field.name().ends_with(Self::STATE_OP_SUFFIX) {
+            match value {
+                Self::OP_ADD => self.op = Some(AttributeUpdateOp::Add),
+                Self::OP_SUB => self.op = Some(AttributeUpdateOp::Sub),
+                Self::OP_OVERRIDE => self.op = Some(AttributeUpdateOp::Override),
+                _ => {}
+            };
+        } else if field.name().ends_with(Self::STATE_UNIT_SUFFIX) {
+            self.unit = Some(value.to_string());
         }
     }
 }

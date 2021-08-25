@@ -9,7 +9,7 @@ import "resources.proto";
 import "async_ops.proto";
 
 service Instrument {
-    rpc WatchUpdates(InstrumentRequest) returns (stream InstrumentUpdate) {}
+    rpc WatchUpdates(InstrumentRequest) returns (stream Update) {}
     rpc WatchTaskDetails(TaskDetailsRequest) returns (stream tasks.TaskDetails) {}
 }
 
@@ -23,7 +23,7 @@ message TaskDetailsRequest {
     common.Id id = 1;
 }
 
-// InstrumentUpdate carries all information regarding tasks, resources, async operations
+// Update carries all information regarding tasks, resources, async operations
 // and resoruce operations in one message. There are a couple of reasons to combine all
 // of these into a single message:
 //
@@ -31,7 +31,7 @@ message TaskDetailsRequest {
 // - we can have all the new_metadata in one place
 // - things such as async ops and resouce ops do not make sense
 //   on their own as they have relations to tasks and resources
-message InstrumentUpdate {
+message Update {
     // The system time when this update was recorded.
     //
     // This is the timestamp any durations in the included `Stats` were

@@ -88,7 +88,7 @@ pub struct Server {
 struct Watch<T>(mpsc::Sender<Result<T, tonic::Status>>);
 
 enum WatchKind {
-    Instrument(Watch<proto::instrument::InstrumentUpdate>),
+    Instrument(Watch<proto::instrument::Update>),
     TaskDetail(WatchRequest<proto::tasks::TaskDetails>),
 }
 
@@ -138,7 +138,7 @@ enum Event {
         op_name: String,
         async_op_id: span::Id,
         task_id: span::Id,
-        readiness: Readiness,
+        readiness: proto::Readiness,
     },
     StateUpdate {
         metadata: &'static Metadata<'static>,
@@ -155,21 +155,16 @@ enum Event {
 }
 
 #[derive(Debug, Clone)]
-enum Readiness {
-    Pending,
-    Ready,
-}
-#[derive(Debug, Clone)]
 struct AttributeUpdate {
-    val: proto::Field,
-    op: AttributeUpdateOp,
+    field: proto::Field,
+    op: Option<AttributeUpdateOp>,
     unit: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 enum AttributeUpdateOp {
     Add,
-    Ovr,
+    Override,
     Sub,
 }
 
@@ -336,31 +331,19 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn register_callsite(&self, meta: &'static Metadata<'static>) -> subscriber::Interest {
-        if meta.name() == "runtime.spawn"
-            // back compat until tokio is updated to use the standardized naming
-            // scheme
-            || (meta.name() == "task" && meta.target() == "tokio::task")
-        {
-            self.spawn_callsites.insert(meta);
-        } else if meta.target() == "runtime::waker"
-            // back compat until tokio is updated to use the standardized naming
-            // scheme
-            || meta.target() == "tokio::task::waker"
-        {
-            self.waker_callsites.insert(meta);
-        } else if meta.name() == ResourceVisitor::RES_SPAN_NAME {
-            self.resource_callsites.insert(meta);
-        } else if meta.name() == AsyncOpVisitor::ASYNC_OP_SPAN_NAME {
-            self.async_op_callsites.insert(meta);
-        } else if meta.name() == PollOpVisitor::POLL_OP_EVENT_NAME
-            || meta.target() == "tokio::resource::poll_op"
-        {
-            self.poll_op_callsites.insert(meta);
-        } else if meta.name() == StateUpdateVisitor::STATE_UPDATE_EVENT_NAME
-            || meta.target() == "tokio::resource::state_update"
-        {
-            self.state_update_callsites.insert(meta);
+        match (meta.name(), meta.target()) {
+            ("runtime.spawn", _) | ("task", "tokio::task") => self.spawn_callsites.insert(meta),
+            (_, "runtime::waker") | (_, "tokio::task::waker") => self.waker_callsites.insert(meta),
+            (ResourceVisitor::RES_SPAN_NAME, _) => self.resource_callsites.insert(meta),
+            (AsyncOpVisitor::ASYNC_OP_SPAN_NAME, _) => self.async_op_callsites.insert(meta),
+            (_, PollOpVisitor::POLL_OP_EVENT_TARGET) | (_, "tokio::resource::poll_op") => {
+                self.poll_op_callsites.insert(meta)
+            }
+            (_, StateUpdateVisitor::STATE_UPDATE_EVENT_TARGET)
+            | (_, "tokio::resource::state_update") => self.state_update_callsites.insert(meta),
+            (_, _) => {}
         }
+
         self.send(Event::Metadata(meta));
         subscriber::Interest::always()
     }
@@ -451,10 +434,10 @@ where
         } else if self.state_update_callsites.contains(event.metadata()) {
             match ctx.current_span().id() {
                 Some(resource_id) if self.is_id_resource(resource_id, &ctx) => {
-                    let mut state_update_visitor = StateUpdateVisitor::default();
-                    event.record(&mut state_update_visitor);
                     let meta_id = event.metadata().into();
-                    if let Some(update) = state_update_visitor.result(meta_id) {
+                    let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
+                    event.record(&mut state_update_visitor);
+                    if let Some(update) = state_update_visitor.result() {
                         let at = SystemTime::now();
                         self.send(Event::StateUpdate {
                             metadata,
@@ -464,7 +447,7 @@ where
                         });
                     }
                 }
-                _ => tracing::warn!(
+                _ => eprintln!(
                     "state update event should be emitted in the context of a resource span: {:?}",
                     event
                 ),
@@ -560,9 +543,8 @@ impl Server {
 
 #[tonic::async_trait]
 impl proto::instrument::instrument_server::Instrument for Server {
-    type WatchUpdatesStream = tokio_stream::wrappers::ReceiverStream<
-        Result<proto::instrument::InstrumentUpdate, tonic::Status>,
-    >;
+    type WatchUpdatesStream =
+        tokio_stream::wrappers::ReceiverStream<Result<proto::instrument::Update, tonic::Status>>;
     type WatchTaskDetailsStream =
         tokio_stream::wrappers::ReceiverStream<Result<proto::tasks::TaskDetails, tonic::Status>>;
     async fn watch_updates(
