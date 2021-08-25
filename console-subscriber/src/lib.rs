@@ -52,7 +52,7 @@ pub struct TasksLayer {
 }
 
 pub struct Server {
-    subscribe: mpsc::Sender<WatchKind>,
+    subscribe: mpsc::Sender<Command>,
     addr: SocketAddr,
     aggregator: Option<Aggregator>,
     client_buffer: usize,
@@ -70,9 +70,11 @@ struct WakerVisitor {
 
 struct Watch<T>(mpsc::Sender<Result<T, tonic::Status>>);
 
-enum WatchKind {
-    Tasks(Watch<proto::tasks::TaskUpdate>),
-    TaskDetail(WatchRequest<proto::tasks::TaskDetails>),
+enum Command {
+    WatchTasks(Watch<proto::tasks::TaskUpdate>),
+    WatchTaskDetail(WatchRequest<proto::tasks::TaskDetails>),
+    Pause,
+    Resume,
 }
 
 struct WatchRequest<T> {
@@ -365,7 +367,7 @@ impl proto::tasks::tasks_server::Tasks for Server {
             tonic::Status::internal("cannot start new watch, aggregation task is not running")
         })?;
         let (tx, rx) = mpsc::channel(self.client_buffer);
-        permit.send(WatchKind::Tasks(Watch(tx)));
+        permit.send(Command::WatchTasks(Watch(tx)));
         tracing::debug!("watch started");
         let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
         Ok(tonic::Response::new(stream))
@@ -385,7 +387,7 @@ impl proto::tasks::tasks_server::Tasks for Server {
 
         // Check with the aggregator task to request a stream if the task exists.
         let (stream_sender, stream_recv) = oneshot::channel();
-        permit.send(WatchKind::TaskDetail(WatchRequest {
+        permit.send(Command::WatchTaskDetail(WatchRequest {
             id: task_id.into(),
             stream_sender,
             buffer: self.client_buffer,
@@ -399,6 +401,26 @@ impl proto::tasks::tasks_server::Tasks for Server {
         tracing::debug!(id = ?task_id, "task details watch started");
         let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
         Ok(tonic::Response::new(stream))
+    }
+
+    async fn pause(
+        &self,
+        _req: tonic::Request<proto::tasks::PauseRequest>,
+    ) -> Result<tonic::Response<proto::tasks::PauseResponse>, tonic::Status> {
+        self.subscribe.send(Command::Pause).await.map_err(|_| {
+            tonic::Status::internal("cannot pause, aggregation task is not running")
+        })?;
+        Ok(tonic::Response::new(proto::tasks::PauseResponse {}))
+    }
+
+    async fn resume(
+        &self,
+        _req: tonic::Request<proto::tasks::ResumeRequest>,
+    ) -> Result<tonic::Response<proto::tasks::ResumeResponse>, tonic::Status> {
+        self.subscribe.send(Command::Resume).await.map_err(|_| {
+            tonic::Status::internal("cannot resume, aggregation task is not running")
+        })?;
+        Ok(tonic::Response::new(proto::tasks::ResumeResponse {}))
     }
 }
 

@@ -9,6 +9,8 @@ import "common.proto";
 service Tasks {
     rpc WatchTasks(TasksRequest) returns (stream TaskUpdate) {}
     rpc WatchTaskDetails(DetailsRequest) returns (stream TaskDetails) {}
+    rpc Pause(PauseRequest) returns (PauseResponse) {}
+    rpc Resume(ResumeRequest) returns (ResumeResponse) {}
 }
 
 message TaskId {
@@ -20,6 +22,12 @@ message TasksRequest {
 
 message DetailsRequest {
     TaskId id = 1;
+}
+
+message PauseRequest {
+}
+
+message ResumeRequest {
 }
 
 // A task state update.
@@ -62,6 +70,12 @@ message TaskDetails {
 
     // HdrHistogram.rs `Histogram` serialized to binary in the V2 format
     optional bytes poll_times_histogram = 3;
+}
+
+message PauseResponse {
+}
+
+message ResumeResponse {
 }
 
 // Data recorded when a new task is spawned.
