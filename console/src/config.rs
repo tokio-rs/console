@@ -38,7 +38,7 @@ pub struct ViewOptions {
     no_colors: bool,
 
     /// Overrides the terminal's default language.
-    #[clap(long = "lang", env = "LANG")]
+    #[clap(long = "lang", env = "LANG", default_value = "en_us.UTF-8")]
     lang: String,
 
     /// Explicitly use only ASCII characters.
