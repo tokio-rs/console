@@ -361,6 +361,7 @@ where
         {
             self.state_update_callsites.insert(meta);
         }
+        eprintln!("{:#?}", self);
         self.send(Event::Metadata(meta));
         subscriber::Interest::always()
     }
@@ -518,12 +519,18 @@ where
 impl fmt::Debug for TasksLayer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("TasksLayer")
+            .field("current_spans", &self.current_spans)
             // mpsc::Sender debug impl is not very useful
             .field("tx", &format_args!("<...>"))
             .field("tx.capacity", &self.tx.capacity())
             .field("flush", &self.flush)
+            .field("flush_under_capacity", &self.flush_under_capacity)
             .field("spawn_callsites", &self.spawn_callsites)
             .field("waker_callsites", &self.waker_callsites)
+            .field("resource_callsites", &self.resource_callsites)
+            .field("async_op_callsites", &self.async_op_callsites)
+            .field("poll_op_callsites", &self.poll_op_callsites)
+            .field("state_update_callsites", &self.state_update_callsites)
             .finish()
     }
 }
