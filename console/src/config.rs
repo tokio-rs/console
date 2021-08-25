@@ -38,7 +38,7 @@ pub struct ViewOptions {
     no_colors: bool,
 
     /// Overrides the terminal's default language.
-    #[clap(long = "lang", env = "LANG")]
+    #[clap(long = "lang", env = "LANG", default_value = "en_us.UTF-8")]
     lang: String,
 
     /// Explicitly use only ASCII characters.
@@ -55,7 +55,7 @@ pub struct ViewOptions {
         parse(from_str = parse_true_color),
         possible_values = &["24bit", "truecolor"],
     )]
-    truecolor: bool,
+    truecolor: Option<bool>,
 
     /// Explicitly set which color palette to use.
     #[clap(
@@ -142,7 +142,7 @@ impl ViewOptions {
         }
 
         // Does the terminal advertise truecolor support via the COLORTERM env var?
-        if self.truecolor {
+        if self.truecolor.unwrap_or(false) {
             tracing::debug!("millions of colors enabled via `COLORTERM=truecolor`");
             return Palette::All;
         }
@@ -156,7 +156,11 @@ impl ViewOptions {
             tracing::debug!(?stdout, "`tput colors` succeeded");
             return stdout
                 .map_err(|err| tracing::warn!(%err, "`tput colors` stdout was not utf-8 (this shouldn't happen)"))
-                .and_then(|s| s.parse::<Palette>().map_err(|_| tracing::warn!(palette = ?s, "invalid color palette from `tput colors`")))
+                .and_then(|s| {
+                    let palette = s.parse::<Palette>();
+                    tracing::debug!(?palette, "parsed `tput colors`");
+                    palette.map_err(|_| tracing::warn!(palette = ?s, "invalid color palette from `tput colors`"))
+                })
                 .unwrap_or_default();
         }
 
