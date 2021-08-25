@@ -1,12 +1,17 @@
 use std::{
+    collections::HashSet,
     fmt, ptr,
-    sync::atomic::{AtomicPtr, AtomicUsize, Ordering},
+    sync::{
+        atomic::{AtomicPtr, AtomicUsize, Ordering},
+        PoisonError, RwLock,
+    },
 };
-use tracing_core::Metadata;
+use tracing_core::{callsite, Metadata};
 
 pub(crate) struct Callsites<const MAX_CALLSITES: usize> {
     ptrs: [AtomicPtr<Metadata<'static>>; MAX_CALLSITES],
     len: AtomicUsize,
+    spill: RwLock<HashSet<callsite::Identifier>>,
 }
 
 impl<const MAX_CALLSITES: usize> Callsites<MAX_CALLSITES> {
@@ -20,31 +25,64 @@ impl<const MAX_CALLSITES: usize> Callsites<MAX_CALLSITES> {
         }
 
         let idx = self.len.fetch_add(1, Ordering::AcqRel);
-        assert!(
-            idx < MAX_CALLSITES,
-            "you tried to store more than {} callsites, \
-            time to make the callsite sets bigger i guess \
-            (please open an issue for this)",
-            MAX_CALLSITES,
-        );
-        self.ptrs[idx]
-            .compare_exchange(
-                ptr::null_mut(),
-                callsite as *const _ as *mut _,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            )
-            .expect("a callsite would have been clobbered by `insert` (this is a bug)");
+        if idx <= MAX_CALLSITES {
+            // If there's still room in the callsites array, stick the address
+            // in there.
+            self.ptrs[idx]
+                .compare_exchange(
+                    ptr::null_mut(),
+                    callsite as *const _ as *mut _,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                )
+                .expect("a callsite would have been clobbered by `insert` (this is a bug)");
+        } else {
+            // Otherwise, we've filled the callsite array (sad!). Spill over
+            // into a hash set.
+            self.spill
+                .write()
+                .unwrap_or_else(PoisonError::into_inner)
+                .insert(callsite.callsite());
+        }
     }
 
     pub(crate) fn contains(&self, callsite: &'static Metadata<'static>) -> bool {
-        let len = self.len.load(Ordering::Acquire);
-        for cs in &self.ptrs[..len] {
-            if ptr::eq(cs.load(Ordering::Acquire), callsite) {
-                return true;
+        let mut start = 0;
+        let mut len = self.len.load(Ordering::Acquire);
+        loop {
+            for cs in &self.ptrs[start..len] {
+                if ptr::eq(cs.load(Ordering::Acquire), callsite) {
+                    return true;
+                }
             }
+
+            // Did the length change while we were iterating over the callsite array?
+            let new_len = self.len.load(Ordering::Acquire);
+            if new_len > len {
+                // If so, check again to see if the callsite is contained in any
+                // callsites that were pushed since the last time we loaded `self.len`.
+                start = len;
+                len = new_len;
+                continue;
+            }
+
+            // If the callsite array is not full, we have checked everything.
+            if len <= MAX_CALLSITES {
+                return false;
+            }
+
+            // Otherwise, we may have spilled over to the slower fallback hash
+            // set. Check that.
+            return self.check_spill(callsite);
         }
-        false
+    }
+
+    #[cold]
+    fn check_spill(&self, callsite: &'static Metadata<'static>) -> bool {
+        self.spill
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .contains(&callsite.callsite())
     }
 }
 
@@ -69,6 +107,7 @@ impl<const MAX_CALLSITES: usize> Default for Callsites<MAX_CALLSITES> {
         Self {
             ptrs: [NULLPTR; MAX_CALLSITES],
             len: AtomicUsize::new(0),
+            spill: Default::default(),
         }
     }
 }
@@ -80,6 +119,7 @@ impl<const MAX_CALLSITES: usize> fmt::Debug for Callsites<MAX_CALLSITES> {
             .field("ptrs", &&self.ptrs[..len])
             .field("len", &len)
             .field("max_callsites", &MAX_CALLSITES)
+            .field("spill", &self.spill)
             .finish()
     }
 }
