@@ -162,7 +162,7 @@ impl FromStr for Palette {
     type Err = &'static str;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
+        match s.trim() {
             "0" => Ok(Palette::NoColors),
             "8" => Ok(Palette::Ansi8),
             "16" => Ok(Palette::Ansi16),
