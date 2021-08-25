@@ -21,3 +21,13 @@ pub fn should_quit(input: &Event) -> bool {
         _ => false,
     }
 }
+
+pub(crate) fn is_space(input: &Event) -> bool {
+    matches!(
+        input,
+        Event::Key(KeyEvent {
+            code: KeyCode::Char(' '),
+            ..
+        })
+    )
+}

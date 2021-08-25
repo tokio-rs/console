@@ -79,7 +79,7 @@ pub struct TasksLayer {
 }
 
 pub struct Server {
-    subscribe: mpsc::Sender<WatchKind>,
+    subscribe: mpsc::Sender<Command>,
     addr: SocketAddr,
     aggregator: Option<Aggregator>,
     client_buffer: usize,
@@ -87,9 +87,11 @@ pub struct Server {
 
 struct Watch<T>(mpsc::Sender<Result<T, tonic::Status>>);
 
-enum WatchKind {
+enum Command {
     Instrument(Watch<proto::instrument::Update>),
-    TaskDetail(WatchRequest<proto::tasks::TaskDetails>),
+    WatchTaskDetail(WatchRequest<proto::tasks::TaskDetails>),
+    Pause,
+    Resume,
 }
 
 struct WatchRequest<T> {
@@ -559,7 +561,7 @@ impl proto::instrument::instrument_server::Instrument for Server {
             tonic::Status::internal("cannot start new watch, aggregation task is not running")
         })?;
         let (tx, rx) = mpsc::channel(self.client_buffer);
-        permit.send(WatchKind::Instrument(Watch(tx)));
+        permit.send(Command::Instrument(Watch(tx)));
         tracing::debug!("watch started");
         let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
         Ok(tonic::Response::new(stream))
@@ -579,7 +581,7 @@ impl proto::instrument::instrument_server::Instrument for Server {
 
         // Check with the aggregator task to request a stream if the task exists.
         let (stream_sender, stream_recv) = oneshot::channel();
-        permit.send(WatchKind::TaskDetail(WatchRequest {
+        permit.send(Command::WatchTaskDetail(WatchRequest {
             id: task_id.into(),
             stream_sender,
             buffer: self.client_buffer,
@@ -593,5 +595,25 @@ impl proto::instrument::instrument_server::Instrument for Server {
         tracing::debug!(id = ?task_id, "task details watch started");
         let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
         Ok(tonic::Response::new(stream))
+    }
+
+    async fn pause(
+        &self,
+        _req: tonic::Request<proto::instrument::PauseRequest>,
+    ) -> Result<tonic::Response<proto::instrument::PauseResponse>, tonic::Status> {
+        self.subscribe.send(Command::Pause).await.map_err(|_| {
+            tonic::Status::internal("cannot pause, aggregation task is not running")
+        })?;
+        Ok(tonic::Response::new(proto::instrument::PauseResponse {}))
+    }
+
+    async fn resume(
+        &self,
+        _req: tonic::Request<proto::instrument::ResumeRequest>,
+    ) -> Result<tonic::Response<proto::instrument::ResumeResponse>, tonic::Status> {
+        self.subscribe.send(Command::Resume).await.map_err(|_| {
+            tonic::Status::internal("cannot resume, aggregation task is not running")
+        })?;
+        Ok(tonic::Response::new(proto::instrument::ResumeResponse {}))
     }
 }

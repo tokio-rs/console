@@ -11,6 +11,8 @@ import "async_ops.proto";
 service Instrument {
     rpc WatchUpdates(InstrumentRequest) returns (stream Update) {}
     rpc WatchTaskDetails(TaskDetailsRequest) returns (stream tasks.TaskDetails) {}
+    rpc Pause(PauseRequest) returns (PauseResponse) {}
+    rpc Resume(ResumeRequest) returns (ResumeResponse) {}
 }
 
 // TODO: In the future allow for the request to specify
@@ -21,6 +23,12 @@ message InstrumentRequest {
 
 message TaskDetailsRequest {
     common.Id id = 1;
+}
+
+message PauseRequest {
+}
+
+message ResumeRequest {
 }
 
 // Update carries all information regarding tasks, resources, async operations
@@ -49,4 +57,10 @@ message Update {
 
     // Any new span metadata that was registered since the last update.
     common.RegisterMetadata new_metadata = 5;
+}
+
+message PauseResponse {
+}
+
+message ResumeResponse {
 }

@@ -23,6 +23,13 @@ pub(crate) struct State {
     last_updated_at: Option<SystemTime>,
     new_tasks: Vec<TaskRef>,
     current_task_details: DetailsRef,
+    temporality: Temporality,
+}
+
+#[derive(Debug)]
+enum Temporality {
+    Live,
+    Paused,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -244,6 +251,20 @@ impl State {
             task.completed_for <= Self::RETAIN_COMPLETED_FOR
         })
     }
+
+    // temporality methods
+
+    pub(crate) fn pause(&mut self) {
+        self.temporality = Temporality::Paused;
+    }
+
+    pub(crate) fn resume(&mut self) {
+        self.temporality = Temporality::Live;
+    }
+
+    pub(crate) fn is_paused(&self) -> bool {
+        matches!(self.temporality, Temporality::Paused)
+    }
 }
 
 impl Task {
@@ -417,6 +438,12 @@ impl From<proto::field::Value> for FieldValue {
             proto::field::Value::U64Val(v) => Self::U64(v),
             proto::field::Value::DebugVal(v) => Self::Debug(v),
         }
+    }
+}
+
+impl Default for Temporality {
+    fn default() -> Self {
+        Self::Live
     }
 }
 

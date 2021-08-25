@@ -1,5 +1,6 @@
 use console_api::instrument::{
-    instrument_client::InstrumentClient, InstrumentRequest, TaskDetailsRequest, Update,
+    instrument_client::InstrumentClient, InstrumentRequest, PauseRequest, ResumeRequest,
+    TaskDetailsRequest, Update,
 };
 use console_api::tasks::TaskDetails;
 use futures::stream::StreamExt;
@@ -19,6 +20,36 @@ enum State {
         stream: Streaming<Update>,
     },
     Disconnected(Duration),
+}
+
+macro_rules! with_client {
+    ($me:ident, $client:ident, $block:expr) => ({
+        loop {
+            match $me.state {
+                State::Connected { client: ref mut $client, .. } => {
+                    match $block {
+                        Ok(resp) => break Ok(resp),
+                        // If the error is a `h2::Error`, that indicates
+                        // something went wrong at the connection level, rather
+                        // than the server returning an error code. In that
+                        // case, let's try reconnecting...
+                        Err(error) if error.source().iter().any(|src| src.is::<h2::Error>()) => {
+                            tracing::warn!(
+                                error = %error,
+                                "connection error sending command"
+                            );
+                            $me.state = State::Disconnected(Self::BACKOFF);
+                        }
+                        // Otherwise, return the error.
+                        Err(e) => {
+                            break Err(e);
+                        }
+                    }
+                }
+                State::Disconnected(_) => $me.connect().await,
+            }
+        }
+    })
 }
 
 impl Connection {
@@ -84,32 +115,36 @@ impl Connection {
         &mut self,
         task_id: u64,
     ) -> Result<Streaming<TaskDetails>, tonic::Status> {
-        loop {
-            match self.state {
-                State::Connected { ref mut client, .. } => {
-                    let request = tonic::Request::new(TaskDetailsRequest {
-                        id: Some(task_id.into()),
-                    });
-                    match client.watch_task_details(request).await {
-                        Ok(watch) => return Ok(watch.into_inner()),
-                        // If the error is a `h2::Error`, that indicates
-                        // something went wrong at the connection level, rather
-                        // than the server returning an error code. In that
-                        // case, let's try reconnecting...
-                        Err(error) if error.source().iter().any(|src| src.is::<h2::Error>()) => {
-                            tracing::warn!(
-                                id = task_id,
-                                error = %error,
-                                "error watching task details"
-                            );
-                            self.state = State::Disconnected(Self::BACKOFF);
-                        }
-                        // Otherwise, return the error.
-                        Err(e) => return Err(e),
-                    }
-                }
-                State::Disconnected(_) => self.connect().await,
-            }
+        with_client!(self, client, {
+            let request = tonic::Request::new(TaskDetailsRequest {
+                id: Some(task_id.into()),
+            });
+            client.watch_task_details(request).await
+        })
+        .map(|watch| watch.into_inner())
+    }
+
+    #[tracing::instrument(skip(self))]
+    pub async fn pause(&mut self) {
+        let res = with_client!(self, client, {
+            let request = tonic::Request::new(PauseRequest {});
+            client.pause(request).await
+        });
+
+        if let Err(e) = res {
+            tracing::error!(error = %e, "rpc error sending pause command");
+        }
+    }
+
+    #[tracing::instrument(skip(self))]
+    pub async fn resume(&mut self) {
+        let res = with_client!(self, client, {
+            let request = tonic::Request::new(ResumeRequest {});
+            client.resume(request).await
+        });
+
+        if let Err(e) = res {
+            tracing::error!(error = %e, "rpc error sending resume command");
         }
     }
 

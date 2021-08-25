@@ -8,6 +8,8 @@ use std::convert::TryInto;
 use tokio::sync::{mpsc, watch};
 use tui::{
     layout::{Constraint, Direction, Layout},
+    style::Color,
+    text::Span,
     widgets::{Paragraph, Wrap},
 };
 
@@ -53,6 +55,17 @@ async fn main() -> color_eyre::Result<()> {
                 if input::should_quit(&input) {
                     return Ok(());
                 }
+
+                if input::is_space(&input) {
+                    if tasks.is_paused() {
+                        conn.resume().await;
+                        tasks.resume();
+                    } else {
+                        conn.pause().await;
+                        tasks.pause();
+                    }
+                }
+
                 let update_kind = view.update_input(input, &tasks);
                 // Using the result of update_input to manage the details watcher task
                 let _ = update_tx.send(update_kind);
@@ -93,7 +106,13 @@ async fn main() -> color_eyre::Result<()> {
                 .constraints([Constraint::Length(1), Constraint::Percentage(95)].as_ref())
                 .split(f.size());
 
-            let header = Paragraph::new(conn.render(&view.styles)).wrap(Wrap { trim: true });
+            let mut header_text = conn.render(&view.styles);
+            if tasks.is_paused() {
+                header_text
+                    .0
+                    .push(Span::styled(" PAUSED", view.styles.fg(Color::Red)));
+            }
+            let header = Paragraph::new(header_text).wrap(Wrap { trim: true });
             f.render_widget(header, chunks[0]);
             view.render(f, chunks[1], &mut tasks);
         })?;
