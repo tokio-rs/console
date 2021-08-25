@@ -156,7 +156,11 @@ impl ViewOptions {
             tracing::debug!(?stdout, "`tput colors` succeeded");
             return stdout
                 .map_err(|err| tracing::warn!(%err, "`tput colors` stdout was not utf-8 (this shouldn't happen)"))
-                .and_then(|s| s.parse::<Palette>().map_err(|_| tracing::warn!(palette = ?s, "invalid color palette from `tput colors`")))
+                .and_then(|s| {
+                    let palette = s.trim().parse::<Palette>();
+                    tracing::debug!(?palette, "parsed `tput colors`");
+                    palette.map_err(|_| tracing::warn!(palette = ?s, "invalid color palette from `tput colors`"))
+                })
                 .unwrap_or_default();
         }
 
