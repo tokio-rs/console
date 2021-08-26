@@ -1,7 +1,8 @@
-use console_api::tasks::{
-    tasks_client::TasksClient, DetailsRequest, PauseRequest, ResumeRequest, TaskDetails,
-    TaskUpdate, TasksRequest,
+use console_api::instrument::{
+    instrument_client::InstrumentClient, InstrumentRequest, PauseRequest, ResumeRequest,
+    TaskDetailsRequest, Update,
 };
+use console_api::tasks::TaskDetails;
 use futures::stream::StreamExt;
 use std::{error::Error, pin::Pin, time::Duration};
 use tonic::{transport::Channel, transport::Uri, Streaming};
@@ -15,8 +16,8 @@ pub struct Connection {
 #[derive(Debug)]
 enum State {
     Connected {
-        client: TasksClient<Channel>,
-        stream: Streaming<TaskUpdate>,
+        client: InstrumentClient<Channel>,
+        stream: Streaming<Update>,
     },
     Disconnected(Duration),
 }
@@ -71,9 +72,9 @@ impl Connection {
                 tokio::time::sleep(backoff).await;
             }
             let try_connect = async {
-                let mut client = TasksClient::connect(self.target.clone()).await?;
-                let request = tonic::Request::new(TasksRequest {});
-                let stream = client.watch_tasks(request).await?.into_inner();
+                let mut client = InstrumentClient::connect(self.target.clone()).await?;
+                let request = tonic::Request::new(InstrumentRequest {});
+                let stream = client.watch_updates(request).await?.into_inner();
                 Ok::<State, Box<dyn Error + Send + Sync>>(State::Connected { client, stream })
             };
             self.state = match try_connect.await {
@@ -90,7 +91,7 @@ impl Connection {
         }
     }
 
-    pub async fn next_update(&mut self) -> TaskUpdate {
+    pub async fn next_update(&mut self) -> Update {
         loop {
             match self.state {
                 State::Connected { ref mut stream, .. } => match Pin::new(stream).next().await {
@@ -115,7 +116,7 @@ impl Connection {
         task_id: u64,
     ) -> Result<Streaming<TaskDetails>, tonic::Status> {
         with_client!(self, client, {
-            let request = tonic::Request::new(DetailsRequest {
+            let request = tonic::Request::new(TaskDetailsRequest {
                 id: Some(task_id.into()),
             });
             client.watch_task_details(request).await

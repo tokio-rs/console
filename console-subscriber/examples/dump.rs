@@ -1,4 +1,4 @@
-use console_api::tasks::{tasks_client::TasksClient, TasksRequest};
+use console_api::instrument::{instrument_client::InstrumentClient, InstrumentRequest};
 use futures::stream::StreamExt;
 
 #[tokio::main]
@@ -11,16 +11,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     eprintln!("CONNECTING: {}", target);
-    let mut client = TasksClient::connect(target).await?;
+    let mut client = InstrumentClient::connect(target).await?;
 
-    let request = tonic::Request::new(TasksRequest {});
-    let mut stream = client.watch_tasks(request).await?.into_inner();
+    let request = tonic::Request::new(InstrumentRequest {});
+    let mut stream = client.watch_updates(request).await?.into_inner();
 
     let mut i: usize = 0;
     while let Some(update) = stream.next().await {
         match update {
             Ok(update) => {
-                eprintln!("UPDATE {}: {:#?}\n", i, update);
+                println!("UPDATE {}: {:#?}\n", i, update);
                 i += 1;
             }
             Err(e) => {

@@ -1,4 +1,5 @@
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 tonic::include_proto!("rs.tokio.console.common");
 
@@ -32,23 +33,26 @@ impl<'a> From<&'a tracing_core::Metadata<'a>> for Metadata {
             metadata::Kind::Event
         };
 
-        let location = Location {
-            file: meta.file().map(String::from),
-            module_path: meta.module_path().map(String::from),
-            line: meta.line(),
-            column: None, // tracing doesn't support columns yet
-        };
-
         let field_names = meta.fields().iter().map(|f| f.name().to_string()).collect();
-
         Metadata {
             name: meta.name().to_string(),
             target: meta.target().to_string(),
-            location: Some(location),
+            location: Some(meta.into()),
             kind: kind as i32,
             level: metadata::Level::from(*meta.level()) as i32,
             field_names,
             ..Default::default()
+        }
+    }
+}
+
+impl<'a> From<&'a tracing_core::Metadata<'a>> for Location {
+    fn from(meta: &'a tracing_core::Metadata<'a>) -> Self {
+        Location {
+            file: meta.file().map(String::from),
+            module_path: meta.module_path().map(String::from),
+            line: meta.line(),
+            column: None, // tracing doesn't support columns yet
         }
     }
 }
@@ -185,3 +189,35 @@ impl From<&dyn std::fmt::Debug> for field::Value {
         field::Value::DebugVal(format!("{:?}", val))
     }
 }
+
+// Clippy warns when a type derives `PartialEq` but has a manual `Hash` impl,
+// or vice versa. However, this is unavoidable here, because `prost` generates
+// a struct with `#[derive(PartialEq)]`, but we cannot add`#[derive(Hash)]` to the
+// generated code.
+#[allow(clippy::derive_hash_xor_eq)]
+impl Hash for field::Name {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            field::Name::NameIdx(idx) => idx.hash(state),
+            field::Name::StrName(s) => s.hash(state),
+        }
+    }
+}
+
+impl Eq for field::Name {}
+
+// === IDs ===
+
+impl From<u64> for Id {
+    fn from(id: u64) -> Self {
+        Id { id }
+    }
+}
+
+impl From<Id> for u64 {
+    fn from(id: Id) -> Self {
+        id.id
+    }
+}
+
+impl Copy for Id {}

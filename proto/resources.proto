@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package rs.tokio.console.resources;
+
+import "google/protobuf/timestamp/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "common.proto";
+
+// A resource state update.
+//
+// Each `ResourceUpdate` contains any resource data that has changed since the last
+// update. This includes:
+// - any new resources that were created since the last update
+// - the current stats for any resource whose stats changed since the last update
+// - any new poll ops that have been incoked on a resource
+message ResourceUpdate {
+    // A list of new resources that were created since the last `ResourceUpdate` was
+    // sent.
+    repeated Resource new_resources = 1;
+
+    // Any resource stats that have changed since the last update.
+    map<uint64, Stats> stats_update = 2;
+
+    // A list of all new poll ops that have been invoked on resources since the last update.
+    repeated PollOp new_poll_ops = 3;
+}
+
+// Static data recorded when a new resource is created.
+message Resource {
+    // The resources's ID.
+    //
+    // This uniquely identifies this resource across all *currently live*
+    // resources. This is also the primary way any operations on a resource
+    // are associated with it
+    common.Id id = 1;
+    // The numeric ID of the resources's `Metadata`.
+    common.MetaId metadata = 2;
+    // The resources's concrete rust type.
+    string concrete_type = 3;
+    // The kind of resource (e.g timer, mutex)
+    Kind kind = 4;
+
+    message Kind {
+        oneof kind {
+            Known known = 1;
+            string other = 2;
+        }
+        enum Known {
+            TIMER = 0;
+        }
+    }
+}
+
+// Task runtime stats of a resource.
+message Stats {
+    // Timestamp of when the resource was created.
+    google.protobuf.Timestamp created_at = 1;
+    // The amount of time this resource has *existed*, regardless of whether or not
+    // it was used by a task.
+    google.protobuf.Duration total_time = 2;
+    // State attributes of the resource. These are dependent on the type of the resource.
+    // For example, a timer resource will have a duration while a semaphore resource may
+    // have permits as an attribute. These values may change over time as the state of
+    // the resource changes. Therefore, they live in the runtime stats rather than the
+    // static data describing the resource.
+    repeated Attribute attributes = 3;
+
+    message Attribute {
+        common.Field field = 1;
+        optional string unit = 2;
+    }
+}
+
+message PollOp {
+    // The numeric ID of the op's `Metadata`.
+    //
+    // This identifies the `Metadata` that describes the `tracing` span
+    // corresponding to this op. The metadata for this ID will have been sent
+    // in a prior `RegisterMetadata` message.
+    common.MetaId metadata = 2;
+    // The resources's ID.
+    common.Id resource_id = 3;
+    // the name of this op (e.g. poll_elapsed, new_timeout, reset, etc.)
+    string name = 4;
+    // Identifies the task context that this poll op has been called from.
+    common.Id task_id = 5;
+    // Identifies the async op ID that this poll op is part of.
+    common.Id async_op_id = 6;
+    // Whether this poll op has returned with ready or pending.
+    common.Readiness readiness = 7;
+}

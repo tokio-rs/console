@@ -6,46 +6,18 @@ import "google/protobuf/timestamp/timestamp.proto";
 import "google/protobuf/duration.proto";
 import "common.proto";
 
-service Tasks {
-    rpc WatchTasks(TasksRequest) returns (stream TaskUpdate) {}
-    rpc WatchTaskDetails(DetailsRequest) returns (stream TaskDetails) {}
-    rpc Pause(PauseRequest) returns (PauseResponse) {}
-    rpc Resume(ResumeRequest) returns (ResumeResponse) {}
-}
-
-message TaskId {
-    uint64 id = 1;
-}
-
-message TasksRequest {
-}
-
-message DetailsRequest {
-    TaskId id = 1;
-}
-
-message PauseRequest {
-}
-
-message ResumeRequest {
-}
-
 // A task state update.
 //
 // Each `TaskUpdate` contains any task data that has changed since the last
 // update. This includes:
 // - any new tasks that were spawned since the last update
-// - metadata for any new spans that were registered since the last update
 // - the current stats for any task whose stats changed since the last update
-// - a list of the IDs of any tasks which *completed* since the last update
 message TaskUpdate {
     // A list of new tasks that were spawned since the last `TaskUpdate` was
     // sent.
     //
     // If this is empty, no new tasks were spawned.
     repeated Task new_tasks = 1;
-    // Any new span metadata that was registered since the last update.
-    common.RegisterMetadata new_metadata = 2;
     // Any task stats that have changed since the last update.
     //
     // This is a map of task IDs (64-bit unsigned integers) to task stats. If a
@@ -54,28 +26,17 @@ message TaskUpdate {
     // *is* included in this map, the corresponding value represents a complete
     // snapshot of that task's stats at in the current time window.
     map<uint64, Stats> stats_update = 3;
-    // The system time when this update was recorded.
-    //
-    // This is the timestamp any durations in the included `Stats` were
-    // calculated relative to.
-    google.protobuf.Timestamp now = 4;
 }
 
 // A task details update
 message TaskDetails {
     // The task's ID which the details belong to.
-    TaskId task_id = 1;
+    common.Id task_id = 1;
 
     google.protobuf.Timestamp now = 2;
 
     // HdrHistogram.rs `Histogram` serialized to binary in the V2 format
     optional bytes poll_times_histogram = 3;
-}
-
-message PauseResponse {
-}
-
-message ResumeResponse {
 }
 
 // Data recorded when a new task is spawned.
@@ -87,7 +48,7 @@ message Task {
     // identified by this ID; if the client requires additional information
     // included in the `Task` message, it should store that data and access it
     // by ID.
-    TaskId id = 1;
+    common.Id id = 1;
     // The numeric ID of the task's `Metadata`.
     //
     // This identifies the `Metadata` that describes the `tracing` span
@@ -122,50 +83,25 @@ message Task {
 
 // Task performance statistics.
 message Stats {
-    // The total number of times this task has been polled.
-    uint64 polls = 1;
     // Timestamp of when the task was spawned.
-    google.protobuf.Timestamp created_at = 2;
-    // The timestamp of the first time this task was polled.
-    //
-    // If this is `None`, the task has not yet been polled.
-    //
-    // Subtracting this timestamp from `created_at` can be used to calculate the
-    // time to first poll for this task, a measurement of executor latency.
-    optional google.protobuf.Timestamp first_poll = 3;
-    // The timestamp of the most recent time this task's poll method was invoked.
-    //
-    // If this is `None`, the task has not yet been polled.
-    //
-    // If the task has only been polled a single time, then this value may be
-    // equal to the `first_poll` timestamp.
-    //
-    optional google.protobuf.Timestamp last_poll_started = 4;
-    // The timestamp of the most recent time this task's poll method finished execution.
-    //
-    // If this is `None`, the task has not yet been polled or is currently being polled.
-    //
-    // If the task has completed, then this is the time the final invocation of its poll
-    // method has completed.
-    optional google.protobuf.Timestamp last_poll_ended = 5;
-    // The total duration this task was being *actively polled*, summed across
-    // all polls. Note that this includes only polls that have completed and is
-    // not reflecting any inprogress polls.
-    google.protobuf.Duration busy_time = 6;
+    google.protobuf.Timestamp created_at = 1;
+
     // The amount of time this task has *existed*, regardless of whether or not
     // it was being polled.
     //
     // Subtracting `busy_time` from `total_time` calculates the task's idle
     // time, the amount of time it has spent *waiting* to be polled.
-    google.protobuf.Duration total_time = 7;
+    google.protobuf.Duration total_time = 2;
     // The total number of times this task's waker has been woken.
-    uint64 wakes = 8;
+    uint64 wakes = 3;
     // The total number of times this task's waker has been cloned.
-    uint64 waker_clones = 9;
+    uint64 waker_clones = 4;
     // The total number of times this task's waker has been dropped.
-    uint64 waker_drops = 10;
+    uint64 waker_drops = 5;
     // The timestamp of the most recent time this task has been woken.
     //
     // If this is `None`, the task has not yet been woken.
-    optional google.protobuf.Timestamp last_wake = 11;
+    optional google.protobuf.Timestamp last_wake = 6;
+    // Contains task poll statistics.
+    common.PollStats poll_stats = 7;
 }
