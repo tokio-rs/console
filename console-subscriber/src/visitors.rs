@@ -317,35 +317,51 @@ impl StateUpdateVisitor {
 
 impl Visit for StateUpdateVisitor {
     fn record_debug(&mut self, field: &field::Field, value: &dyn std::fmt::Debug) {
-        self.field = Some(proto::Field {
-            name: Some(field.name().into()),
-            value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
-        });
+        if !field.name().ends_with(Self::STATE_OP_SUFFIX)
+            && !field.name().ends_with(Self::STATE_UNIT_SUFFIX)
+        {
+            self.field = Some(proto::Field {
+                name: Some(field.name().into()),
+                value: Some(value.into()),
+                metadata_id: Some(self.meta_id.clone()),
+            });
+        }
     }
 
     fn record_i64(&mut self, field: &field::Field, value: i64) {
-        self.field = Some(proto::Field {
-            name: Some(field.name().into()),
-            value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
-        });
+        if !field.name().ends_with(Self::STATE_OP_SUFFIX)
+            && !field.name().ends_with(Self::STATE_UNIT_SUFFIX)
+        {
+            self.field = Some(proto::Field {
+                name: Some(field.name().into()),
+                value: Some(value.into()),
+                metadata_id: Some(self.meta_id.clone()),
+            });
+        }
     }
 
     fn record_u64(&mut self, field: &field::Field, value: u64) {
-        self.field = Some(proto::Field {
-            name: Some(field.name().into()),
-            value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
-        });
+        if !field.name().ends_with(Self::STATE_OP_SUFFIX)
+            && !field.name().ends_with(Self::STATE_UNIT_SUFFIX)
+        {
+            self.field = Some(proto::Field {
+                name: Some(field.name().into()),
+                value: Some(value.into()),
+                metadata_id: Some(self.meta_id.clone()),
+            });
+        }
     }
 
     fn record_bool(&mut self, field: &field::Field, value: bool) {
-        self.field = Some(proto::Field {
-            name: Some(field.name().into()),
-            value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
-        });
+        if !field.name().ends_with(Self::STATE_OP_SUFFIX)
+            && !field.name().ends_with(Self::STATE_UNIT_SUFFIX)
+        {
+            self.field = Some(proto::Field {
+                name: Some(field.name().into()),
+                value: Some(value.into()),
+                metadata_id: Some(self.meta_id.clone()),
+            });
+        }
     }
 
     fn record_str(&mut self, field: &field::Field, value: &str) {
@@ -358,6 +374,12 @@ impl Visit for StateUpdateVisitor {
             };
         } else if field.name().ends_with(Self::STATE_UNIT_SUFFIX) {
             self.unit = Some(value.to_string());
+        } else {
+            self.field = Some(proto::Field {
+                name: Some(field.name().into()),
+                value: Some(value.into()),
+                metadata_id: Some(self.meta_id.clone()),
+            });
         }
     }
 }
