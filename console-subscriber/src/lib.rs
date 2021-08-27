@@ -1,15 +1,16 @@
 use console_api as proto;
+use proto::resources::resource;
 use serde::Serialize;
-use tokio::sync::{mpsc, oneshot};
-
 use std::{
+    cell::RefCell,
     fmt,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
     time::{Duration, SystemTime},
 };
+use thread_local::ThreadLocal;
+use tokio::sync::{mpsc, oneshot};
 use tracing_core::{
-    field::{self, Visit},
     span,
     subscriber::{self, Subscriber},
     Metadata,
@@ -21,16 +22,23 @@ mod builder;
 mod callsites;
 mod init;
 mod record;
+mod stack;
+pub(crate) mod sync;
+mod visitors;
 
 use aggregator::Aggregator;
 pub use builder::Builder;
 use callsites::Callsites;
+use stack::SpanStack;
+use visitors::{AsyncOpVisitor, FieldVisitor, ResourceVisitor, WakerVisitor};
 
 pub use init::{build, init};
 
-use crate::aggregator::TaskId;
+use crate::aggregator::Id;
+use crate::visitors::{PollOpVisitor, StateUpdateVisitor};
 
 pub struct TasksLayer {
+    current_spans: ThreadLocal<RefCell<SpanStack>>,
     tx: mpsc::Sender<Event>,
     flush: Arc<aggregator::Flush>,
     /// When the channel capacity goes under this number, a flush in the aggregator
@@ -40,47 +48,61 @@ pub struct TasksLayer {
     /// Set of callsites for spans representing spawned tasks.
     ///
     /// For task spans, each runtime these will have like, 1-5 callsites in it, max, so
-    /// 16 is probably fine. For async operations, we may need a bigger callsites array.
-    spawn_callsites: Callsites<16>,
+    /// 8 should be plenty. If several runtimes are in use, we may have to spill
+    /// over into the backup hashmap, but it's unlikely.
+    spawn_callsites: Callsites<8>,
 
     /// Set of callsites for events representing waker operations.
     ///
-    /// 32 is probably a reasonable number of waker ops; it's a bit generous if
+    /// 16 is probably a reasonable number of waker ops; it's a bit generous if
     /// there's only one async runtime library in use, but if there are multiple,
     /// they might all have their own sets of waker ops.
-    waker_callsites: Callsites<32>,
+    waker_callsites: Callsites<16>,
+
+    /// Set of callsites for spans reprenting resources
+    ///
+    /// TODO: Take some time to determine more reasonable numbers
+    resource_callsites: Callsites<32>,
+
+    /// Set of callsites for spans reprensing async operations on resources
+    ///
+    /// TODO: Take some time to determine more reasonable numbers
+    async_op_callsites: Callsites<32>,
+
+    /// Set of callsites for events reprensing poll operation invocations on resources
+    ///
+    /// TODO: Take some time to determine more reasonable numbers
+    poll_op_callsites: Callsites<32>,
+
+    /// Set of callsites for events reprensing state attribute state updates on resources
+    ///
+    /// TODO: Take some time to determine more reasonable numbers
+    state_update_callsites: Callsites<32>,
 }
 
 pub struct Server {
-    subscribe: mpsc::Sender<WatchKind>,
+    subscribe: mpsc::Sender<Command>,
     addr: SocketAddr,
     aggregator: Option<Aggregator>,
     client_buffer: usize,
 }
 
-struct FieldVisitor {
-    fields: Vec<proto::Field>,
-    meta_id: proto::MetaId,
-}
-
-struct WakerVisitor {
-    id: Option<span::Id>,
-    op: Option<WakeOp>,
-}
-
 struct Watch<T>(mpsc::Sender<Result<T, tonic::Status>>);
 
-enum WatchKind {
-    Tasks(Watch<proto::tasks::TaskUpdate>),
-    TaskDetail(WatchRequest<proto::tasks::TaskDetails>),
+enum Command {
+    Instrument(Watch<proto::instrument::Update>),
+    WatchTaskDetail(WatchRequest<proto::tasks::TaskDetails>),
+    Pause,
+    Resume,
 }
 
 struct WatchRequest<T> {
-    id: TaskId,
+    id: Id,
     stream_sender: oneshot::Sender<mpsc::Receiver<Result<T, tonic::Status>>>,
     buffer: usize,
 }
 
+#[derive(Debug)]
 enum Event {
     Metadata(&'static Metadata<'static>),
     Spawn {
@@ -106,9 +128,51 @@ enum Event {
         op: WakeOp,
         at: SystemTime,
     },
+    Resource {
+        id: span::Id,
+        metadata: &'static Metadata<'static>,
+        at: SystemTime,
+        concrete_type: String,
+        kind: resource::Kind,
+    },
+    PollOp {
+        metadata: &'static Metadata<'static>,
+        at: SystemTime,
+        resource_id: span::Id,
+        op_name: String,
+        async_op_id: span::Id,
+        task_id: span::Id,
+        readiness: proto::Readiness,
+    },
+    StateUpdate {
+        metadata: &'static Metadata<'static>,
+        at: SystemTime,
+        resource_id: span::Id,
+        update: AttributeUpdate,
+    },
+    AsyncResourceOp {
+        id: span::Id,
+        metadata: &'static Metadata<'static>,
+        at: SystemTime,
+        source: String,
+    },
 }
 
-#[derive(Clone, Copy, Serialize)]
+#[derive(Debug, Clone)]
+struct AttributeUpdate {
+    field: proto::Field,
+    op: Option<AttributeUpdateOp>,
+    unit: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+enum AttributeUpdateOp {
+    Add,
+    Override,
+    Sub,
+}
+
+#[derive(Clone, Debug, Copy, Serialize)]
 enum WakeOp {
     Wake,
     WakeByRef,
@@ -166,6 +230,11 @@ impl TasksLayer {
             flush_under_capacity,
             spawn_callsites: Callsites::default(),
             waker_callsites: Callsites::default(),
+            resource_callsites: Callsites::default(),
+            async_op_callsites: Callsites::default(),
+            poll_op_callsites: Callsites::default(),
+            state_update_callsites: Callsites::default(),
+            current_spans: ThreadLocal::new(),
         };
         (layer, server)
     }
@@ -183,6 +252,14 @@ impl TasksLayer {
         self.spawn_callsites.contains(meta)
     }
 
+    fn is_resource(&self, meta: &'static Metadata<'static>) -> bool {
+        self.resource_callsites.contains(meta)
+    }
+
+    fn is_async_op(&self, meta: &'static Metadata<'static>) -> bool {
+        self.async_op_callsites.contains(meta)
+    }
+
     fn is_id_spawned<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
     where
         S: Subscriber + for<'a> LookupSpan<'a>,
@@ -190,6 +267,44 @@ impl TasksLayer {
         cx.span(id)
             .map(|span| self.is_spawn(span.metadata()))
             .unwrap_or(false)
+    }
+
+    fn is_id_resource<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
+    where
+        S: Subscriber + for<'a> LookupSpan<'a>,
+    {
+        cx.span(id)
+            .map(|span| self.is_resource(span.metadata()))
+            .unwrap_or(false)
+    }
+
+    fn is_id_async_op<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
+    where
+        S: Subscriber + for<'a> LookupSpan<'a>,
+    {
+        cx.span(id)
+            .map(|span| self.is_async_op(span.metadata()))
+            .unwrap_or(false)
+    }
+
+    fn is_id_tracked<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
+    where
+        S: Subscriber + for<'a> LookupSpan<'a>,
+    {
+        self.is_id_async_op(id, cx) || self.is_id_resource(id, cx) || self.is_id_spawned(id, cx)
+    }
+
+    fn first_entered<P>(&self, stack: &SpanStack, p: P) -> Option<span::Id>
+    where
+        P: Fn(&span::Id) -> bool,
+    {
+        stack
+            .stack()
+            .iter()
+            .rev()
+            .find(|id| p(id.id()))
+            .map(|id| id.id())
+            .cloned()
     }
 
     fn send(&self, event: Event) {
@@ -220,21 +335,19 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn register_callsite(&self, meta: &'static Metadata<'static>) -> subscriber::Interest {
-        if meta.name() == "runtime.spawn"
-            // back compat until tokio is updated to use the standardized naming
-            // scheme
-            || (meta.name() == "task" && meta.target() == "tokio::task")
-        {
-            self.spawn_callsites.insert(meta);
-        } else if meta.target() == "runtime::waker"
-            // back compat until tokio is updated to use the standardized naming
-            // scheme
-            || meta.target() == "tokio::task::waker"
-        {
-            self.waker_callsites.insert(meta);
+        match (meta.name(), meta.target()) {
+            ("runtime.spawn", _) | ("task", "tokio::task") => self.spawn_callsites.insert(meta),
+            (_, "runtime::waker") | (_, "tokio::task::waker") => self.waker_callsites.insert(meta),
+            (ResourceVisitor::RES_SPAN_NAME, _) => self.resource_callsites.insert(meta),
+            (AsyncOpVisitor::ASYNC_OP_SPAN_NAME, _) => self.async_op_callsites.insert(meta),
+            (_, PollOpVisitor::POLL_OP_EVENT_TARGET) => self.poll_op_callsites.insert(meta),
+            (_, StateUpdateVisitor::STATE_UPDATE_EVENT_TARGET) => {
+                self.state_update_callsites.insert(meta)
+            }
+            (_, _) => {}
         }
-        self.send(Event::Metadata(meta));
 
+        self.send(Event::Metadata(meta));
         subscriber::Interest::always()
     }
 
@@ -242,43 +355,119 @@ where
         let metadata = attrs.metadata();
         if self.is_spawn(metadata) {
             let at = SystemTime::now();
-            let mut fields_collector = FieldVisitor {
-                fields: Vec::default(),
-                meta_id: metadata.into(),
-            };
-            attrs.record(&mut fields_collector);
-
+            let mut field_visitor = FieldVisitor::new(metadata.into());
+            attrs.record(&mut field_visitor);
             self.send(Event::Spawn {
                 id: id.clone(),
                 at,
                 metadata,
-                fields: fields_collector.fields,
+                fields: field_visitor.result(),
             });
+        } else if self.is_resource(metadata) {
+            let mut resource_visitor = ResourceVisitor::default();
+            attrs.record(&mut resource_visitor);
+            if let Some((concrete_type, kind)) = resource_visitor.result() {
+                let at = SystemTime::now();
+                self.send(Event::Resource {
+                    id: id.clone(),
+                    metadata,
+                    at,
+                    concrete_type,
+                    kind,
+                });
+            } // else unknown resource span format
+        } else if self.is_async_op(metadata) {
+            let mut async_op_visitor = AsyncOpVisitor::default();
+            attrs.record(&mut async_op_visitor);
+            if let Some(source) = async_op_visitor.result() {
+                let at = SystemTime::now();
+                self.send(Event::AsyncResourceOp {
+                    id: id.clone(),
+                    at,
+                    metadata,
+                    source,
+                });
+            }
+            // else async op span needs to have a source field
         }
     }
 
-    fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
+    fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
+        let metadata = event.metadata();
         if self.waker_callsites.contains(event.metadata()) {
             let at = SystemTime::now();
-            let mut visitor = WakerVisitor { id: None, op: None };
+            let mut visitor = WakerVisitor::default();
             event.record(&mut visitor);
-
-            if let WakerVisitor {
-                id: Some(id),
-                op: Some(op),
-            } = visitor
-            {
+            if let Some((id, op)) = visitor.result() {
                 self.send(Event::Waker { id, op, at });
             }
-            // else...
-            // unknown waker event... what to do? can't trace it from here...
+            // else unknown waker event... what to do? can't trace it from here...
+        } else if self.poll_op_callsites.contains(event.metadata()) {
+            match ctx.current_span().id() {
+                Some(resource_id) if self.is_id_resource(resource_id, &ctx) => {
+                    let mut poll_op_visitor = PollOpVisitor::default();
+                    event.record(&mut poll_op_visitor);
+                    if let Some((op_name, readiness)) = poll_op_visitor.result() {
+                        let task_and_async_op_ids = self.current_spans.get().and_then(|stack| {
+                            let stack = stack.borrow();
+                            let task_id =
+                                self.first_entered(&stack, |id| self.is_id_spawned(id, &ctx))?;
+                            let async_op_id =
+                                self.first_entered(&stack, |id| self.is_id_async_op(id, &ctx))?;
+                            Some((task_id, async_op_id))
+                        });
+
+                        if let Some((task_id, async_op_id)) = task_and_async_op_ids {
+                            let at = SystemTime::now();
+                            self.send(Event::PollOp {
+                                metadata,
+                                at,
+                                resource_id: resource_id.clone(),
+                                op_name,
+                                async_op_id,
+                                task_id,
+                                readiness,
+                            });
+                        }
+                        // else poll op event should be emitted in the context of an async op and task spans
+                    }
+                }
+                _ => {} // poll op event should be emitted in the context of a resource span
+            }
+        } else if self.state_update_callsites.contains(event.metadata()) {
+            match ctx.current_span().id() {
+                Some(resource_id) if self.is_id_resource(resource_id, &ctx) => {
+                    let meta_id = event.metadata().into();
+                    let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
+                    event.record(&mut state_update_visitor);
+                    if let Some(update) = state_update_visitor.result() {
+                        let at = SystemTime::now();
+                        self.send(Event::StateUpdate {
+                            metadata,
+                            at,
+                            resource_id: resource_id.clone(),
+                            update,
+                        });
+                    }
+                }
+                _ => eprintln!(
+                    "state update event should be emitted in the context of a resource span: {:?}",
+                    event
+                ),
+            }
         }
     }
 
     fn on_enter(&self, id: &span::Id, cx: Context<'_, S>) {
-        if !self.is_id_spawned(id, &cx) {
+        if !self.is_id_tracked(id, &cx) {
             return;
         }
+
+        self.current_spans
+            .get_or_default()
+            .borrow_mut()
+            .push(id.clone());
+
         self.send(Event::Enter {
             at: SystemTime::now(),
             id: id.clone(),
@@ -286,9 +475,14 @@ where
     }
 
     fn on_exit(&self, id: &span::Id, cx: Context<'_, S>) {
-        if !self.is_id_spawned(id, &cx) {
+        if !self.is_id_tracked(id, &cx) {
             return;
         }
+
+        if let Some(spans) = self.current_spans.get() {
+            spans.borrow_mut().pop(id);
+        }
+
         self.send(Event::Exit {
             at: SystemTime::now(),
             id: id.clone(),
@@ -296,9 +490,10 @@ where
     }
 
     fn on_close(&self, id: span::Id, cx: Context<'_, S>) {
-        if !self.is_id_spawned(&id, &cx) {
+        if !self.is_id_tracked(&id, &cx) {
             return;
         }
+
         self.send(Event::Close {
             at: SystemTime::now(),
             id,
@@ -339,7 +534,9 @@ impl Server {
         let aggregate = tokio::spawn(aggregate.run());
         let addr = self.addr;
         let res = builder
-            .add_service(proto::tasks::tasks_server::TasksServer::new(self))
+            .add_service(proto::instrument::instrument_server::InstrumentServer::new(
+                self,
+            ))
             .serve(addr)
             .await;
         aggregate.abort();
@@ -348,15 +545,15 @@ impl Server {
 }
 
 #[tonic::async_trait]
-impl proto::tasks::tasks_server::Tasks for Server {
-    type WatchTasksStream =
-        tokio_stream::wrappers::ReceiverStream<Result<proto::tasks::TaskUpdate, tonic::Status>>;
+impl proto::instrument::instrument_server::Instrument for Server {
+    type WatchUpdatesStream =
+        tokio_stream::wrappers::ReceiverStream<Result<proto::instrument::Update, tonic::Status>>;
     type WatchTaskDetailsStream =
         tokio_stream::wrappers::ReceiverStream<Result<proto::tasks::TaskDetails, tonic::Status>>;
-    async fn watch_tasks(
+    async fn watch_updates(
         &self,
-        req: tonic::Request<proto::tasks::TasksRequest>,
-    ) -> Result<tonic::Response<Self::WatchTasksStream>, tonic::Status> {
+        req: tonic::Request<proto::instrument::InstrumentRequest>,
+    ) -> Result<tonic::Response<Self::WatchUpdatesStream>, tonic::Status> {
         match req.remote_addr() {
             Some(addr) => tracing::debug!(client.addr = %addr, "starting a new watch"),
             None => tracing::debug!(client.addr = %"<unknown>", "starting a new watch"),
@@ -365,7 +562,7 @@ impl proto::tasks::tasks_server::Tasks for Server {
             tonic::Status::internal("cannot start new watch, aggregation task is not running")
         })?;
         let (tx, rx) = mpsc::channel(self.client_buffer);
-        permit.send(WatchKind::Tasks(Watch(tx)));
+        permit.send(Command::Instrument(Watch(tx)));
         tracing::debug!("watch started");
         let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
         Ok(tonic::Response::new(stream))
@@ -373,7 +570,7 @@ impl proto::tasks::tasks_server::Tasks for Server {
 
     async fn watch_task_details(
         &self,
-        req: tonic::Request<proto::tasks::DetailsRequest>,
+        req: tonic::Request<proto::instrument::TaskDetailsRequest>,
     ) -> Result<tonic::Response<Self::WatchTaskDetailsStream>, tonic::Status> {
         let task_id = req
             .into_inner()
@@ -385,7 +582,7 @@ impl proto::tasks::tasks_server::Tasks for Server {
 
         // Check with the aggregator task to request a stream if the task exists.
         let (stream_sender, stream_recv) = oneshot::channel();
-        permit.send(WatchKind::TaskDetail(WatchRequest {
+        permit.send(Command::WatchTaskDetail(WatchRequest {
             id: task_id.into(),
             stream_sender,
             buffer: self.client_buffer,
@@ -400,70 +597,24 @@ impl proto::tasks::tasks_server::Tasks for Server {
         let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
         Ok(tonic::Response::new(stream))
     }
-}
 
-impl Visit for FieldVisitor {
-    fn record_debug(&mut self, field: &field::Field, value: &dyn std::fmt::Debug) {
-        self.fields.push(proto::Field {
-            name: Some(field.name().into()),
-            value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
-        });
+    async fn pause(
+        &self,
+        _req: tonic::Request<proto::instrument::PauseRequest>,
+    ) -> Result<tonic::Response<proto::instrument::PauseResponse>, tonic::Status> {
+        self.subscribe.send(Command::Pause).await.map_err(|_| {
+            tonic::Status::internal("cannot pause, aggregation task is not running")
+        })?;
+        Ok(tonic::Response::new(proto::instrument::PauseResponse {}))
     }
 
-    fn record_i64(&mut self, field: &tracing_core::Field, value: i64) {
-        self.fields.push(proto::Field {
-            name: Some(field.name().into()),
-            value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
-        });
-    }
-
-    fn record_u64(&mut self, field: &tracing_core::Field, value: u64) {
-        self.fields.push(proto::Field {
-            name: Some(field.name().into()),
-            value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
-        });
-    }
-
-    fn record_bool(&mut self, field: &tracing_core::Field, value: bool) {
-        self.fields.push(proto::Field {
-            name: Some(field.name().into()),
-            value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
-        });
-    }
-
-    fn record_str(&mut self, field: &tracing_core::Field, value: &str) {
-        self.fields.push(proto::Field {
-            name: Some(field.name().into()),
-            value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
-        });
-    }
-}
-
-impl Visit for WakerVisitor {
-    fn record_debug(&mut self, _: &field::Field, _: &dyn std::fmt::Debug) {
-        // don't care (yet?)
-    }
-
-    fn record_u64(&mut self, field: &tracing_core::Field, value: u64) {
-        if field.name() == "task.id" {
-            self.id = Some(span::Id::from_u64(value));
-        }
-    }
-
-    fn record_str(&mut self, field: &tracing_core::Field, value: &str) {
-        if field.name() == "op" {
-            self.op = Some(match value {
-                "waker.wake" => WakeOp::Wake,
-                "waker.wake_by_ref" => WakeOp::WakeByRef,
-                "waker.clone" => WakeOp::Clone,
-                "waker.drop" => WakeOp::Drop,
-                _ => return,
-            });
-        }
+    async fn resume(
+        &self,
+        _req: tonic::Request<proto::instrument::ResumeRequest>,
+    ) -> Result<tonic::Response<proto::instrument::ResumeResponse>, tonic::Status> {
+        self.subscribe.send(Command::Resume).await.map_err(|_| {
+            tonic::Status::internal("cannot resume, aggregation task is not running")
+        })?;
+        Ok(tonic::Response::new(proto::instrument::ResumeResponse {}))
     }
 }

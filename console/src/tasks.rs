@@ -23,6 +23,13 @@ pub(crate) struct State {
     last_updated_at: Option<SystemTime>,
     new_tasks: Vec<TaskRef>,
     current_task_details: DetailsRef,
+    temporality: Temporality,
+}
+
+#[derive(Debug)]
+enum Temporality {
+    Live,
+    Paused,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -123,12 +130,18 @@ impl State {
         self.new_tasks.drain(..)
     }
 
-    pub(crate) fn update_tasks(&mut self, styles: &view::Styles, update: proto::tasks::TaskUpdate) {
-        if let Some(now) = update.now {
-            self.last_updated_at = Some(now.try_into().unwrap());
+    pub(crate) fn update_tasks(
+        &mut self,
+        styles: &view::Styles,
+        update: proto::tasks::TaskUpdate,
+        new_metadata: Option<proto::RegisterMetadata>,
+        now: Option<SystemTime>,
+    ) {
+        if let Some(now) = now {
+            self.last_updated_at = Some(now);
         }
 
-        if let Some(new_metadata) = update.new_metadata {
+        if let Some(new_metadata) = new_metadata {
             let metas = new_metadata.metadata.into_iter().filter_map(|meta| {
                 let id = meta.id?.id;
                 let metadata = meta.metadata?;
@@ -237,6 +250,20 @@ impl State {
             task.completed_for += 1;
             task.completed_for <= Self::RETAIN_COMPLETED_FOR
         })
+    }
+
+    // temporality methods
+
+    pub(crate) fn pause(&mut self) {
+        self.temporality = Temporality::Paused;
+    }
+
+    pub(crate) fn resume(&mut self) {
+        self.temporality = Temporality::Live;
+    }
+
+    pub(crate) fn is_paused(&self) -> bool {
+        matches!(self.temporality, Temporality::Paused)
     }
 }
 
@@ -369,15 +396,16 @@ impl From<proto::tasks::Stats> for Stats {
         }
 
         let total = pb.total_time.map(pb_duration);
-        let busy = pb.busy_time.map(pb_duration).unwrap_or_default();
+        let poll_stats = pb.poll_stats.expect("task should have poll stats");
+        let busy = poll_stats.busy_time.map(pb_duration).unwrap_or_default();
         let idle = total.map(|total| total - busy);
         Self {
             total,
             idle,
             busy,
-            last_poll_started: pb.last_poll_started.map(|v| v.try_into().unwrap()),
-            last_poll_ended: pb.last_poll_ended.map(|v| v.try_into().unwrap()),
-            polls: pb.polls,
+            last_poll_started: poll_stats.last_poll_started.map(|v| v.try_into().unwrap()),
+            last_poll_ended: poll_stats.last_poll_ended.map(|v| v.try_into().unwrap()),
+            polls: poll_stats.polls,
             created_at: pb
                 .created_at
                 .expect("task span was never created")
@@ -410,6 +438,12 @@ impl From<proto::field::Value> for FieldValue {
             proto::field::Value::U64Val(v) => Self::U64(v),
             proto::field::Value::DebugVal(v) => Self::Debug(v),
         }
+    }
+}
+
+impl Default for Temporality {
+    fn default() -> Self {
+        Self::Live
     }
 }
 

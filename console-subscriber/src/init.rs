@@ -80,7 +80,9 @@ pub fn init() {
 pub fn build() -> ConsoleSubscriberLayer {
     let (layer, server) = TasksLayer::builder().with_default_env().build();
 
-    let filter = EnvFilter::from_default_env().add_directive("tokio=trace".parse().unwrap());
+    let filter = EnvFilter::from_default_env()
+        .add_directive("tokio=trace".parse().unwrap())
+        .add_directive("runtime=trace".parse().unwrap());
 
     let console_subscriber = tracing_subscriber::registry().with(filter).with(layer);
 

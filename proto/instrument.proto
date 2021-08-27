@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package rs.tokio.console.instrument;
+
+import "google/protobuf/timestamp/timestamp.proto";
+import "common.proto";
+import "tasks.proto";
+import "resources.proto";
+import "async_ops.proto";
+
+service Instrument {
+    rpc WatchUpdates(InstrumentRequest) returns (stream Update) {}
+    rpc WatchTaskDetails(TaskDetailsRequest) returns (stream tasks.TaskDetails) {}
+    rpc Pause(PauseRequest) returns (PauseResponse) {}
+    rpc Resume(ResumeRequest) returns (ResumeResponse) {}
+}
+
+// TODO: In the future allow for the request to specify
+// only the data that the caller cares about (i.e. only
+// tasks but no resources)
+message InstrumentRequest {
+}
+
+message TaskDetailsRequest {
+    common.Id id = 1;
+}
+
+message PauseRequest {
+}
+
+message ResumeRequest {
+}
+
+// Update carries all information regarding tasks, resources, async operations
+// and resoruce operations in one message. There are a couple of reasons to combine all
+// of these into a single message:
+//
+// - we can use one single timestamp for all the data
+// - we can have all the new_metadata in one place
+// - things such as async ops and resouce ops do not make sense
+//   on their own as they have relations to tasks and resources
+message Update {
+    // The system time when this update was recorded.
+    //
+    // This is the timestamp any durations in the included `Stats` were
+    // calculated relative to.
+    google.protobuf.Timestamp now = 1;
+
+    // Task state update.
+    tasks.TaskUpdate task_update = 2;
+
+    // Resource state update.
+    resources.ResourceUpdate resource_update = 3;
+
+    // Async operations state update
+    async_ops.AsyncOpUpdate async_op_update = 4;
+
+    // Any new span metadata that was registered since the last update.
+    common.RegisterMetadata new_metadata = 5;
+}
+
+message PauseResponse {
+}
+
+message ResumeResponse {
+}

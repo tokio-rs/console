@@ -2,6 +2,11 @@ syntax = "proto3";
 
 package rs.tokio.console.common;
 import "google/protobuf/timestamp/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+message Id {
+    uint64 id = 1;
+}
 
 /// A Rust source code location.
 message Location {
@@ -82,4 +87,44 @@ message Metadata {
         DEBUG = 3;
         TRACE = 4;
     }
+}
+
+// Contains stats about objects that can be polled. Currently these can be:
+// - tasks that have been spawned
+// - async operations on resources that are performed within the context of a task
+message PollStats {
+    // The total number of times this object has been polled.
+    uint64 polls = 1;
+    // The timestamp of the first time this object was polled.
+    //
+    // If this is `None`, the object has not yet been polled.
+    //
+    // Subtracting this timestamp from `created_at` can be used to calculate the
+    // time to first poll for this object, a measurement of executor latency.
+    optional google.protobuf.Timestamp first_poll = 3;
+    // The timestamp of the most recent time this objects's poll method was invoked.
+    //
+    // If this is `None`, the object has not yet been polled.
+    //
+    // If the object has only been polled a single time, then this value may be
+    // equal to the `first_poll` timestamp.
+    //
+    optional google.protobuf.Timestamp last_poll_started = 4;
+    // The timestamp of the most recent time this objects's poll method finished execution.
+    //
+    // If this is `None`, the object has not yet been polled or is currently being polled.
+    //
+    // If the object does not exist anymore, then this is the time the final invocation of
+    // its poll method has completed.
+    optional google.protobuf.Timestamp last_poll_ended = 5;
+    // The total duration this object was being *actively polled*, summed across
+    // all polls. Note that this includes only polls that have completed and is
+    // not reflecting any inprogress polls.
+    google.protobuf.Duration busy_time = 6;
+}
+
+// Indicates the readiness of a pollable entity (i.e task, resource).
+enum Readiness {
+    READY = 0;
+    PENDING = 1;
 }
