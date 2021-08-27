@@ -204,6 +204,7 @@ impl List {
             Span::from(format!(" Idle ({})", num_idle)),
         ]);
 
+        /* TODO: use this to adjust the max size of name and target columns...
         // How many characters wide are the fixed-length non-field columns?
         let fixed_col_width = id_width.chars()
             + STATE_LEN
@@ -213,11 +214,15 @@ impl List {
             + DUR_LEN as u16
             + POLLS_LEN as u16
             + target_width.chars();
+        */
+
         // Fill all remaining characters in the frame with the task's fields.
-        // TODO(eliza): there's gotta be a nicer way to do this in `tui`...what
-        // we want is really just a constraint that says "always use all the
-        // characters remaining".
-        let fields_width = frame.size().width - fixed_col_width;
+        //
+        // Ideally we'd use Min(0), and it would fill the rest of the space. But that is broken
+        // in tui 0.16. We can use Percentage to fill the space for now.
+        //
+        // See https://github.com/fdehau/tui-rs/issues/525
+        let fields_width = layout::Constraint::Percentage(100);
         let widths = &[
             id_width.constraint(),
             layout::Constraint::Length(STATE_LEN),
@@ -227,7 +232,7 @@ impl List {
             layout::Constraint::Length(DUR_LEN as u16),
             layout::Constraint::Length(POLLS_LEN as u16),
             target_width.constraint(),
-            layout::Constraint::Min(fields_width),
+            fields_width,
         ];
 
         let table = table
