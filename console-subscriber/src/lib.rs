@@ -340,11 +340,10 @@ where
             (_, "runtime::waker") | (_, "tokio::task::waker") => self.waker_callsites.insert(meta),
             (ResourceVisitor::RES_SPAN_NAME, _) => self.resource_callsites.insert(meta),
             (AsyncOpVisitor::ASYNC_OP_SPAN_NAME, _) => self.async_op_callsites.insert(meta),
-            (_, PollOpVisitor::POLL_OP_EVENT_TARGET) | (_, "tokio::resource::poll_op") => {
-                self.poll_op_callsites.insert(meta)
+            (_, PollOpVisitor::POLL_OP_EVENT_TARGET) => self.poll_op_callsites.insert(meta),
+            (_, StateUpdateVisitor::STATE_UPDATE_EVENT_TARGET) => {
+                self.state_update_callsites.insert(meta)
             }
-            (_, StateUpdateVisitor::STATE_UPDATE_EVENT_TARGET)
-            | (_, "tokio::resource::state_update") => self.state_update_callsites.insert(meta),
             (_, _) => {}
         }
 
