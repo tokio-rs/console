@@ -263,32 +263,44 @@ impl List {
         self.sorted_tasks.retain(|t| t.upgrade().is_some());
     }
 
-    fn scroll_next(&mut self) {
-        let i = match self.table_state.selected() {
-            Some(i) => {
-                if i >= self.sorted_tasks.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
+    fn scroll_with(&mut self, f: impl Fn(&Vec<TaskRef>, usize) -> usize) {
+        // If the list of sorted tasks is empty, don't try to scroll...
+        if self.sorted_tasks.is_empty() {
+            self.table_state.select(None);
+            return;
+        }
+
+        // Increment the currently selected row, or if no row is selected, start
+        // at the first row.
+        let i = self.table_state.selected().unwrap_or(0);
+        let i = f(&self.sorted_tasks, i);
         self.table_state.select(Some(i));
     }
 
-    fn scroll_prev(&mut self) {
-        let i = match self.table_state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.sorted_tasks.len() - 1
-                } else {
-                    i - 1
-                }
+    fn scroll_next(&mut self) {
+        self.scroll_with(|tasks, i| {
+            if i >= tasks.len() - 1 {
+                // If the last task is currently selected, wrap around to the
+                // first task.
+                0
+            } else {
+                // Otherwise, increase the selected index by 1.
+                i + 1
             }
-            None => 0,
-        };
-        self.table_state.select(Some(i));
+        });
+    }
+
+    fn scroll_prev(&mut self) {
+        self.scroll_with(|tasks, i| {
+            if i == 0 {
+                // If the first task is currently selected, wrap around to the
+                // last task.
+                tasks.len() - 1
+            } else {
+                // Otherwise, decrease the selected task by 1.
+                i - 1
+            }
+        })
     }
 
     pub(crate) fn selected_task(&self) -> TaskRef {
