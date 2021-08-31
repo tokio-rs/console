@@ -724,7 +724,7 @@ impl Aggregator {
                 op_name,
                 async_op_id,
                 task_id,
-                readiness,
+                is_ready,
             } => {
                 let async_op_id = self.ids.id_for(async_op_id);
                 let resource_id = self.ids.id_for(resource_id);
@@ -735,9 +735,7 @@ impl Aggregator {
                 async_op_stats.task_id.get_or_insert(task_id);
                 async_op_stats.resource_id.get_or_insert(resource_id);
 
-                if readiness == proto::Readiness::Pending
-                    && async_op_stats.poll_stats.first_poll.is_none()
-                {
+                if !is_ready && async_op_stats.poll_stats.first_poll.is_none() {
                     async_op_stats.poll_stats.first_poll = Some(at);
                 }
 
@@ -747,7 +745,7 @@ impl Aggregator {
                     name: op_name,
                     task_id: Some(task_id.into()),
                     async_op_id: Some(async_op_id.into()),
-                    readiness: readiness as i32,
+                    is_ready,
                 };
 
                 self.all_poll_ops.push(poll_op.clone());

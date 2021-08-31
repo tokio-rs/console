@@ -142,7 +142,7 @@ enum Event {
         op_name: String,
         async_op_id: span::Id,
         task_id: span::Id,
-        readiness: proto::Readiness,
+        is_ready: bool,
     },
     StateUpdate {
         metadata: &'static Metadata<'static>,
@@ -407,7 +407,7 @@ where
                 Some(resource_id) if self.is_id_resource(resource_id, &ctx) => {
                     let mut poll_op_visitor = PollOpVisitor::default();
                     event.record(&mut poll_op_visitor);
-                    if let Some((op_name, readiness)) = poll_op_visitor.result() {
+                    if let Some((op_name, is_ready)) = poll_op_visitor.result() {
                         let task_and_async_op_ids = self.current_spans.get().and_then(|stack| {
                             let stack = stack.borrow();
                             let task_id =
@@ -426,7 +426,7 @@ where
                                 op_name,
                                 async_op_id,
                                 task_id,
-                                readiness,
+                                is_ready,
                             });
                         }
                         // else poll op event should be emitted in the context of an async op and task spans
