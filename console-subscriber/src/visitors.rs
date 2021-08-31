@@ -87,7 +87,7 @@ pub(crate) struct WakerVisitor {
 #[derive(Default)]
 pub(crate) struct PollOpVisitor {
     op_name: Option<String>,
-    readiness: Option<proto::Readiness>,
+    is_ready: Option<bool>,
 }
 
 /// Used to extract the fields needed to construct
@@ -256,33 +256,27 @@ impl Visit for WakerVisitor {
 impl PollOpVisitor {
     pub(crate) const POLL_OP_EVENT_TARGET: &'static str = "runtime::resource::poll_op";
     const OP_NAME_FIELD_NAME: &'static str = "op_name";
-    const OP_READINESS_FIELD_NAME: &'static str = "readiness";
-    const OP_READINESS_READY: &'static str = "ready";
-    const OP_READINESS_PENDING: &'static str = "pending";
+    const OP_READINESS_FIELD_NAME: &'static str = "is_ready";
 
-    pub(crate) fn result(self) -> Option<(String, proto::Readiness)> {
+    pub(crate) fn result(self) -> Option<(String, bool)> {
         let op_name = self.op_name?;
-        let readiness = self.readiness?;
-        Some((op_name, readiness))
+        let is_ready = self.is_ready?;
+        Some((op_name, is_ready))
     }
 }
 
 impl Visit for PollOpVisitor {
     fn record_debug(&mut self, _: &field::Field, _: &dyn std::fmt::Debug) {}
 
+    fn record_bool(&mut self, field: &tracing_core::Field, value: bool) {
+        if field.name() == Self::OP_READINESS_FIELD_NAME {
+            self.is_ready = Some(value)
+        }
+    }
+
     fn record_str(&mut self, field: &tracing_core::Field, value: &str) {
-        match field.name() {
-            Self::OP_NAME_FIELD_NAME => {
-                self.op_name = Some(value.to_string());
-            }
-            Self::OP_READINESS_FIELD_NAME => {
-                self.readiness = Some(match value {
-                    Self::OP_READINESS_READY => proto::Readiness::Ready,
-                    Self::OP_READINESS_PENDING => proto::Readiness::Pending,
-                    _ => return,
-                });
-            }
-            _ => {}
+        if field.name() == Self::OP_NAME_FIELD_NAME {
+            self.op_name = Some(value.to_string());
         }
     }
 }

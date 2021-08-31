@@ -87,5 +87,5 @@ message PollOp {
     // Identifies the async op ID that this poll op is part of.
     common.Id async_op_id = 6;
     // Whether this poll op has returned with ready or pending.
-    common.Readiness readiness = 7;
+    bool is_ready = 7;
 }
