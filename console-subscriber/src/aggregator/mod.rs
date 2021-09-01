@@ -85,7 +85,7 @@ pub(crate) struct Aggregator {
     // TODO: drop the poll ops for async ops that have been dropped
     all_poll_ops: ShrinkVec<proto::resources::PollOp>,
 
-    /// *New* PollOp events that whave occured since the last update
+    /// *New* PollOp events that whave occurred since the last update
     ///
     /// This is emptied on every state update.
     new_poll_ops: Vec<proto::resources::PollOp>,

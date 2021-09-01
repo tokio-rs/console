@@ -35,7 +35,7 @@ toolkit consists of multiple components:
 
 [gRPC]: https://grpc.io/
 [protocol buffers]: https://developers.google.com/protocol-buffers
-[the protobuf definitions]: ../proto
+[the protobuf definitions]: ./proto
 [`tonic`]: https://lib.rs/crates/tonic
 [Tokio]: https://tokio.rs
 
@@ -138,8 +138,8 @@ cargo run --example $name
 
 [`tracing`]: https://lib.rs/crates/tracing
 [`tracing-subscriber`]: https://lib.rs/crates/tracing-subscriber
-[`console-api`]: ../console-api
-[`console-subscriber`]: ../console-subscriber
-[`console`]: ../console
+[`console-api`]: ./console-api
+[`console-subscriber`]: ./console-subscriber
+[`console`]: ./console
 [`Layer`]: https://docs.rs/tracing-subscriber/0.2.18/tracing_subscriber/layer/trait.Layer.html
 [`tracing` target]: https://docs.rs/tracing/0.1.26/tracing/struct.Metadata.html

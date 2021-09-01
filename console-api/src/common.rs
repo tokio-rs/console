@@ -96,7 +96,7 @@ impl fmt::Display for Field {
 impl fmt::Display for Location {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match (self.module_path.as_ref(), self.file.as_ref()) {
-            // Module paths take predecence because they're shorter...
+            // Module paths take precedence because they're shorter...
             (Some(module), _) => f.write_str(module.as_ref())?,
             (None, Some(file)) => f.write_str(file.as_ref())?,
             // If there's no file or module path, then printing the line and
