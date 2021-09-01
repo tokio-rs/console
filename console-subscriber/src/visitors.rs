@@ -1,4 +1,5 @@
-//! These visitors are respondible for extracing the relevan
+//! These visitors are responsible for extracting the relevant
+```
 //! fields from tracing metadata and producing the parts
 //! needed to construct `Event` instances.
 

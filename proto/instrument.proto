@@ -32,12 +32,12 @@ message ResumeRequest {
 }
 
 // Update carries all information regarding tasks, resources, async operations
-// and resoruce operations in one message. There are a couple of reasons to combine all
+// and resource operations in one message. There are a couple of reasons to combine all
 // of these into a single message:
 //
 // - we can use one single timestamp for all the data
 // - we can have all the new_metadata in one place
-// - things such as async ops and resouce ops do not make sense
+// - things such as async ops and resource ops do not make sense
 //   on their own as they have relations to tasks and resources
 message Update {
     // The system time when this update was recorded.
