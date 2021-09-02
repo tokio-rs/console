@@ -242,6 +242,11 @@ impl State {
     }
 
     pub(crate) fn retain_active(&mut self) {
+        // Don't clean up stopped tasks while the console is paused.
+        if self.is_paused() {
+            return;
+        }
+
         self.tasks.retain(|_, task| {
             let mut task = task.borrow_mut();
             if task.completed_for == 0 {
@@ -455,7 +460,6 @@ impl Default for SortBy {
 
 impl SortBy {
     pub fn sort(&self, now: SystemTime, tasks: &mut Vec<Weak<RefCell<Task>>>) {
-        // tasks.retain(|t| t.upgrade().is_some());
         match self {
             Self::Tid => tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().id)),
             Self::Name => {
