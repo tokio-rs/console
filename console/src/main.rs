@@ -20,6 +20,7 @@ mod conn;
 mod input;
 mod tasks;
 mod term;
+mod util;
 mod view;
 
 #[tokio::main]

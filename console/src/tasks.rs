@@ -1,4 +1,4 @@
-use crate::view;
+use crate::{util::Percentage, view};
 use console_api as proto;
 use hdrhistogram::Histogram;
 use std::{
@@ -377,6 +377,11 @@ impl Task {
     /// Returns the total number of times this task has woken itself.
     pub(crate) fn self_wakes(&self) -> u64 {
         self.stats.self_wakes
+    }
+
+    /// Returns the percentage of this task's total wakeups that were self-wakes.
+    pub(crate) fn self_wake_percent(&self) -> f64 {
+        self.self_wakes().percent_of(self.wakes())
     }
 
     fn update(&mut self) {
