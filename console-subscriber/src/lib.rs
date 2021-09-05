@@ -174,8 +174,8 @@ enum AttributeUpdateOp {
 
 #[derive(Clone, Debug, Copy, Serialize)]
 enum WakeOp {
-    Wake,
-    WakeByRef,
+    Wake { self_wake: bool },
+    WakeByRef { self_wake: bool },
     Clone,
     Drop,
 }
@@ -398,7 +398,17 @@ where
             let at = SystemTime::now();
             let mut visitor = WakerVisitor::default();
             event.record(&mut visitor);
-            if let Some((id, op)) = visitor.result() {
+            if let Some((id, mut op)) = visitor.result() {
+                if op.is_wake() {
+                    // Are we currently inside the task's span? If so, the task
+                    // has woken itself.
+                    let self_wake = self
+                        .current_spans
+                        .get()
+                        .map(|spans| spans.borrow().iter().any(|span| span == &id))
+                        .unwrap_or(false);
+                    op = op.self_wake(self_wake);
+                }
                 self.send(Event::Waker { id, op, at });
             }
             // else unknown waker event... what to do? can't trace it from here...
@@ -616,5 +626,20 @@ impl proto::instrument::instrument_server::Instrument for Server {
             tonic::Status::internal("cannot resume, aggregation task is not running")
         })?;
         Ok(tonic::Response::new(proto::instrument::ResumeResponse {}))
+    }
+}
+
+impl WakeOp {
+    /// Returns `true` if `self` is a `Wake` or `WakeByRef` event.
+    fn is_wake(self) -> bool {
+        matches!(self, Self::Wake { .. } | Self::WakeByRef { .. })
+    }
+
+    fn self_wake(self, self_wake: bool) -> Self {
+        match self {
+            Self::Wake { .. } => Self::Wake { self_wake },
+            Self::WakeByRef { .. } => Self::WakeByRef { self_wake },
+            x => x,
+        }
     }
 }

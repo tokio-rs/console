@@ -243,8 +243,8 @@ impl Visit for WakerVisitor {
     fn record_str(&mut self, field: &tracing_core::Field, value: &str) {
         if field.name() == "op" {
             self.op = Some(match value {
-                Self::WAKE => WakeOp::Wake,
-                Self::WAKE_BY_REF => WakeOp::WakeByRef,
+                Self::WAKE => WakeOp::Wake { self_wake: false },
+                Self::WAKE_BY_REF => WakeOp::WakeByRef { self_wake: false },
                 Self::CLONE => WakeOp::Clone,
                 Self::DROP => WakeOp::Drop,
                 _ => return,
