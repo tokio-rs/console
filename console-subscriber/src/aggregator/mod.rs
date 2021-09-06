@@ -184,6 +184,7 @@ struct TaskStats {
     wakes: u64,
     waker_clones: u64,
     waker_drops: u64,
+    self_wakes: u64,
     last_wake: Option<SystemTime>,
 
     poll_times_histogram: Histogram<u64>,
@@ -273,6 +274,7 @@ impl Default for TaskStats {
             wakes: 0,
             waker_clones: 0,
             waker_drops: 0,
+            self_wakes: 0,
             last_wake: None,
             // significant figures should be in the [0-5] range and memory usage
             // grows exponentially with higher a sigfig
@@ -663,9 +665,15 @@ impl Aggregator {
                 // "wasted" waker ops, but we'll leave that for another time.
                 if let Some(mut task_stats) = self.task_stats.update(&id) {
                     match op {
-                        WakeOp::Wake | WakeOp::WakeByRef => {
+                        WakeOp::Wake { self_wake } | WakeOp::WakeByRef { self_wake } => {
                             task_stats.wakes += 1;
                             task_stats.last_wake = Some(at);
+
+                            // If the  task has woken itself, increment the
+                            // self-wake count.
+                            if self_wake {
+                                task_stats.self_wakes += 1;
+                            }
 
                             // Note: `Waker::wake` does *not* call the `drop`
                             // implementation, so waking by value doesn't
@@ -675,7 +683,7 @@ impl Aggregator {
                             //
                             // see
                             // https://github.com/rust-lang/rust/blob/673d0db5e393e9c64897005b470bfeb6d5aec61b/library/core/src/task/wake.rs#L211-L212
-                            if let WakeOp::Wake = op {
+                            if let WakeOp::Wake { .. } = op {
                                 task_stats.waker_drops += 1;
                             }
                         }
@@ -866,6 +874,7 @@ impl ToProto for TaskStats {
             total_time: total_time(self.created_at, self.closed_at).map(Into::into),
             wakes: self.wakes,
             waker_clones: self.waker_clones,
+            self_wakes: self.self_wakes,
             waker_drops: self.waker_drops,
             last_wake: self.last_wake.map(Into::into),
         }

@@ -104,4 +104,6 @@ message Stats {
     optional google.protobuf.Timestamp last_wake = 6;
     // Contains task poll statistics.
     common.PollStats poll_stats = 7;
+    // The total number of times this task has woken itself.
+    uint64 self_wakes = 8;
 }

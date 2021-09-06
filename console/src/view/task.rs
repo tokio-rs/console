@@ -55,7 +55,7 @@ impl TaskView {
             .constraints(
                 [
                     layout::Constraint::Length(1),
-                    layout::Constraint::Length(7),
+                    layout::Constraint::Length(8),
                     layout::Constraint::Length(9),
                     layout::Constraint::Percentage(60),
                 ]
@@ -105,17 +105,33 @@ impl TaskView {
             Span::raw(" = quit"),
         ]);
 
-        let attrs = Spans::from(vec![
+        // Just preallocate capacity for ID, name, target, total, busy, and idle.
+        let mut metrics = Vec::with_capacity(6);
+        metrics.push(Spans::from(vec![
             bold("ID: "),
             Span::raw(format!("{} ", task.id())),
             task.state().render(styles),
-        ]);
-        let target = Spans::from(vec![bold("Target: "), Span::raw(task.target())]);
-        let total = Spans::from(vec![bold("Total Time: "), dur(styles, task.total(now))]);
-        let busy = Spans::from(vec![bold("Busy: "), dur(styles, task.busy(now))]);
-        let idle = Spans::from(vec![bold("Idle: "), dur(styles, task.idle(now))]);
+        ]));
 
-        let metrics = vec![attrs, target, total, busy, idle];
+        if let Some(name) = task.name() {
+            metrics.push(Spans::from(vec![bold("Name: "), Span::raw(name)]));
+        }
+        metrics.push(Spans::from(vec![
+            bold("Target: "),
+            Span::raw(task.target()),
+        ]));
+        metrics.push(Spans::from(vec![
+            bold("Total Time: "),
+            dur(styles, task.total(now)),
+        ]));
+        metrics.push(Spans::from(vec![
+            bold("Busy: "),
+            dur(styles, task.busy(now)),
+        ]));
+        metrics.push(Spans::from(vec![
+            bold("Idle: "),
+            dur(styles, task.idle(now)),
+        ]));
 
         let wakers = Spans::from(vec![
             bold("Current wakers: "),
@@ -130,6 +146,12 @@ impl TaskView {
             bold("Woken: "),
             Span::from(format!("{} times", task.wakes())),
         ];
+
+        if task.self_wakes() > 0 {
+            wakeups.push(Span::raw(", "));
+            wakeups.push(bold("Self Wakes: "));
+            wakeups.push(Span::from(format!("{} times", task.self_wakes())));
+        }
 
         // If the task has been woken, add the time since wake to its stats as well.
         if let Some(since) = task.since_wake(now) {
