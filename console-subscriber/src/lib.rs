@@ -400,15 +400,13 @@ where
             event.record(&mut visitor);
             if let Some((id, mut op)) = visitor.result() {
                 if op.is_wake() {
-                    eprintln!("WAKE {:?}", id);
                     // Are we currently inside the task's span? If so, the task
                     // has woken itself.
                     let self_wake = self
                         .current_spans
                         .get()
-                        .map(|spans| spans.borrow().iter().any(|span| dbg!(span) == &id))
+                        .map(|spans| spans.borrow().iter().any(|span| span == &id))
                         .unwrap_or(false);
-                    dbg!(self_wake);
                     op = op.self_wake(self_wake);
                 }
                 self.send(Event::Waker { id, op, at });
