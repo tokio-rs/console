@@ -148,7 +148,7 @@ impl List {
                         width = id_width.chars() as usize
                     ))),
                     Cell::from(task.state().render(styles)),
-                    Cell::from(name_width.update_str(task.name().to_string())),
+                    Cell::from(name_width.update_str(task.name().unwrap_or("").to_string())),
                     dur_cell(task.total(now)),
                     dur_cell(task.busy(now)),
                     dur_cell(task.idle(now)),
