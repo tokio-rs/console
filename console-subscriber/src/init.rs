@@ -50,10 +50,11 @@ pub fn init() {
 /// and a [filter] that enables the spans and events required by the console.
 ///
 /// Unlike [`init`], this function does not set the default subscriber, allowing
-/// additional [`Layer`s] to be added.
+/// additional [`Layer`]s to be added.
 ///
 /// [subscriber]: https://docs.rs/tracing/latest/tracing/subscriber/trait.Subscriber.html
 /// [filter]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
+/// [`Layer`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html
 ///
 /// ## Configuration
 ///
@@ -62,9 +63,8 @@ pub fn init() {
 ///
 /// ## Differences from `init`
 ///
-/// You must call
-/// [`init`][tracing_subscriber::util::SubscriberInitExt::init] on the
-/// final layer in order to register the subscriber.
+/// You must call [`.init()`] on the final subscriber in order to [set the
+/// subscriber as the default][set_default].
 ///
 /// ## Examples
 ///
@@ -75,7 +75,8 @@ pub fn init() {
 /// //  .with(...)
 ///     .init();
 /// ```
-
+/// [`.init()`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/util/trait.SubscriberInitExt.html
+/// [set_default]: https://docs.rs/tracing/latest/tracing/subscriber/fn.set_default.html
 #[must_use = "build() without init() will not set the default tracing subscriber"]
 pub fn build() -> ConsoleSubscriberLayer {
     let (layer, server) = TasksLayer::builder().with_default_env().build();

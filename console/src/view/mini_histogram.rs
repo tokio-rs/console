@@ -9,7 +9,10 @@ use tui::{
 
 /// This is a tui-rs widget to visualize a latency histogram in a small area.
 /// It is based on the [`Sparkline`] widget, so it draws a mini bar chart with
-/// some labels for clarity. Unlike Sparkline, it does not omit very small values.
+/// some labels for clarity. Unlike Sparkline, it does not omit very small
+/// values.
+///
+/// [`Sparkline`]: tui::widgets::Sparkline
 pub(crate) struct MiniHistogram<'a> {
     /// A block to wrap the widget in
     block: Option<Block<'a>>,
