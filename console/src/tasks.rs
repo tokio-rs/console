@@ -283,8 +283,8 @@ impl Task {
         &self.target
     }
 
-    pub(crate) fn name(&self) -> &str {
-        self.name.as_ref().map(AsRef::as_ref).unwrap_or_default()
+    pub(crate) fn name(&self) -> Option<&str> {
+        self.name.as_ref().map(AsRef::as_ref)
     }
 
     pub(crate) fn formatted_fields(&self) -> &[Vec<Span<'static>>] {
