@@ -5,3 +5,7 @@
     """
   environment = { RUSTDOCFLAGS= "--cfg docsrs -D warnings" }
   publish = "target/doc"
+
+[[redirects]]
+  from = "/"
+  to = "/console_subscriber"
