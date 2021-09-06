@@ -2,6 +2,7 @@
   command = """
     rustup install nightly --profile minimal \
         && cargo doc --no-deps --all-features \
+        && ls target/doc \
         && cp -r target/doc _netlify_out
     """
   environment = { RUSTDOCFLAGS= "--cfg docsrs -D warnings" }
