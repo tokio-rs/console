@@ -4,7 +4,7 @@
         && cargo doc --no-deps --all-features \
         && cp -r target/doc _netlify_out
     """
-  environment = { RUSTDOCFLAGS= "--cfg docsrs" }
+  environment = { RUSTDOCFLAGS= "--cfg docsrs -D warnings" }
   publish = "_netlify_out"
 
 [[redirects]]
