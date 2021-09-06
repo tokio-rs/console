@@ -127,14 +127,20 @@ impl List {
                 let task = task.borrow();
                 let state = task.state();
                 warning_results.extend(warnings.iter().filter_map(|warning| {
-                    let Spans(mut warning) = warning.check(&*task)?;
-                    let mut spans = Vec::with_capacity(warning.len() + 1);
-                    spans.push(Span::styled(
-                        styles.if_utf8("\u{26A0} ", "/!\\ "),
-                        styles.fg(Color::LightYellow),
-                    ));
-                    spans.append(&mut warning);
-                    Some(Spans::from(spans))
+                    let warning = warning.check(&*task)?;
+                    let task = if let Some(name) = task.name() {
+                        Span::from(format!("Task '{}' (ID {}) ", name, task.id()))
+                    } else {
+                        Span::from(format!("Task ID {} ", task.id()))
+                    };
+                    Some(Spans::from(vec![
+                        Span::styled(
+                            styles.if_utf8("\u{26A0} ", "/!\\ "),
+                            styles.fg(Color::LightYellow),
+                        ),
+                        task,
+                        Span::from(warning),
+                    ]))
                 }));
                 // Count task states
                 match state {

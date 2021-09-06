@@ -1,8 +1,7 @@
 use crate::tasks::Task;
-use tui::text::{Span, Spans};
 
 pub trait Warning<T>: std::fmt::Debug {
-    fn check(&self, val: &T) -> Option<tui::text::Spans>;
+    fn check(&self, val: &T) -> Option<String>;
 }
 
 #[derive(Clone, Debug)]
@@ -24,22 +23,13 @@ impl Default for SelfWakePercent {
 }
 
 impl Warning<Task> for SelfWakePercent {
-    fn check(&self, task: &Task) -> Option<tui::text::Spans> {
+    fn check(&self, task: &Task) -> Option<String> {
         let self_wakes = task.self_wake_percent();
         if self_wakes > self.min_percent {
-            let name = task.name();
-            let task = if name.is_empty() {
-                Span::from(format!("Task ID {} ", task.id()))
-            } else {
-                Span::from(format!("Task '{}' (ID {}) ", name, task.id()))
-            };
-            return Some(Spans::from(vec![
-                task,
-                Span::from(format!(
-                    "has woken itself for more than {:.2}% of its total wakeups ({:.2}%)",
-                    self.min_percent, self_wakes
-                )),
-            ]));
+            return Some(format!(
+                "has woken itself for more than {:.2}% of its total wakeups ({:.2}%)",
+                self.min_percent, self_wakes
+            ));
         }
 
         None
