@@ -29,9 +29,9 @@ impl Warning<Task> for SelfWakePercent {
         if self_wakes > self.min_percent {
             let name = task.name();
             let task = if name.is_empty() {
-                Span::from(format!("⚠ Task ID {} ", task.id()))
+                Span::from(format!("Task ID {} ", task.id()))
             } else {
-                Span::from(format!("⚠ Task '{}' (ID {}) ", name, task.id()))
+                Span::from(format!("Task '{}' (ID {}) ", name, task.id()))
             };
             return Some(Spans::from(vec![
                 task,

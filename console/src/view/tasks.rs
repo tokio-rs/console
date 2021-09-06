@@ -126,7 +126,16 @@ impl List {
                 let task = task.upgrade()?;
                 let task = task.borrow();
                 let state = task.state();
-                warning_results.extend(warnings.iter().filter_map(|warning| warning.check(&*task)));
+                warning_results.extend(warnings.iter().filter_map(|warning| {
+                    let Spans(mut warning) = warning.check(&*task)?;
+                    let mut spans = Vec::with_capacity(warning.len() + 1);
+                    spans.push(Span::styled(
+                        styles.if_utf8("\u{26A0} ", "/!\\ "),
+                        styles.fg(Color::LightYellow),
+                    ));
+                    spans.append(&mut warning);
+                    Some(Spans::from(spans))
+                }));
                 // Count task states
                 match state {
                     TaskState::Running => *num_running += 1,
