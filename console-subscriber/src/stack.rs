@@ -49,6 +49,12 @@ impl SpanStack {
         false
     }
 
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &Id> {
+        self.stack
+            .iter()
+            .filter_map(|ContextId { id, duplicate }| if *duplicate { None } else { Some(id) })
+    }
+
     pub(crate) fn stack(&self) -> &Vec<ContextId> {
         &self.stack
     }
