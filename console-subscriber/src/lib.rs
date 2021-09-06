@@ -548,16 +548,16 @@ impl Server {
             .aggregator
             .take()
             .expect("cannot start server multiple times");
-        let aggregate = tokio::spawn(aggregate.run());
+        let aggregate = spawn_named(aggregate.run(), "console::aggregate");
         let addr = self.addr;
-        let res = builder
+        let serve = builder
             .add_service(proto::instrument::instrument_server::InstrumentServer::new(
                 self,
             ))
-            .serve(addr)
-            .await;
+            .serve(addr);
+        let res = spawn_named(serve, "console::serve").await;
         aggregate.abort();
-        res.map_err(Into::into)
+        res?.map_err(Into::into)
     }
 }
 
@@ -649,4 +649,19 @@ impl WakeOp {
             x => x,
         }
     }
+}
+
+#[track_caller]
+pub(crate) fn spawn_named<T>(
+    task: impl std::future::Future<Output = T> + Send + 'static,
+    _name: &str,
+) -> tokio::task::JoinHandle<T>
+where
+    T: Send + 'static,
+{
+    #[cfg(tokio_unstable)]
+    return tokio::task::Builder::new().name(_name).spawn(task);
+
+    #[cfg(not(tokio_unstable))]
+    tokio::spawn(task)
 }
