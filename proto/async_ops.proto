@@ -43,12 +43,8 @@ message AsyncOp {
 message Stats {
     // Timestamp of when the async op has been created.
     google.protobuf.Timestamp created_at = 1;
-    // The amount of time this op has *existed*, regardless of whether or not
-    // it was being polled.
-    //
-    // Subtracting `poll_stats.busy_time` from `total_time` calculates the resource's idle
-    // time, the amount of time it has spent *waiting* to be polled.
-    google.protobuf.Duration total_time = 2;
+    // Timestamp of when the async op was dropped.
+    google.protobuf.Timestamp dropped_at = 2;
     // The resource Id this `AsyncOp` is associated with. Note that both
     // `resource_id` and `task_id` can be None if this async op has not been polled yet
     common.Id resource_id = 3;

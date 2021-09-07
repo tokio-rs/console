@@ -1,6 +1,7 @@
 use crate::view::Palette;
 use clap::{ArgGroup, Clap, ValueHint};
 use std::process::Command;
+use std::time::Duration;
 use tonic::transport::Uri;
 
 #[derive(Clap, Debug)]
@@ -28,6 +29,11 @@ pub struct Config {
 
     #[clap(flatten)]
     pub(crate) view_options: ViewOptions,
+
+    /// The amount of time resource that have been dropped
+    /// will be displayed in the console.
+    #[clap(long = "retain-for", default_value = "5h", parse(try_from_str = parse_retain_for))]
+    pub(crate) retain_for: Duration,
 }
 
 #[derive(Clap, Debug, Clone)]
@@ -175,4 +181,11 @@ impl ViewOptions {
 fn parse_true_color(s: &str) -> bool {
     let s = s.trim();
     s.eq_ignore_ascii_case("truecolor") || s.eq_ignore_ascii_case("24bit")
+}
+
+fn parse_retain_for(s: &str) -> Result<Duration, String> {
+    match console_util::parse_duration(s) {
+        Ok(duration) => Ok(duration),
+        Err(error) => Err(error.to_string()),
+    }
 }

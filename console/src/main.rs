@@ -42,7 +42,7 @@ async fn main() -> color_eyre::Result<()> {
     // A channel to send the task details update stream (no need to keep outdated details in the memory)
     let (details_tx, mut details_rx) = mpsc::channel::<TaskDetails>(2);
 
-    let mut tasks = State::default();
+    let mut tasks = State::new(args.retain_for);
     let mut input = input::EventStream::new();
     let mut view = view::View::new(styles);
 
