@@ -413,8 +413,8 @@ where
             }
             // else unknown waker event... what to do? can't trace it from here...
         } else if self.poll_op_callsites.contains(event.metadata()) {
-            match ctx.current_span().id() {
-                Some(resource_id) if self.is_id_resource(resource_id, &ctx) => {
+            match ctx.event_span(event) {
+                Some(resource_span) if self.is_resource(resource_span.metadata()) => {
                     let mut poll_op_visitor = PollOpVisitor::default();
                     event.record(&mut poll_op_visitor);
                     if let Some((op_name, is_ready)) = poll_op_visitor.result() {
@@ -432,21 +432,28 @@ where
                             self.send(Event::PollOp {
                                 metadata,
                                 at,
-                                resource_id: resource_id.clone(),
+                                resource_id: resource_span.id(),
                                 op_name,
                                 async_op_id,
                                 task_id,
                                 is_ready,
                             });
+                        } else {
+                            eprintln!(
+                                "poll op event should be emitted in the context of an async op and task spans: {:?}",
+                                event
+                            )
                         }
-                        // else poll op event should be emitted in the context of an async op and task spans
                     }
                 }
-                _ => {} // poll op event should be emitted in the context of a resource span
+                _ => eprintln!(
+                    "poll op event should have a resource span parent: {:?}",
+                    event
+                ),
             }
         } else if self.state_update_callsites.contains(event.metadata()) {
-            match ctx.current_span().id() {
-                Some(resource_id) if self.is_id_resource(resource_id, &ctx) => {
+            match ctx.event_span(event) {
+                Some(resource_span) if self.is_resource(resource_span.metadata()) => {
                     let meta_id = event.metadata().into();
                     let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
                     event.record(&mut state_update_visitor);
@@ -455,13 +462,13 @@ where
                         self.send(Event::StateUpdate {
                             metadata,
                             at,
-                            resource_id: resource_id.clone(),
+                            resource_id: resource_span.id(),
                             update,
                         });
                     }
                 }
                 _ => eprintln!(
-                    "state update event should be emitted in the context of a resource span: {:?}",
+                    "state update event should have a resource span parent: {:?}",
                     event
                 ),
             }
@@ -541,16 +548,16 @@ impl Server {
             .aggregator
             .take()
             .expect("cannot start server multiple times");
-        let aggregate = tokio::spawn(aggregate.run());
+        let aggregate = spawn_named(aggregate.run(), "console::aggregate");
         let addr = self.addr;
-        let res = builder
+        let serve = builder
             .add_service(proto::instrument::instrument_server::InstrumentServer::new(
                 self,
             ))
-            .serve(addr)
-            .await;
+            .serve(addr);
+        let res = spawn_named(serve, "console::serve").await;
         aggregate.abort();
-        res.map_err(Into::into)
+        res?.map_err(Into::into)
     }
 }
 
@@ -642,4 +649,19 @@ impl WakeOp {
             x => x,
         }
     }
+}
+
+#[track_caller]
+pub(crate) fn spawn_named<T>(
+    task: impl std::future::Future<Output = T> + Send + 'static,
+    _name: &str,
+) -> tokio::task::JoinHandle<T>
+where
+    T: Send + 'static,
+{
+    #[cfg(tokio_unstable)]
+    return tokio::task::Builder::new().name(_name).spawn(task);
+
+    #[cfg(not(tokio_unstable))]
+    tokio::spawn(task)
 }
