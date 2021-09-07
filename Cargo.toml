@@ -2,8 +2,7 @@
 members = [
     "console",
     "console-subscriber",
-    "console-api",
-    "console-util"
+    "console-api"
 ]
 resolver = "2"
 

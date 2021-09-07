@@ -1,5 +1,4 @@
 use super::{Server, TasksLayer};
-use console_util::parse_duration;
 use std::{
     net::{SocketAddr, ToSocketAddrs},
     path::PathBuf,
@@ -154,8 +153,8 @@ impl Builder {
 
 fn duration_from_env(var_name: &str) -> Option<Duration> {
     let var = std::env::var(var_name).ok()?;
-    match parse_duration(&var) {
-        Ok(dur) => Some(dur),
+    match var.parse::<humantime::Duration>() {
+        Ok(dur) => Some(dur.into()),
         Err(e) => panic!(
             "failed to parse a duration from `{}={:?}`: {}",
             var_name, var, e

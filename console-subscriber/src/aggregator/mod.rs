@@ -109,7 +109,7 @@ pub(crate) struct Flush {
 // time can be dropped. This generally refers to spans that
 // have been closed indicating that a task, async op or a
 // resource is not in use anymore
-pub(crate) trait Droppable {
+pub(crate) trait DroppedAt {
     fn dropped_at(&self) -> Option<SystemTime>;
 }
 
@@ -206,19 +206,19 @@ struct AsyncOpStats {
     poll_stats: PollStats,
 }
 
-impl Droppable for ResourceStats {
+impl DroppedAt for ResourceStats {
     fn dropped_at(&self) -> Option<SystemTime> {
         self.dropped_at
     }
 }
 
-impl Droppable for TaskStats {
+impl DroppedAt for TaskStats {
     fn dropped_at(&self) -> Option<SystemTime> {
         self.dropped_at
     }
 }
 
-impl Droppable for AsyncOpStats {
+impl DroppedAt for AsyncOpStats {
     fn dropped_at(&self) -> Option<SystemTime> {
         self.dropped_at
     }

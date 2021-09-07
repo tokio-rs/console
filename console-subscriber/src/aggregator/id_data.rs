@@ -1,4 +1,4 @@
-use super::{shrink::ShrinkMap, Droppable, Id, Ids, ToProto};
+use super::{shrink::ShrinkMap, DroppedAt, Id, Ids, ToProto};
 use std::collections::{HashMap, HashSet};
 use std::ops::{Deref, DerefMut};
 use std::time::{Duration, SystemTime};
@@ -72,7 +72,7 @@ impl<T> IdData<T> {
         }
     }
 
-    pub(crate) fn drop_closed<R: Droppable>(
+    pub(crate) fn drop_closed<R: DroppedAt>(
         &mut self,
         stats: &mut IdData<R>,
         now: SystemTime,

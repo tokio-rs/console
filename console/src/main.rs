@@ -25,6 +25,7 @@ mod view;
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     let mut args = config::Config::parse();
+    let retain_for = args.retain_for();
     args.trace_init()?;
     tracing::debug!(?args.target_addr, ?args.view_options);
 
@@ -42,7 +43,7 @@ async fn main() -> color_eyre::Result<()> {
     // A channel to send the task details update stream (no need to keep outdated details in the memory)
     let (details_tx, mut details_rx) = mpsc::channel::<TaskDetails>(2);
 
-    let mut tasks = State::new(args.retain_for);
+    let mut tasks = State::new(retain_for);
     let mut input = input::EventStream::new();
     let mut view = view::View::new(styles);
 

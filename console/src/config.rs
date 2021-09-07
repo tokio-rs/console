@@ -30,11 +30,16 @@ pub struct Config {
     #[clap(flatten)]
     pub(crate) view_options: ViewOptions,
 
-    /// The amount of time resource that have been dropped
-    /// will be displayed in the console.
-    #[clap(long = "retain-for", default_value = "5h", parse(try_from_str = parse_retain_for))]
-    pub(crate) retain_for: Duration,
+    /// How long to continue displaying completed tasks and dropped resources
+    /// after they have been closed. Accepted values are:
+    ///
+    /// - durations in the form of 5days 2min 2s.
+    /// - `none` to disable this functionality
+    #[clap(long = "retain-for", default_value = "6s", parse(try_from_str = parse_retain_for))]
+    retain_for: RetainFor,
 }
+#[derive(Debug)]
+struct RetainFor(Option<Duration>);
 
 #[derive(Clap, Debug, Clone)]
 #[clap(group = ArgGroup::new("colors").conflicts_with("no-colors"))]
@@ -118,6 +123,10 @@ impl Config {
 
         Ok(())
     }
+
+    pub(crate) fn retain_for(&self) -> Option<Duration> {
+        self.retain_for.0
+    }
 }
 
 // === impl ViewOptions ===
@@ -183,9 +192,12 @@ fn parse_true_color(s: &str) -> bool {
     s.eq_ignore_ascii_case("truecolor") || s.eq_ignore_ascii_case("24bit")
 }
 
-fn parse_retain_for(s: &str) -> Result<Duration, String> {
-    match console_util::parse_duration(s) {
-        Ok(duration) => Ok(duration),
-        Err(error) => Err(error.to_string()),
+fn parse_retain_for(s: &str) -> Result<RetainFor, String> {
+    match s {
+        "none" => Ok(RetainFor(None)),
+        _ => match s.parse::<humantime::Duration>() {
+            Ok(duration) => Ok(RetainFor(Some(duration.into()))),
+            Err(error) => Err(error.to_string()),
+        },
     }
 }

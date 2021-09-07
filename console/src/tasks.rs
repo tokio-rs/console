@@ -24,7 +24,7 @@ pub(crate) struct State {
     new_tasks: Vec<TaskRef>,
     current_task_details: DetailsRef,
     temporality: Temporality,
-    retain_for: Duration,
+    retain_for: Option<Duration>,
 }
 
 #[derive(Debug)]
@@ -122,7 +122,7 @@ pub(crate) enum FieldValue {
 }
 
 impl State {
-    pub(crate) fn new(retain_for: Duration) -> Self {
+    pub(crate) fn new(retain_for: Option<Duration>) -> Self {
         Self {
             retain_for,
             ..Default::default()
@@ -252,8 +252,7 @@ impl State {
             return;
         }
 
-        if let Some(now) = self.last_updated_at {
-            let retain_for = self.retain_for;
+        if let (Some(now), Some(retain_for)) = (self.last_updated_at, self.retain_for) {
             self.tasks.retain(|_, task| {
                 let task = task.borrow();
 
