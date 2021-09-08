@@ -14,7 +14,9 @@ use tui::{
 
 #[derive(Debug)]
 pub(crate) struct List {
-    warnings: Vec<Box<dyn warnings::Warning<Task>>>,
+    /// A list of linters (implementing the [`Warn`] trait) used to generate
+    /// warnings.
+    linters: Vec<Box<dyn warnings::Warn<Task>>>,
     sorted_tasks: Vec<TaskRef>,
     sort_by: tasks::SortBy,
     table_state: TableState,
@@ -112,21 +114,21 @@ impl List {
         let mut target_width = view::Width::new(Self::HEADER[7].len() as u16);
         let mut num_idle = 0;
         let mut num_running = 0;
-        let mut warning_results = Vec::new();
+        let mut warnings = Vec::new();
         let rows = {
             let id_width = &mut id_width;
             let target_width = &mut target_width;
             let name_width = &mut name_width;
             let num_running = &mut num_running;
             let num_idle = &mut num_idle;
-            let warning_results = &mut warning_results;
+            let warnings = &mut warnings;
 
-            let warnings = &self.warnings;
+            let linters = &self.linters;
             self.sorted_tasks.iter().filter_map(move |task| {
                 let task = task.upgrade()?;
                 let task = task.borrow();
                 let state = task.state();
-                warning_results.extend(warnings.iter().filter_map(|warning| {
+                warnings.extend(linters.iter().filter_map(|warning| {
                     let warning = warning.check(&*task)?;
                     let task = if let Some(name) = task.name() {
                         Span::from(format!("Task '{}' (ID {}) ", name, task.id()))
@@ -226,7 +228,7 @@ impl List {
         let layout = layout::Layout::default()
             .direction(layout::Direction::Vertical)
             .margin(0);
-        let (controls_area, tasks_area, warnings_area) = if warning_results.is_empty() {
+        let (controls_area, tasks_area, warnings_area) = if warnings.is_empty() {
             let chunks = layout
                 .constraints(
                     [
@@ -242,7 +244,7 @@ impl List {
                 .constraints(
                     [
                         layout::Constraint::Length(1),
-                        layout::Constraint::Length(warning_results.len() as u16 + 2),
+                        layout::Constraint::Length(warnings.len() as u16 + 2),
                         layout::Constraint::Min(area.height - 1),
                     ]
                     .as_ref(),
@@ -298,9 +300,9 @@ impl List {
         if let Some(area) = warnings_area {
             let block = styles.border_block().title(Spans::from(vec![
                 bold("Warnings"),
-                Span::from(format!(" ({})", warning_results.len())),
+                Span::from(format!(" ({})", warnings.len())),
             ]));
-            frame.render_widget(Paragraph::new(warning_results).block(block), area);
+            frame.render_widget(Paragraph::new(warnings).block(block), area);
         }
 
         self.sorted_tasks.retain(|t| t.upgrade().is_some());
@@ -364,7 +366,7 @@ impl List {
 impl Default for List {
     fn default() -> Self {
         Self {
-            warnings: vec![Box::new(warnings::SelfWakePercent::default())],
+            linters: vec![Box::new(warnings::SelfWakePercent::default())],
             sorted_tasks: Vec::new(),
             sort_by: tasks::SortBy::default(),
             table_state: TableState::default(),

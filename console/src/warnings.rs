@@ -1,6 +1,6 @@
 use crate::tasks::Task;
 
-pub trait Warning<T>: std::fmt::Debug {
+pub trait Warn<T>: std::fmt::Debug {
     fn check(&self, val: &T) -> Option<String>;
 }
 
@@ -22,7 +22,7 @@ impl Default for SelfWakePercent {
     }
 }
 
-impl Warning<Task> for SelfWakePercent {
+impl Warn<Task> for SelfWakePercent {
     fn check(&self, task: &Task) -> Option<String> {
         let self_wakes = task.self_wake_percent();
         if self_wakes > self.min_percent {
