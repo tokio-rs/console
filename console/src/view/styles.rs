@@ -113,6 +113,20 @@ impl Styles {
         }
     }
 
+    pub fn warning_wide(&self) -> Span<'static> {
+        Span::styled(
+            self.if_utf8("\u{26A0} ", "/!\\ "),
+            self.fg(Color::LightYellow).add_modifier(Modifier::BOLD),
+        )
+    }
+
+    pub fn warning_narrow(&self) -> Span<'static> {
+        Span::styled(
+            self.if_utf8("\u{26A0} ", "! "),
+            self.fg(Color::LightYellow).add_modifier(Modifier::BOLD),
+        )
+    }
+
     pub fn color(&self, color: Color) -> Option<Color> {
         use Palette::*;
         match (self.palette, color) {

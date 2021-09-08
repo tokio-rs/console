@@ -1,4 +1,4 @@
-use crate::{util::Percentage, view};
+use crate::{util::Percentage, view, warnings::Linter};
 use console_api as proto;
 use hdrhistogram::Histogram;
 use std::{
@@ -20,6 +20,7 @@ use tui::{
 pub(crate) struct State {
     tasks: HashMap<u64, Rc<RefCell<Task>>>,
     metas: HashMap<u64, Metadata>,
+    linters: Vec<Linter<Task>>,
     last_updated_at: Option<SystemTime>,
     new_tasks: Vec<TaskRef>,
     current_task_details: DetailsRef,
@@ -37,11 +38,12 @@ enum Temporality {
 pub(crate) enum SortBy {
     Tid = 0,
     State = 1,
-    Name = 2,
-    Total = 3,
-    Busy = 4,
-    Idle = 5,
-    Polls = 6,
+    Warns = 2,
+    Name = 3,
+    Total = 4,
+    Busy = 5,
+    Idle = 6,
+    Polls = 7,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -63,6 +65,8 @@ pub(crate) struct Task {
     completed_for: usize,
     target: Arc<str>,
     name: Option<Arc<str>>,
+    /// Currently active warnings for this task.
+    warnings: Vec<Linter<Task>>,
 }
 
 #[derive(Debug, Default)]
@@ -122,6 +126,11 @@ pub(crate) enum FieldValue {
 
 impl State {
     const RETAIN_COMPLETED_FOR: usize = 6;
+
+    pub(crate) fn with_linters(mut self, linters: impl IntoIterator<Item = Linter<Task>>) -> Self {
+        self.linters.extend(linters.into_iter());
+        self
+    }
 
     pub(crate) fn last_updated_at(&self) -> Option<SystemTime> {
         self.last_updated_at
@@ -202,6 +211,7 @@ impl State {
                 stats,
                 completed_for: 0,
                 target: meta.target.clone(),
+                warnings: Vec::new(),
             };
             task.update();
             let task = Rc::new(RefCell::new(task));
@@ -209,12 +219,21 @@ impl State {
             Some((id, task))
         });
         self.tasks.extend(new_tasks);
-
+        let linters = &self.linters;
         for (id, stats) in stats_update {
             if let Some(task) = self.tasks.get_mut(&id) {
-                let mut t = task.borrow_mut();
-                t.stats = stats.into();
-                t.update();
+                let mut task = task.borrow_mut();
+                tracing::trace!(?task, "processing stats update for");
+                task.warnings.clear();
+                for lint in linters {
+                    tracing::debug!(?lint, ?task, "checking...");
+                    if let Some(lint) = lint.check(&*task) {
+                        tracing::info!(?lint, ?task, "found a warning!");
+                        task.warnings.push(lint)
+                    }
+                }
+                task.stats = stats.into();
+                task.update();
             }
         }
     }
@@ -271,6 +290,10 @@ impl State {
 
     pub(crate) fn is_paused(&self) -> bool {
         matches!(self.temporality, Temporality::Paused)
+    }
+
+    pub(crate) fn warnings(&self) -> impl Iterator<Item = &Linter<Task>> {
+        self.linters.iter().filter(|linter| linter.count() > 0)
     }
 }
 
@@ -384,6 +407,10 @@ impl Task {
         self.self_wakes().percent_of(self.wakes())
     }
 
+    pub(crate) fn warnings(&self) -> &[Linter<Task>] {
+        &self.warnings[..]
+    }
+
     fn update(&mut self) {
         let completed = self.stats.total.is_some() && self.completed_for == 0;
         if completed {
@@ -481,6 +508,8 @@ impl SortBy {
             Self::State => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().state()))
             }
+            Self::Warns => tasks
+                .sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().warnings().len())),
             Self::Total => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().total(now)))
             }
@@ -503,6 +532,7 @@ impl TryFrom<usize> for SortBy {
         match idx {
             idx if idx == Self::Tid as usize => Ok(Self::Tid),
             idx if idx == Self::State as usize => Ok(Self::State),
+            idx if idx == Self::Warns as usize => Ok(Self::Warns),
             idx if idx == Self::Name as usize => Ok(Self::Name),
             idx if idx == Self::Total as usize => Ok(Self::Total),
             idx if idx == Self::Busy as usize => Ok(Self::Busy),

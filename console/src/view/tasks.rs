@@ -1,22 +1,18 @@
 use crate::{
     input,
-    tasks::{self, Task, TaskRef, TaskState},
+    tasks::{self, TaskRef, TaskState},
     view::{self, bold},
-    warnings,
 };
 use std::convert::TryFrom;
 use tui::{
     layout,
     style::{self, Color, Style},
-    text::{self, Span, Spans},
-    widgets::{Cell, Paragraph, Row, Table, TableState},
+    text::{self, Span, Spans, Text},
+    widgets::{self, Cell, ListItem, Paragraph, Row, Table, TableState},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct List {
-    /// A list of linters (implementing the [`warnings::Warn`] trait) used to generate
-    /// warnings.
-    linters: Vec<Box<dyn warnings::Warn<Task>>>,
     sorted_tasks: Vec<TaskRef>,
     sort_by: tasks::SortBy,
     table_state: TableState,
@@ -26,7 +22,7 @@ pub(crate) struct List {
 
 impl List {
     const HEADER: &'static [&'static str] = &[
-        "ID", "State", "Name", "Total", "Busy", "Idle", "Polls", "Target", "Fields",
+        "ID", "State", "Warn", "Name", "Total", "Busy", "Idle", "Polls", "Target", "Fields",
     ];
 
     pub(crate) fn len(&self) -> usize {
@@ -110,45 +106,40 @@ impl List {
 
         // Start out wide enough to display the column headers...
         let mut id_width = view::Width::new(Self::HEADER[0].len() as u16);
-        let mut name_width = view::Width::new(Self::HEADER[2].len() as u16);
-        let mut target_width = view::Width::new(Self::HEADER[7].len() as u16);
+        let mut warn_width = view::Width::new(Self::HEADER[2].len() as u16);
+        let mut name_width = view::Width::new(Self::HEADER[3].len() as u16);
+        let mut target_width = view::Width::new(Self::HEADER[8].len() as u16);
         let mut num_idle = 0;
         let mut num_running = 0;
-        let mut warnings = Vec::new();
         let rows = {
             let id_width = &mut id_width;
             let target_width = &mut target_width;
             let name_width = &mut name_width;
+            let warn_width = &mut warn_width;
             let num_running = &mut num_running;
             let num_idle = &mut num_idle;
-            let warnings = &mut warnings;
 
-            let linters = &self.linters;
             self.sorted_tasks.iter().filter_map(move |task| {
                 let task = task.upgrade()?;
                 let task = task.borrow();
                 let state = task.state();
-                warnings.extend(linters.iter().filter_map(|warning| {
-                    let warning = warning.check(&*task)?;
-                    let task = if let Some(name) = task.name() {
-                        Span::from(format!("Task '{}' (ID {}) ", name, task.id()))
-                    } else {
-                        Span::from(format!("Task ID {} ", task.id()))
-                    };
-                    Some(Spans::from(vec![
-                        Span::styled(
-                            styles.if_utf8("\u{26A0} ", "/!\\ "),
-                            styles.fg(Color::LightYellow),
-                        ),
-                        task,
-                        Span::from(warning),
-                    ]))
-                }));
+
                 // Count task states
                 match state {
                     TaskState::Running => *num_running += 1,
                     TaskState::Idle => *num_idle += 1,
                     _ => {}
+                };
+                let n_warnings = task.warnings().len();
+                let warnings = if n_warnings > 0 {
+                    let n_warnings = n_warnings.to_string();
+                    warn_width.update_len(n_warnings.len() + 2); // add 2 for the warning icon + whitespace
+                    Cell::from(Spans::from(vec![
+                        styles.warning_narrow(),
+                        Span::from(n_warnings),
+                    ]))
+                } else {
+                    Cell::from("")
                 };
 
                 let mut row = Row::new(vec![
@@ -158,6 +149,7 @@ impl List {
                         width = id_width.chars() as usize
                     ))),
                     Cell::from(task.state().render(styles)),
+                    warnings,
                     Cell::from(name_width.update_str(task.name().unwrap_or("").to_string())),
                     dur_cell(task.total(now)),
                     dur_cell(task.busy(now)),
@@ -225,6 +217,17 @@ impl List {
             + POLLS_LEN as u16
             + target_width.chars();
         */
+        let warnings = state
+            .warnings()
+            .map(|warning| {
+                ListItem::new(Text::from(Spans::from(vec![
+                    styles.warning_wide(),
+                    // TODO(eliza): it would be nice to handle singular vs plural...
+                    Span::from(format!("{} {}", warning.count(), warning.summary())),
+                ])))
+            })
+            .collect::<Vec<_>>();
+
         let layout = layout::Layout::default()
             .direction(layout::Direction::Vertical)
             .margin(0);
@@ -263,6 +266,7 @@ impl List {
         let widths = &[
             id_width.constraint(),
             layout::Constraint::Length(STATE_LEN),
+            warn_width.constraint(),
             name_width.constraint(),
             layout::Constraint::Length(DUR_LEN as u16),
             layout::Constraint::Length(DUR_LEN as u16),
@@ -298,11 +302,10 @@ impl List {
         frame.render_widget(Paragraph::new(controls), controls_area);
 
         if let Some(area) = warnings_area {
-            let block = styles.border_block().title(Spans::from(vec![
-                bold("Warnings"),
-                Span::from(format!(" ({})", warnings.len())),
-            ]));
-            frame.render_widget(Paragraph::new(warnings).block(block), area);
+            let block = styles
+                .border_block()
+                .title(Spans::from(vec![bold("Warnings")]));
+            frame.render_widget(widgets::List::new(warnings).block(block), area);
         }
 
         self.sorted_tasks.retain(|t| t.upgrade().is_some());
@@ -360,18 +363,5 @@ impl List {
                 self.sorted_tasks[selected].clone()
             })
             .unwrap_or_default()
-    }
-}
-
-impl Default for List {
-    fn default() -> Self {
-        Self {
-            linters: vec![Box::new(warnings::SelfWakePercent::default())],
-            sorted_tasks: Vec::new(),
-            sort_by: tasks::SortBy::default(),
-            table_state: TableState::default(),
-            selected_column: 0,
-            sort_descending: false,
-        }
     }
 }
