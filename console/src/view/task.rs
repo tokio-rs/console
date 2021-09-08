@@ -161,7 +161,7 @@ impl TaskView {
             waker_stats.push(Spans::from(vec![
                 bold("Self Wakes: "),
                 Span::from(format!(
-                    "{} times ({:.2}%)",
+                    "{} times ({}%)",
                     task.self_wakes(),
                     task.self_wake_percent()
                 )),

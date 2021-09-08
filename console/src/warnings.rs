@@ -6,12 +6,12 @@ pub trait Warn<T>: std::fmt::Debug {
 
 #[derive(Clone, Debug)]
 pub(crate) struct SelfWakePercent {
-    min_percent: f64,
+    min_percent: u64,
 }
 
 impl SelfWakePercent {
-    pub(crate) const DEFAULT_PERCENT: f64 = 50.0;
-    pub(crate) fn new(min_percent: f64) -> Self {
+    pub(crate) const DEFAULT_PERCENT: u64 = 50;
+    pub(crate) fn new(min_percent: u64) -> Self {
         Self { min_percent }
     }
 }
@@ -27,7 +27,7 @@ impl Warn<Task> for SelfWakePercent {
         let self_wakes = task.self_wake_percent();
         if self_wakes > self.min_percent {
             return Some(format!(
-                "has woken itself for more than {:.2}% of its total wakeups ({:.2}%)",
+                "has woken itself for more than {}% of its total wakeups ({}%)",
                 self.min_percent, self_wakes
             ));
         }

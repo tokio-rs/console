@@ -380,7 +380,7 @@ impl Task {
     }
 
     /// Returns the percentage of this task's total wakeups that were self-wakes.
-    pub(crate) fn self_wake_percent(&self) -> f64 {
+    pub(crate) fn self_wake_percent(&self) -> u64 {
         self.self_wakes().percent_of(self.wakes())
     }
 
