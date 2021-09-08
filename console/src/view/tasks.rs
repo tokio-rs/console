@@ -14,7 +14,7 @@ use tui::{
 
 #[derive(Debug)]
 pub(crate) struct List {
-    /// A list of linters (implementing the [`Warn`] trait) used to generate
+    /// A list of linters (implementing the [`warnings::Warn`] trait) used to generate
     /// warnings.
     linters: Vec<Box<dyn warnings::Warn<Task>>>,
     sorted_tasks: Vec<TaskRef>,
