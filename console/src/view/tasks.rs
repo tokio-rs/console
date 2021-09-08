@@ -1,7 +1,8 @@
 use crate::{
     input,
-    tasks::{self, TaskRef, TaskState},
+    tasks::{self, Task, TaskRef, TaskState},
     view::{self, bold},
+    warnings,
 };
 use std::convert::TryFrom;
 use tui::{
@@ -10,8 +11,12 @@ use tui::{
     text::{self, Span, Spans},
     widgets::{Cell, Paragraph, Row, Table, TableState},
 };
-#[derive(Clone, Debug, Default)]
+
+#[derive(Debug)]
 pub(crate) struct List {
+    /// A list of linters (implementing the [`warnings::Warn`] trait) used to generate
+    /// warnings.
+    linters: Vec<Box<dyn warnings::Warn<Task>>>,
     sorted_tasks: Vec<TaskRef>,
     sort_by: tasks::SortBy,
     table_state: TableState,
@@ -76,27 +81,6 @@ impl List {
         area: layout::Rect,
         state: &mut tasks::State,
     ) {
-        let chunks = layout::Layout::default()
-            .direction(layout::Direction::Vertical)
-            .margin(0)
-            .constraints(
-                [
-                    layout::Constraint::Length(1),
-                    layout::Constraint::Min(area.height - 1),
-                ]
-                .as_ref(),
-            )
-            .split(area);
-        let controls_area = chunks[0];
-        let tasks_area = chunks[1];
-
-        let now = if let Some(now) = state.last_updated_at() {
-            now
-        } else {
-            // If we have never gotten an update yet, skip...
-            return;
-        };
-
         const STATE_LEN: u16 = List::HEADER[1].len() as u16;
         const DUR_LEN: usize = 10;
         // This data is only updated every second, so it doesn't make a ton of
@@ -104,6 +88,13 @@ impl List {
         // there's room for the unit!)
         const DUR_PRECISION: usize = 4;
         const POLLS_LEN: usize = 5;
+
+        let now = if let Some(now) = state.last_updated_at() {
+            now
+        } else {
+            // If we have never gotten an update yet, skip...
+            return;
+        };
 
         self.sorted_tasks.extend(state.take_new_tasks());
         self.sort_by.sort(now, &mut self.sorted_tasks);
@@ -123,17 +114,36 @@ impl List {
         let mut target_width = view::Width::new(Self::HEADER[7].len() as u16);
         let mut num_idle = 0;
         let mut num_running = 0;
+        let mut warnings = Vec::new();
         let rows = {
             let id_width = &mut id_width;
             let target_width = &mut target_width;
             let name_width = &mut name_width;
             let num_running = &mut num_running;
             let num_idle = &mut num_idle;
+            let warnings = &mut warnings;
+
+            let linters = &self.linters;
             self.sorted_tasks.iter().filter_map(move |task| {
                 let task = task.upgrade()?;
                 let task = task.borrow();
                 let state = task.state();
-
+                warnings.extend(linters.iter().filter_map(|warning| {
+                    let warning = warning.check(&*task)?;
+                    let task = if let Some(name) = task.name() {
+                        Span::from(format!("Task '{}' (ID {}) ", name, task.id()))
+                    } else {
+                        Span::from(format!("Task ID {} ", task.id()))
+                    };
+                    Some(Spans::from(vec![
+                        Span::styled(
+                            styles.if_utf8("\u{26A0} ", "/!\\ "),
+                            styles.fg(Color::LightYellow),
+                        ),
+                        task,
+                        Span::from(warning),
+                    ]))
+                }));
                 // Count task states
                 match state {
                     TaskState::Running => *num_running += 1,
@@ -215,6 +225,33 @@ impl List {
             + POLLS_LEN as u16
             + target_width.chars();
         */
+        let layout = layout::Layout::default()
+            .direction(layout::Direction::Vertical)
+            .margin(0);
+        let (controls_area, tasks_area, warnings_area) = if warnings.is_empty() {
+            let chunks = layout
+                .constraints(
+                    [
+                        layout::Constraint::Length(1),
+                        layout::Constraint::Min(area.height - 1),
+                    ]
+                    .as_ref(),
+                )
+                .split(area);
+            (chunks[0], chunks[1], None)
+        } else {
+            let chunks = layout
+                .constraints(
+                    [
+                        layout::Constraint::Length(1),
+                        layout::Constraint::Length(warnings.len() as u16 + 2),
+                        layout::Constraint::Min(area.height - 1),
+                    ]
+                    .as_ref(),
+                )
+                .split(area);
+            (chunks[0], chunks[2], Some(chunks[1]))
+        };
 
         // Fill all remaining characters in the frame with the task's fields.
         //
@@ -259,6 +296,14 @@ impl List {
         ]));
 
         frame.render_widget(Paragraph::new(controls), controls_area);
+
+        if let Some(area) = warnings_area {
+            let block = styles.border_block().title(Spans::from(vec![
+                bold("Warnings"),
+                Span::from(format!(" ({})", warnings.len())),
+            ]));
+            frame.render_widget(Paragraph::new(warnings).block(block), area);
+        }
 
         self.sorted_tasks.retain(|t| t.upgrade().is_some());
     }
@@ -315,5 +360,18 @@ impl List {
                 self.sorted_tasks[selected].clone()
             })
             .unwrap_or_default()
+    }
+}
+
+impl Default for List {
+    fn default() -> Self {
+        Self {
+            linters: vec![Box::new(warnings::SelfWakePercent::default())],
+            sorted_tasks: Vec::new(),
+            sort_by: tasks::SortBy::default(),
+            table_state: TableState::default(),
+            selected_column: 0,
+            sort_descending: false,
+        }
     }
 }
