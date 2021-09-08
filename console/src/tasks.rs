@@ -722,11 +722,12 @@ impl TaskState {
         const IDLE_UTF8: &str = "\u{23F8}";
         const COMPLETED_UTF8: &str = "\u{23F9}";
         match self {
-            Self::Running => {
-                Span::styled(styles.if_utf8(RUNNING_UTF8, ">"), styles.fg(Color::Green))
-            }
-            Self::Idle => Span::raw(styles.if_utf8(IDLE_UTF8, ":")),
-            Self::Completed => Span::raw(styles.if_utf8(COMPLETED_UTF8, "!")),
+            Self::Running => Span::styled(
+                styles.if_utf8(RUNNING_UTF8, "BUSY"),
+                styles.fg(Color::Green),
+            ),
+            Self::Idle => Span::raw(styles.if_utf8(IDLE_UTF8, "IDLE")),
+            Self::Completed => Span::raw(styles.if_utf8(COMPLETED_UTF8, "DONE")),
         }
     }
 }
