@@ -14,7 +14,7 @@ use std::{
 use tui::{
     layout::{self, Layout},
     text::{Span, Spans, Text},
-    widgets::{Block, Paragraph},
+    widgets::{Block, List, ListItem, Paragraph},
 };
 
 pub(crate) struct TaskView {
@@ -50,20 +50,60 @@ impl TaskView {
             .as_ref()
             .filter(|details| details.task_id() == task.id());
 
-        let chunks = Layout::default()
-            .direction(layout::Direction::Vertical)
-            .constraints(
-                [
-                    layout::Constraint::Length(1),
-                    layout::Constraint::Length(8),
-                    layout::Constraint::Length(9),
-                    layout::Constraint::Percentage(60),
-                ]
-                .as_ref(),
-            )
-            .split(area);
+        let warnings: Vec<_> = task
+            .warnings()
+            .iter()
+            .map(|linter| {
+                ListItem::new(Text::from(Spans::from(vec![
+                    styles.warning_wide(),
+                    // TODO(eliza): it would be nice to handle singular vs plural...
+                    Span::from(linter.format(task)),
+                ])))
+            })
+            .collect();
 
-        let controls_area = chunks[0];
+        let (controls_area, stats_area, poll_dur_area, fields_area, warnings_area) =
+            if warnings.is_empty() {
+                let chunks = Layout::default()
+                    .direction(layout::Direction::Vertical)
+                    .constraints(
+                        [
+                            // controls
+                            layout::Constraint::Length(1),
+                            // task stats
+                            layout::Constraint::Length(8),
+                            // poll duration
+                            layout::Constraint::Length(9),
+                            // fields
+                            layout::Constraint::Percentage(60),
+                        ]
+                        .as_ref(),
+                    )
+                    .split(area);
+                (chunks[0], chunks[1], chunks[2], chunks[3], None)
+            } else {
+                let chunks = Layout::default()
+                    .direction(layout::Direction::Vertical)
+                    .constraints(
+                        [
+                            // controls
+                            layout::Constraint::Length(1),
+                            // warnings (add 2 for top and bottom borders)
+                            layout::Constraint::Length(warnings.len() as u16 + 2),
+                            // task stats
+                            layout::Constraint::Length(8),
+                            // poll duration
+                            layout::Constraint::Length(9),
+                            // fields
+                            layout::Constraint::Percentage(60),
+                        ]
+                        .as_ref(),
+                    )
+                    .split(area);
+
+                (chunks[0], chunks[2], chunks[3], chunks[4], Some(chunks[1]))
+            };
+
         let stats_area = Layout::default()
             .direction(layout::Direction::Horizontal)
             .constraints(
@@ -73,11 +113,11 @@ impl TaskView {
                 ]
                 .as_ref(),
             )
-            .split(chunks[1]);
+            .split(stats_area);
 
         // Only split the histogram area in half if we're also drawing a
         // sparkline (which requires UTF-8 characters).
-        let histogram_area = if styles.utf8 {
+        let poll_dur_area = if styles.utf8 {
             Layout::default()
                 .direction(layout::Direction::Horizontal)
                 .constraints(
@@ -88,14 +128,12 @@ impl TaskView {
                     ]
                     .as_ref(),
                 )
-                .split(chunks[2])
+                .split(poll_dur_area)
         } else {
-            vec![chunks[2]]
+            vec![poll_dur_area]
         };
 
-        let percentiles_area = histogram_area[0];
-
-        let fields_area = chunks[3];
+        let percentiles_area = poll_dur_area[0];
 
         let controls = Spans::from(vec![
             Span::raw("controls: "),
@@ -173,7 +211,7 @@ impl TaskView {
 
         // If UTF-8 is disabled we can't draw the histogram sparklne.
         if styles.utf8 {
-            let sparkline_area = histogram_area[1];
+            let sparkline_area = poll_dur_area[1];
 
             // Bit of a deadlock: We cannot know the highest bucket value without determining the number of buckets,
             // and we cannot determine the number of buckets without knowing the width of the chart area which depends on
@@ -193,6 +231,11 @@ impl TaskView {
                 .duration_precision(2);
 
             frame.render_widget(histogram_sparkline, sparkline_area);
+        }
+
+        if let Some(warnings_area) = warnings_area {
+            let warnings = List::new(warnings).block(styles.border_block().title("Warnings"));
+            frame.render_widget(warnings, warnings_area);
         }
 
         let task_widget = Paragraph::new(metrics).block(styles.border_block().title("Task"));

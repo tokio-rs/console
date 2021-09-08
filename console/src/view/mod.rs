@@ -137,12 +137,14 @@ impl Width {
     }
 
     pub(crate) fn update_str<S: AsRef<str>>(&mut self, s: S) -> S {
-        let len = s.as_ref().len();
+        self.update_len(s.as_ref().len());
+        s
+    }
+    pub(crate) fn update_len(&mut self, len: usize) {
         let max = cmp::max(self.curr as usize, len);
         // Cap since a string could be stupid-long and not fit in a u16.
         // 100 is arbitrarily chosen, to keep the UI sane.
         self.curr = cmp::min(max, 100) as u16;
-        s
     }
 
     pub(crate) fn constraint(&self) -> layout::Constraint {
