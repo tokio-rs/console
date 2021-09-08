@@ -11,7 +11,7 @@ use tui::{
     widgets::{self, Cell, ListItem, Paragraph, Row, Table, TableState},
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct List {
     sorted_tasks: Vec<TaskRef>,
     sort_by: tasks::SortBy,
@@ -22,7 +22,7 @@ pub(crate) struct List {
 
 impl List {
     const HEADER: &'static [&'static str] = &[
-        "ID", "State", "Warn", "Name", "Total", "Busy", "Idle", "Polls", "Target", "Fields",
+        "Warn", "ID", "State", "Name", "Total", "Busy", "Idle", "Polls", "Target", "Fields",
     ];
 
     pub(crate) fn len(&self) -> usize {
@@ -77,7 +77,7 @@ impl List {
         area: layout::Rect,
         state: &mut tasks::State,
     ) {
-        const STATE_LEN: u16 = List::HEADER[1].len() as u16;
+        const STATE_LEN: u16 = List::HEADER[2].len() as u16;
         const DUR_LEN: usize = 10;
         // This data is only updated every second, so it doesn't make a ton of
         // sense to have a lot of precision in timestamps (and this makes sure
@@ -105,8 +105,8 @@ impl List {
         };
 
         // Start out wide enough to display the column headers...
-        let mut id_width = view::Width::new(Self::HEADER[0].len() as u16);
-        let mut warn_width = view::Width::new(Self::HEADER[2].len() as u16);
+        let mut warn_width = view::Width::new(Self::HEADER[0].len() as u16);
+        let mut id_width = view::Width::new(Self::HEADER[1].len() as u16);
         let mut name_width = view::Width::new(Self::HEADER[3].len() as u16);
         let mut target_width = view::Width::new(Self::HEADER[8].len() as u16);
         let mut num_idle = 0;
@@ -143,13 +143,13 @@ impl List {
                 };
 
                 let mut row = Row::new(vec![
+                    warnings,
                     Cell::from(id_width.update_str(format!(
                         "{:>width$}",
                         task.id(),
                         width = id_width.chars() as usize
                     ))),
                     Cell::from(task.state().render(styles)),
-                    warnings,
                     Cell::from(name_width.update_str(task.name().unwrap_or("").to_string())),
                     dur_cell(task.total(now)),
                     dur_cell(task.busy(now)),
@@ -264,9 +264,9 @@ impl List {
         // See https://github.com/fdehau/tui-rs/issues/525
         let fields_width = layout::Constraint::Percentage(100);
         let widths = &[
+            warn_width.constraint(),
             id_width.constraint(),
             layout::Constraint::Length(STATE_LEN),
-            warn_width.constraint(),
             name_width.constraint(),
             layout::Constraint::Length(DUR_LEN as u16),
             layout::Constraint::Length(DUR_LEN as u16),
@@ -363,5 +363,18 @@ impl List {
                 self.sorted_tasks[selected].clone()
             })
             .unwrap_or_default()
+    }
+}
+
+impl Default for List {
+    fn default() -> Self {
+        let sort_by = tasks::SortBy::default();
+        List {
+            sorted_tasks: Default::default(),
+            sort_by,
+            table_state: Default::default(),
+            selected_column: sort_by as usize,
+            sort_descending: false,
+        }
     }
 }

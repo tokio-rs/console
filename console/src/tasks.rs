@@ -36,9 +36,9 @@ enum Temporality {
 #[derive(Debug, Copy, Clone)]
 #[repr(usize)]
 pub(crate) enum SortBy {
-    Tid = 0,
-    State = 1,
-    Warns = 2,
+    Warns = 0,
+    Tid = 1,
+    State = 2,
     Name = 3,
     Total = 4,
     Busy = 5,
