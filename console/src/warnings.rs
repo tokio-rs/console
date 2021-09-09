@@ -133,3 +133,20 @@ impl Warn<Task> for SelfWakePercent {
         )
     }
 }
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct LostWaker;
+
+impl Warn<Task> for LostWaker {
+    fn summary(&self) -> &str {
+        "tasks have lost their waker"
+    }
+
+    fn check(&self, task: &Task) -> bool {
+        !task.is_completed() && task.waker_count() == 0
+    }
+
+    fn format(&self, _: &Task) -> String {
+        "This task has lost its waker, and will never be woken again.".into()
+    }
+}
