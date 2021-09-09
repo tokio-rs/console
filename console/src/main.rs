@@ -47,9 +47,10 @@ async fn main() -> color_eyre::Result<()> {
     let mut tasks = State::default()
         // TODO(eliza): allow configuring the list of linters via the
         // CLI/possibly a config file?
-        .with_linters(vec![warnings::Linter::new(
-            warnings::SelfWakePercent::default(),
-        )]);
+        .with_linters(vec![
+            warnings::Linter::new(warnings::SelfWakePercent::default()),
+            warnings::Linter::new(warnings::LostWaker),
+        ]);
     let mut input = input::EventStream::new();
     let mut view = view::View::new(styles);
 
