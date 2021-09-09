@@ -7,10 +7,11 @@ use std::convert::TryFrom;
 use tui::{
     layout,
     style::{self, Color, Style},
-    text::{self, Span, Spans},
-    widgets::{Cell, Paragraph, Row, Table, TableState},
+    text::{self, Span, Spans, Text},
+    widgets::{self, Cell, ListItem, Paragraph, Row, Table, TableState},
 };
-#[derive(Clone, Debug, Default)]
+
+#[derive(Debug)]
 pub(crate) struct List {
     sorted_tasks: Vec<TaskRef>,
     sort_by: tasks::SortBy,
@@ -21,7 +22,7 @@ pub(crate) struct List {
 
 impl List {
     const HEADER: &'static [&'static str] = &[
-        "ID", "State", "Name", "Total", "Busy", "Idle", "Polls", "Target", "Fields",
+        "Warn", "ID", "State", "Name", "Total", "Busy", "Idle", "Polls", "Target", "Fields",
     ];
 
     pub(crate) fn len(&self) -> usize {
@@ -76,19 +77,13 @@ impl List {
         area: layout::Rect,
         state: &mut tasks::State,
     ) {
-        let chunks = layout::Layout::default()
-            .direction(layout::Direction::Vertical)
-            .margin(0)
-            .constraints(
-                [
-                    layout::Constraint::Length(1),
-                    layout::Constraint::Min(area.height - 1),
-                ]
-                .as_ref(),
-            )
-            .split(area);
-        let controls_area = chunks[0];
-        let tasks_area = chunks[1];
+        const STATE_LEN: u16 = List::HEADER[2].len() as u16;
+        const DUR_LEN: usize = 10;
+        // This data is only updated every second, so it doesn't make a ton of
+        // sense to have a lot of precision in timestamps (and this makes sure
+        // there's room for the unit!)
+        const DUR_PRECISION: usize = 4;
+        const POLLS_LEN: usize = 5;
 
         let now = if let Some(now) = state.last_updated_at() {
             now
@@ -96,14 +91,6 @@ impl List {
             // If we have never gotten an update yet, skip...
             return;
         };
-
-        const STATE_LEN: u16 = List::HEADER[1].len() as u16;
-        const DUR_LEN: usize = 10;
-        // This data is only updated every second, so it doesn't make a ton of
-        // sense to have a lot of precision in timestamps (and this makes sure
-        // there's room for the unit!)
-        const DUR_PRECISION: usize = 4;
-        const POLLS_LEN: usize = 5;
 
         self.sorted_tasks.extend(state.take_new_tasks());
         self.sort_by.sort(now, &mut self.sorted_tasks);
@@ -118,17 +105,20 @@ impl List {
         };
 
         // Start out wide enough to display the column headers...
-        let mut id_width = view::Width::new(Self::HEADER[0].len() as u16);
-        let mut name_width = view::Width::new(Self::HEADER[2].len() as u16);
-        let mut target_width = view::Width::new(Self::HEADER[7].len() as u16);
+        let mut warn_width = view::Width::new(Self::HEADER[0].len() as u16);
+        let mut id_width = view::Width::new(Self::HEADER[1].len() as u16);
+        let mut name_width = view::Width::new(Self::HEADER[3].len() as u16);
+        let mut target_width = view::Width::new(Self::HEADER[8].len() as u16);
         let mut num_idle = 0;
         let mut num_running = 0;
         let rows = {
             let id_width = &mut id_width;
             let target_width = &mut target_width;
             let name_width = &mut name_width;
+            let warn_width = &mut warn_width;
             let num_running = &mut num_running;
             let num_idle = &mut num_idle;
+
             self.sorted_tasks.iter().filter_map(move |task| {
                 let task = task.upgrade()?;
                 let task = task.borrow();
@@ -140,8 +130,20 @@ impl List {
                     TaskState::Idle => *num_idle += 1,
                     _ => {}
                 };
+                let n_warnings = task.warnings().len();
+                let warnings = if n_warnings > 0 {
+                    let n_warnings = n_warnings.to_string();
+                    warn_width.update_len(n_warnings.len() + 2); // add 2 for the warning icon + whitespace
+                    Cell::from(Spans::from(vec![
+                        styles.warning_narrow(),
+                        Span::from(n_warnings),
+                    ]))
+                } else {
+                    Cell::from("")
+                };
 
                 let mut row = Row::new(vec![
+                    warnings,
                     Cell::from(id_width.update_str(format!(
                         "{:>width$}",
                         task.id(),
@@ -215,6 +217,44 @@ impl List {
             + POLLS_LEN as u16
             + target_width.chars();
         */
+        let warnings = state
+            .warnings()
+            .map(|warning| {
+                ListItem::new(Text::from(Spans::from(vec![
+                    styles.warning_wide(),
+                    // TODO(eliza): it would be nice to handle singular vs plural...
+                    Span::from(format!("{} {}", warning.count(), warning.summary())),
+                ])))
+            })
+            .collect::<Vec<_>>();
+
+        let layout = layout::Layout::default()
+            .direction(layout::Direction::Vertical)
+            .margin(0);
+        let (controls_area, tasks_area, warnings_area) = if warnings.is_empty() {
+            let chunks = layout
+                .constraints(
+                    [
+                        layout::Constraint::Length(1),
+                        layout::Constraint::Min(area.height - 1),
+                    ]
+                    .as_ref(),
+                )
+                .split(area);
+            (chunks[0], chunks[1], None)
+        } else {
+            let chunks = layout
+                .constraints(
+                    [
+                        layout::Constraint::Length(1),
+                        layout::Constraint::Length(warnings.len() as u16 + 2),
+                        layout::Constraint::Min(area.height - 1),
+                    ]
+                    .as_ref(),
+                )
+                .split(area);
+            (chunks[0], chunks[2], Some(chunks[1]))
+        };
 
         // Fill all remaining characters in the frame with the task's fields.
         //
@@ -224,6 +264,7 @@ impl List {
         // See https://github.com/fdehau/tui-rs/issues/525
         let fields_width = layout::Constraint::Percentage(100);
         let widths = &[
+            warn_width.constraint(),
             id_width.constraint(),
             layout::Constraint::Length(STATE_LEN),
             name_width.constraint(),
@@ -259,6 +300,13 @@ impl List {
         ]));
 
         frame.render_widget(Paragraph::new(controls), controls_area);
+
+        if let Some(area) = warnings_area {
+            let block = styles
+                .border_block()
+                .title(Spans::from(vec![bold("Warnings")]));
+            frame.render_widget(widgets::List::new(warnings).block(block), area);
+        }
 
         self.sorted_tasks.retain(|t| t.upgrade().is_some());
     }
@@ -315,5 +363,18 @@ impl List {
                 self.sorted_tasks[selected].clone()
             })
             .unwrap_or_default()
+    }
+}
+
+impl Default for List {
+    fn default() -> Self {
+        let sort_by = tasks::SortBy::default();
+        List {
+            sorted_tasks: Default::default(),
+            sort_by,
+            table_state: Default::default(),
+            selected_column: sort_by as usize,
+            sort_descending: false,
+        }
     }
 }

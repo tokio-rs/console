@@ -1,4 +1,4 @@
-use crate::view;
+use crate::{util::Percentage, view, warnings::Linter};
 use console_api as proto;
 use hdrhistogram::Histogram;
 use std::{
@@ -20,6 +20,7 @@ use tui::{
 pub(crate) struct State {
     tasks: HashMap<u64, Rc<RefCell<Task>>>,
     metas: HashMap<u64, Metadata>,
+    linters: Vec<Linter<Task>>,
     last_updated_at: Option<SystemTime>,
     new_tasks: Vec<TaskRef>,
     current_task_details: DetailsRef,
@@ -36,13 +37,14 @@ enum Temporality {
 #[derive(Debug, Copy, Clone)]
 #[repr(usize)]
 pub(crate) enum SortBy {
-    Tid = 0,
-    State = 1,
-    Name = 2,
-    Total = 3,
-    Busy = 4,
-    Idle = 5,
-    Polls = 6,
+    Warns = 0,
+    Tid = 1,
+    State = 2,
+    Name = 3,
+    Total = 4,
+    Busy = 5,
+    Idle = 6,
+    Polls = 7,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -63,6 +65,8 @@ pub(crate) struct Task {
     stats: Stats,
     target: Arc<str>,
     name: Option<Arc<str>>,
+    /// Currently active warnings for this task.
+    warnings: Vec<Linter<Task>>,
 }
 
 #[derive(Debug, Default)]
@@ -122,11 +126,14 @@ pub(crate) enum FieldValue {
 }
 
 impl State {
-    pub(crate) fn new(retain_for: Option<Duration>) -> Self {
-        Self {
-            retain_for,
-            ..Default::default()
-        }
+    pub(crate) fn with_retain_for(mut self, retain_for: Option<Duration>) -> Self {
+        self.retain_for = retain_for;
+        self
+    }
+
+    pub(crate) fn with_linters(mut self, linters: impl IntoIterator<Item = Linter<Task>>) -> Self {
+        self.linters.extend(linters.into_iter());
+        self
     }
 
     pub(crate) fn last_updated_at(&self) -> Option<SystemTime> {
@@ -207,17 +214,27 @@ impl State {
                 formatted_fields,
                 stats,
                 target: meta.target.clone(),
+                warnings: Vec::new(),
             };
             let task = Rc::new(RefCell::new(task));
             new_list.push(Rc::downgrade(&task));
             Some((id, task))
         });
         self.tasks.extend(new_tasks);
-
+        let linters = &self.linters;
         for (id, stats) in stats_update {
             if let Some(task) = self.tasks.get_mut(&id) {
-                let mut t = task.borrow_mut();
-                t.stats = stats.into();
+                let mut task = task.borrow_mut();
+                tracing::trace!(?task, "processing stats update for");
+                task.warnings.clear();
+                for lint in linters {
+                    tracing::debug!(?lint, ?task, "checking...");
+                    if let Some(lint) = lint.check(&*task) {
+                        tracing::info!(?lint, ?task, "found a warning!");
+                        task.warnings.push(lint)
+                    }
+                }
+                task.stats = stats.into();
             }
         }
     }
@@ -279,6 +296,10 @@ impl State {
 
     pub(crate) fn is_paused(&self) -> bool {
         matches!(self.temporality, Temporality::Paused)
+    }
+
+    pub(crate) fn warnings(&self) -> impl Iterator<Item = &Linter<Task>> {
+        self.linters.iter().filter(|linter| linter.count() > 0)
     }
 }
 
@@ -386,6 +407,15 @@ impl Task {
     pub(crate) fn self_wakes(&self) -> u64 {
         self.stats.self_wakes
     }
+
+    /// Returns the percentage of this task's total wakeups that were self-wakes.
+    pub(crate) fn self_wake_percent(&self) -> u64 {
+        self.self_wakes().percent_of(self.wakes())
+    }
+
+    pub(crate) fn warnings(&self) -> &[Linter<Task>] {
+        &self.warnings[..]
+    }
 }
 
 impl Details {
@@ -482,6 +512,8 @@ impl SortBy {
             Self::State => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().state()))
             }
+            Self::Warns => tasks
+                .sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().warnings().len())),
             Self::Total => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().total(now)))
             }
@@ -504,6 +536,7 @@ impl TryFrom<usize> for SortBy {
         match idx {
             idx if idx == Self::Tid as usize => Ok(Self::Tid),
             idx if idx == Self::State as usize => Ok(Self::State),
+            idx if idx == Self::Warns as usize => Ok(Self::Warns),
             idx if idx == Self::Name as usize => Ok(Self::Name),
             idx if idx == Self::Total as usize => Ok(Self::Total),
             idx if idx == Self::Busy as usize => Ok(Self::Busy),
@@ -693,11 +726,12 @@ impl TaskState {
         const IDLE_UTF8: &str = "\u{23F8}";
         const COMPLETED_UTF8: &str = "\u{23F9}";
         match self {
-            Self::Running => {
-                Span::styled(styles.if_utf8(RUNNING_UTF8, ">"), styles.fg(Color::Green))
-            }
-            Self::Idle => Span::raw(styles.if_utf8(IDLE_UTF8, ":")),
-            Self::Completed => Span::raw(styles.if_utf8(COMPLETED_UTF8, "!")),
+            Self::Running => Span::styled(
+                styles.if_utf8(RUNNING_UTF8, "BUSY"),
+                styles.fg(Color::Green),
+            ),
+            Self::Idle => Span::raw(styles.if_utf8(IDLE_UTF8, "IDLE")),
+            Self::Completed => Span::raw(styles.if_utf8(COMPLETED_UTF8, "DONE")),
         }
     }
 }
