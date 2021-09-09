@@ -164,6 +164,7 @@ impl State {
         let mut stats_update = update.stats_update;
         let new_list = &mut self.new_tasks;
         new_list.clear();
+        let linters = &self.linters;
 
         let metas = &mut self.metas;
         let new_tasks = update.new_tasks.into_iter().filter_map(|mut task| {
@@ -214,26 +215,19 @@ impl State {
                 warnings: Vec::new(),
             };
             task.update();
+            task.lint(linters);
             let task = Rc::new(RefCell::new(task));
             new_list.push(Rc::downgrade(&task));
             Some((id, task))
         });
         self.tasks.extend(new_tasks);
-        let linters = &self.linters;
         for (id, stats) in stats_update {
             if let Some(task) = self.tasks.get_mut(&id) {
                 let mut task = task.borrow_mut();
                 tracing::trace!(?task, "processing stats update for");
-                task.warnings.clear();
-                for lint in linters {
-                    tracing::debug!(?lint, ?task, "checking...");
-                    if let Some(lint) = lint.check(&*task) {
-                        tracing::info!(?lint, ?task, "found a warning!");
-                        task.warnings.push(lint)
-                    }
-                }
                 task.stats = stats.into();
                 task.update();
+                task.lint(linters);
             }
         }
     }
@@ -415,6 +409,17 @@ impl Task {
         let completed = self.stats.total.is_some() && self.completed_for == 0;
         if completed {
             self.completed_for = 1;
+        }
+    }
+
+    fn lint(&mut self, linters: &[Linter<Task>]) {
+        self.warnings.clear();
+        for lint in linters {
+            tracing::debug!(?lint, task = ?self, "checking...");
+            if let Some(warning) = lint.check(self) {
+                tracing::info!(?warning, task = ?self, "found a warning!");
+                self.warnings.push(warning)
+            }
         }
     }
 }
