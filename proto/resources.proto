@@ -55,9 +55,8 @@ message Resource {
 message Stats {
     // Timestamp of when the resource was created.
     google.protobuf.Timestamp created_at = 1;
-    // The amount of time this resource has *existed*, regardless of whether or not
-    // it was used by a task.
-    google.protobuf.Duration total_time = 2;
+    // Timestamp of when the resource was dropped.
+    google.protobuf.Timestamp dropped_at = 2;
     // State attributes of the resource. These are dependent on the type of the resource.
     // For example, a timer resource will have a duration while a semaphore resource may
     // have permits as an attribute. These values may change over time as the state of

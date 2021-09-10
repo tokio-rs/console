@@ -1,4 +1,4 @@
-use super::{shrink::ShrinkMap, Closable, Id, Ids, ToProto};
+use super::{shrink::ShrinkMap, DroppedAt, Id, Ids, ToProto};
 use std::collections::{HashMap, HashSet};
 use std::ops::{Deref, DerefMut};
 use std::time::{Duration, SystemTime};
@@ -72,7 +72,7 @@ impl<T> IdData<T> {
         }
     }
 
-    pub(crate) fn drop_closed<R: Closable>(
+    pub(crate) fn drop_closed<R: DroppedAt>(
         &mut self,
         stats: &mut IdData<R>,
         now: SystemTime,
@@ -92,16 +92,16 @@ impl<T> IdData<T> {
 
         let mut dropped_ids = HashSet::new();
         stats.data.retain_and_shrink(|id, (stats, dirty)| {
-            if let Some(closed) = stats.closed_at() {
-                let closed_for = now.duration_since(closed).unwrap_or_default();
+            if let Some(dropped_at) = stats.dropped_at() {
+                let dropped_for = now.duration_since(dropped_at).unwrap_or_default();
                 let should_drop =
                         // if there are any clients watching, retain all dirty tasks regardless of age
                         (*dirty && has_watchers)
-                        || closed_for > retention;
+                        || dropped_for > retention;
                 tracing::trace!(
                     stats.id = ?id,
-                    stats.closed_at = ?closed,
-                    stats.closed_for = ?closed_for,
+                    stats.dropped_at = ?dropped_at,
+                    stats.dropped_for = ?dropped_for,
                     stats.dirty = *dirty,
                     should_drop,
                 );

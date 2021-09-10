@@ -27,6 +27,7 @@ mod warnings;
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     let mut args = config::Config::parse();
+    let retain_for = args.retain_for();
     args.trace_init()?;
     tracing::debug!(?args.target_addr, ?args.view_options);
 
@@ -50,7 +51,8 @@ async fn main() -> color_eyre::Result<()> {
         .with_linters(vec![
             warnings::Linter::new(warnings::SelfWakePercent::default()),
             warnings::Linter::new(warnings::LostWaker),
-        ]);
+        ])
+        .with_retain_for(retain_for);
     let mut input = input::EventStream::new();
     let mut view = view::View::new(styles);
 

@@ -1,6 +1,8 @@
 use crate::view::Palette;
 use clap::{ArgGroup, Clap, ValueHint};
 use std::process::Command;
+use std::str::FromStr;
+use std::time::Duration;
 use tonic::transport::Uri;
 
 #[derive(Clap, Debug)]
@@ -28,7 +30,31 @@ pub struct Config {
 
     #[clap(flatten)]
     pub(crate) view_options: ViewOptions,
+
+    /// How long to continue displaying completed tasks and dropped resources
+    /// after they have been closed. Accepted values are:
+    ///
+    /// - Durations, parsed as a combination of time spans (such as `5days 2min 2s`).
+    ///
+    ///   Each time span is an integer number followed by a suffix. Supported suffixes are:
+    ///
+    ///   * `nsec`, `ns` -- nanoseconds
+    ///   * `usec`, `us` -- microseconds
+    ///   * `msec`, `ms` -- milliseconds
+    ///   * `seconds`, `second`, `sec`, `s`
+    ///   * `minutes`, `minute`, `min`, `m`
+    ///   * `hours`, `hour`, `hr`, `h`
+    ///   * `days`, `day`, `d`
+    ///   * `weeks`, `week`, `w`
+    ///   * `months`, `month`, `M` -- defined as 30.44 days
+    ///   * `years`, `year`, `y` -- defined as 365.25 days
+    /// - `none` to disable removing completed task spans
+    #[clap(long = "retain-for", default_value = "6s")]
+    retain_for: RetainFor,
 }
+
+#[derive(Debug)]
+struct RetainFor(Option<Duration>);
 
 #[derive(Clap, Debug, Clone)]
 #[clap(group = ArgGroup::new("colors").conflicts_with("no-colors"))]
@@ -112,6 +138,10 @@ impl Config {
 
         Ok(())
     }
+
+    pub(crate) fn retain_for(&self) -> Option<Duration> {
+        self.retain_for.0
+    }
 }
 
 // === impl ViewOptions ===
@@ -175,4 +205,17 @@ impl ViewOptions {
 fn parse_true_color(s: &str) -> bool {
     let s = s.trim();
     s.eq_ignore_ascii_case("truecolor") || s.eq_ignore_ascii_case("24bit")
+}
+
+impl FromStr for RetainFor {
+    type Err = humantime::DurationError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            s if s.eq_ignore_ascii_case("none") => Ok(RetainFor(None)),
+            _ => s
+                .parse::<humantime::Duration>()
+                .map(|duration| RetainFor(Some(duration.into()))),
+        }
+    }
 }

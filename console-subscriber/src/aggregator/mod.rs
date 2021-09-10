@@ -105,12 +105,12 @@ pub(crate) struct Flush {
     pub(crate) triggered: AtomicBool,
 }
 
-// An entity that at some point in time can be closed.
-// This generally refers to spans that have been closed
-// indicating that a task, async op or a resource is not
-// in use anymore
-pub(crate) trait Closable {
-    fn closed_at(&self) -> Option<SystemTime>;
+// An entity (e.g Task, Resource) that at some point in
+// time can be dropped. This generally refers to spans that
+// have been closed indicating that a task, async op or a
+// resource is not in use anymore
+pub(crate) trait DroppedAt {
+    fn dropped_at(&self) -> Option<SystemTime>;
 }
 
 pub(crate) trait ToProto {
@@ -164,7 +164,7 @@ struct FieldKey {
 #[derive(Default)]
 struct ResourceStats {
     created_at: Option<SystemTime>,
-    closed_at: Option<SystemTime>,
+    dropped_at: Option<SystemTime>,
     attributes: HashMap<FieldKey, Attribute>,
 }
 
@@ -178,7 +178,7 @@ struct Task {
 struct TaskStats {
     // task stats
     created_at: Option<SystemTime>,
-    closed_at: Option<SystemTime>,
+    dropped_at: Option<SystemTime>,
 
     // waker stats
     wakes: u64,
@@ -200,27 +200,27 @@ struct AsyncOp {
 #[derive(Default)]
 struct AsyncOpStats {
     created_at: Option<SystemTime>,
-    closed_at: Option<SystemTime>,
+    dropped_at: Option<SystemTime>,
     resource_id: Option<Id>,
     task_id: Option<Id>,
     poll_stats: PollStats,
 }
 
-impl Closable for ResourceStats {
-    fn closed_at(&self) -> Option<SystemTime> {
-        self.closed_at
+impl DroppedAt for ResourceStats {
+    fn dropped_at(&self) -> Option<SystemTime> {
+        self.dropped_at
     }
 }
 
-impl Closable for TaskStats {
-    fn closed_at(&self) -> Option<SystemTime> {
-        self.closed_at
+impl DroppedAt for TaskStats {
+    fn dropped_at(&self) -> Option<SystemTime> {
+        self.dropped_at
     }
 }
 
-impl Closable for AsyncOpStats {
-    fn closed_at(&self) -> Option<SystemTime> {
-        self.closed_at
+impl DroppedAt for AsyncOpStats {
+    fn dropped_at(&self) -> Option<SystemTime> {
+        self.dropped_at
     }
 }
 
@@ -270,7 +270,7 @@ impl Default for TaskStats {
     fn default() -> Self {
         TaskStats {
             created_at: None,
-            closed_at: None,
+            dropped_at: None,
             wakes: 0,
             waker_clones: 0,
             waker_drops: 0,
@@ -643,15 +643,15 @@ impl Aggregator {
             Event::Close { id, at } => {
                 let id = self.ids.id_for(id);
                 if let Some(mut task_stats) = self.task_stats.update(&id) {
-                    task_stats.closed_at = Some(at);
+                    task_stats.dropped_at = Some(at);
                 }
 
                 if let Some(mut resource_stats) = self.resource_stats.update(&id) {
-                    resource_stats.closed_at = Some(at);
+                    resource_stats.dropped_at = Some(at);
                 }
 
                 if let Some(mut async_op_stats) = self.async_op_stats.update(&id) {
-                    async_op_stats.closed_at = Some(at);
+                    async_op_stats.dropped_at = Some(at);
                 }
             }
 
@@ -871,7 +871,7 @@ impl ToProto for TaskStats {
         proto::tasks::Stats {
             poll_stats: Some(self.poll_stats.to_proto()),
             created_at: self.created_at.map(Into::into),
-            total_time: total_time(self.created_at, self.closed_at).map(Into::into),
+            dropped_at: self.dropped_at.map(Into::into),
             wakes: self.wakes,
             waker_clones: self.waker_clones,
             self_wakes: self.self_wakes,
@@ -901,7 +901,7 @@ impl ToProto for ResourceStats {
         let attributes = self.attributes.values().cloned().collect();
         proto::resources::Stats {
             created_at: self.created_at.map(Into::into),
-            total_time: total_time(self.created_at, self.closed_at).map(Into::into),
+            dropped_at: self.dropped_at.map(Into::into),
             attributes,
         }
     }
@@ -926,8 +926,7 @@ impl ToProto for AsyncOpStats {
         proto::async_ops::Stats {
             poll_stats: Some(self.poll_stats.to_proto()),
             created_at: self.created_at.map(Into::into),
-            total_time: total_time(self.created_at, self.closed_at).map(Into::into),
-
+            dropped_at: self.dropped_at.map(Into::into),
             resource_id: self.resource_id.map(Into::into),
             task_id: self.task_id.map(Into::into),
         }
@@ -984,12 +983,6 @@ fn serialize_histogram(histogram: &Histogram<u64>) -> Result<Vec<u8>, V2Serializ
     let mut buf = Vec::new();
     serializer.serialize(histogram, &mut buf)?;
     Ok(buf)
-}
-
-fn total_time(created_at: Option<SystemTime>, closed_at: Option<SystemTime>) -> Option<Duration> {
-    let end = closed_at?;
-    let start = created_at?;
-    end.duration_since(start).ok()
 }
 
 fn update_attribute(attribute: &mut Attribute, update: AttributeUpdate) {

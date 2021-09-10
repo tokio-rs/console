@@ -25,6 +25,7 @@ pub(crate) struct State {
     new_tasks: Vec<TaskRef>,
     current_task_details: DetailsRef,
     temporality: Temporality,
+    retain_for: Option<Duration>,
 }
 
 #[derive(Debug)]
@@ -62,7 +63,6 @@ pub(crate) struct Task {
     fields: Vec<Field>,
     formatted_fields: Vec<Vec<Span<'static>>>,
     stats: Stats,
-    completed_for: usize,
     target: Arc<str>,
     name: Option<Arc<str>>,
     /// Currently active warnings for this task.
@@ -88,6 +88,7 @@ pub(crate) struct Metadata {
 struct Stats {
     polls: u64,
     created_at: SystemTime,
+    dropped_at: Option<SystemTime>,
     busy: Duration,
     last_poll_started: Option<SystemTime>,
     last_poll_ended: Option<SystemTime>,
@@ -125,7 +126,10 @@ pub(crate) enum FieldValue {
 }
 
 impl State {
-    const RETAIN_COMPLETED_FOR: usize = 6;
+    pub(crate) fn with_retain_for(mut self, retain_for: Option<Duration>) -> Self {
+        self.retain_for = retain_for;
+        self
+    }
 
     pub(crate) fn with_linters(mut self, linters: impl IntoIterator<Item = Linter<Task>>) -> Self {
         self.linters.extend(linters.into_iter());
@@ -210,11 +214,9 @@ impl State {
                 fields,
                 formatted_fields,
                 stats,
-                completed_for: 0,
                 target: meta.target.clone(),
                 warnings: Vec::new(),
             };
-            task.update();
             task.lint(linters);
             let task = Rc::new(RefCell::new(task));
             new_list.push(Rc::downgrade(&task));
@@ -226,7 +228,6 @@ impl State {
                 let mut task = task.borrow_mut();
                 tracing::trace!(?task, "processing stats update for");
                 task.stats = stats.into();
-                task.update();
                 task.lint(linters);
             }
         }
@@ -262,14 +263,19 @@ impl State {
             return;
         }
 
-        self.tasks.retain(|_, task| {
-            let mut task = task.borrow_mut();
-            if task.completed_for == 0 {
-                return true;
-            }
-            task.completed_for += 1;
-            task.completed_for <= Self::RETAIN_COMPLETED_FOR
-        })
+        if let (Some(now), Some(retain_for)) = (self.last_updated_at, self.retain_for) {
+            self.tasks.retain(|_, task| {
+                let task = task.borrow();
+
+                task.stats
+                    .dropped_at
+                    .map(|d| {
+                        let dropped_for = now.duration_since(d).unwrap();
+                        retain_for > dropped_for
+                    })
+                    .unwrap_or(true)
+            })
+        }
     }
 
     // temporality methods
@@ -405,13 +411,6 @@ impl Task {
         &self.warnings[..]
     }
 
-    fn update(&mut self) {
-        let completed = self.stats.total.is_some() && self.completed_for == 0;
-        if completed {
-            self.completed_for = 1;
-        }
-    }
-
     fn lint(&mut self, linters: &[Linter<Task>]) {
         self.warnings.clear();
         for lint in linters {
@@ -444,7 +443,15 @@ impl From<proto::tasks::Stats> for Stats {
             Duration::from_secs(secs) + Duration::from_nanos(nanos)
         }
 
-        let total = pb.total_time.map(pb_duration);
+        let created_at = pb
+            .created_at
+            .expect("task span was never created")
+            .try_into()
+            .unwrap();
+
+        let dropped_at: Option<SystemTime> = pb.dropped_at.map(|v| v.try_into().unwrap());
+        let total = dropped_at.map(|d| d.duration_since(created_at).unwrap());
+
         let poll_stats = pb.poll_stats.expect("task should have poll stats");
         let busy = poll_stats.busy_time.map(pb_duration).unwrap_or_default();
         let idle = total.map(|total| total - busy);
@@ -455,11 +462,8 @@ impl From<proto::tasks::Stats> for Stats {
             last_poll_started: poll_stats.last_poll_started.map(|v| v.try_into().unwrap()),
             last_poll_ended: poll_stats.last_poll_ended.map(|v| v.try_into().unwrap()),
             polls: poll_stats.polls,
-            created_at: pb
-                .created_at
-                .expect("task span was never created")
-                .try_into()
-                .unwrap(),
+            created_at,
+            dropped_at,
             wakes: pb.wakes,
             waker_clones: pb.waker_clones,
             waker_drops: pb.waker_drops,
