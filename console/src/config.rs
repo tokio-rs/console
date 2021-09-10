@@ -212,7 +212,7 @@ impl FromStr for RetainFor {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "none" => Ok(RetainFor(None)),
+            s if s.eq_ignore_ascii_case("none") => Ok(RetainFor(None)),
             _ => s
                 .parse::<humantime::Duration>()
                 .map(|duration| RetainFor(Some(duration.into()))),
