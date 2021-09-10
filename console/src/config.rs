@@ -1,6 +1,7 @@
 use crate::view::Palette;
 use clap::{ArgGroup, Clap, ValueHint};
 use std::process::Command;
+use std::str::FromStr;
 use std::time::Duration;
 use tonic::transport::Uri;
 
@@ -33,11 +34,25 @@ pub struct Config {
     /// How long to continue displaying completed tasks and dropped resources
     /// after they have been closed. Accepted values are:
     ///
-    /// - durations in the form of 5days 2min 2s.
-    /// - `none` to disable this functionality
-    #[clap(long = "retain-for", default_value = "6s", parse(try_from_str = parse_retain_for))]
+    /// - Durations, parsed as a combination of time spans (such as `5days 2min 2s`).
+    ///
+    ///   Each time span is an integer number followed by a suffix. Supported suffixes are:
+    ///
+    ///   * `nsec`, `ns` -- nanoseconds
+    ///   * `usec`, `us` -- microseconds
+    ///   * `msec`, `ms` -- milliseconds
+    ///   * `seconds`, `second`, `sec`, `s`
+    ///   * `minutes`, `minute`, `min`, `m`
+    ///   * `hours`, `hour`, `hr`, `h`
+    ///   * `days`, `day`, `d`
+    ///   * `weeks`, `week`, `w`
+    ///   * `months`, `month`, `M` -- defined as 30.44 days
+    ///   * `years`, `year`, `y` -- defined as 365.25 days
+    /// - `none` to disable removing completed task spans
+    #[clap(long = "retain-for", default_value = "6s")]
     retain_for: RetainFor,
 }
+
 #[derive(Debug)]
 struct RetainFor(Option<Duration>);
 
@@ -192,12 +207,15 @@ fn parse_true_color(s: &str) -> bool {
     s.eq_ignore_ascii_case("truecolor") || s.eq_ignore_ascii_case("24bit")
 }
 
-fn parse_retain_for(s: &str) -> Result<RetainFor, String> {
-    match s {
-        "none" => Ok(RetainFor(None)),
-        _ => match s.parse::<humantime::Duration>() {
-            Ok(duration) => Ok(RetainFor(Some(duration.into()))),
-            Err(error) => Err(error.to_string()),
-        },
+impl FromStr for RetainFor {
+    type Err = humantime::DurationError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "none" => Ok(RetainFor(None)),
+            _ => s
+                .parse::<humantime::Duration>()
+                .map(|duration| RetainFor(Some(duration.into()))),
+        }
     }
 }
