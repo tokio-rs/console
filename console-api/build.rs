@@ -2,14 +2,14 @@ use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let iface_files = &[
-        "../proto/trace.proto",
-        "../proto/common.proto",
-        "../proto/tasks.proto",
-        "../proto/instrument.proto",
-        "../proto/resources.proto",
-        "../proto/async_ops.proto",
+        "proto/trace.proto",
+        "proto/common.proto",
+        "proto/tasks.proto",
+        "proto/instrument.proto",
+        "proto/resources.proto",
+        "proto/async_ops.proto",
     ];
-    let dirs = &["../proto"];
+    let dirs = &["proto"];
 
     tonic_build::configure()
         .build_client(true)

@@ -86,24 +86,11 @@ others.
 ## using it
 
 to **instrument an application using Tokio**, add a dependency on the
-[`console-subscriber`] crate, and **add the `TasksLayer` type** to your
-[`tracing`] subscriber. for example:
+[`console-subscriber`] crate, and **add this one-liner** to the top of your
+`main` function:
+
 ```rust
-    use tracing_subscriber::{prelude::*, fmt, EnvFilter};
-    // construct the `console_subscriber` layer and the console wire protocol server
-    let (layer, server) = console_subscriber::TasksLayer::new();
-    // ensure that Tokio's internal instrumentation is enabled
-    let filter = EnvFilter::from_default_env().add_directive("tokio=trace".parse()?);
-
-    tracing_subscriber::registry()
-        // the `TasksLayer` can be used in combination with other `tracing` layers...
-        .with(tracing_subscriber::fmt::layer())
-        .with(filter)
-        .with(layer)
-        .init();
-
-    // spawn the server task
-    tokio::spawn(server.serve());
+console_subscriber::init();
 ```
 
 notes:
