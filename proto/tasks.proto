@@ -85,13 +85,8 @@ message Task {
 message Stats {
     // Timestamp of when the task was spawned.
     google.protobuf.Timestamp created_at = 1;
-
-    // The amount of time this task has *existed*, regardless of whether or not
-    // it was being polled.
-    //
-    // Subtracting `busy_time` from `total_time` calculates the task's idle
-    // time, the amount of time it has spent *waiting* to be polled.
-    google.protobuf.Duration total_time = 2;
+    // Timestamp of when the task was dropped.
+    google.protobuf.Timestamp dropped_at = 2;
     // The total number of times this task's waker has been woken.
     uint64 wakes = 3;
     // The total number of times this task's waker has been cloned.

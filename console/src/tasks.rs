@@ -1,4 +1,4 @@
-use crate::{util::Percentage, view};
+use crate::{util::Percentage, view, warnings::Linter};
 use console_api as proto;
 use hdrhistogram::Histogram;
 use std::{
@@ -20,10 +20,12 @@ use tui::{
 pub(crate) struct State {
     tasks: HashMap<u64, Rc<RefCell<Task>>>,
     metas: HashMap<u64, Metadata>,
+    linters: Vec<Linter<Task>>,
     last_updated_at: Option<SystemTime>,
     new_tasks: Vec<TaskRef>,
     current_task_details: DetailsRef,
     temporality: Temporality,
+    retain_for: Option<Duration>,
 }
 
 #[derive(Debug)]
@@ -35,13 +37,14 @@ enum Temporality {
 #[derive(Debug, Copy, Clone)]
 #[repr(usize)]
 pub(crate) enum SortBy {
-    Tid = 0,
-    State = 1,
-    Name = 2,
-    Total = 3,
-    Busy = 4,
-    Idle = 5,
-    Polls = 6,
+    Warns = 0,
+    Tid = 1,
+    State = 2,
+    Name = 3,
+    Total = 4,
+    Busy = 5,
+    Idle = 6,
+    Polls = 7,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -60,9 +63,10 @@ pub(crate) struct Task {
     fields: Vec<Field>,
     formatted_fields: Vec<Vec<Span<'static>>>,
     stats: Stats,
-    completed_for: usize,
     target: Arc<str>,
     name: Option<Arc<str>>,
+    /// Currently active warnings for this task.
+    warnings: Vec<Linter<Task>>,
 }
 
 #[derive(Debug, Default)]
@@ -84,6 +88,7 @@ pub(crate) struct Metadata {
 struct Stats {
     polls: u64,
     created_at: SystemTime,
+    dropped_at: Option<SystemTime>,
     busy: Duration,
     last_poll_started: Option<SystemTime>,
     last_poll_ended: Option<SystemTime>,
@@ -121,7 +126,15 @@ pub(crate) enum FieldValue {
 }
 
 impl State {
-    const RETAIN_COMPLETED_FOR: usize = 6;
+    pub(crate) fn with_retain_for(mut self, retain_for: Option<Duration>) -> Self {
+        self.retain_for = retain_for;
+        self
+    }
+
+    pub(crate) fn with_linters(mut self, linters: impl IntoIterator<Item = Linter<Task>>) -> Self {
+        self.linters.extend(linters.into_iter());
+        self
+    }
 
     pub(crate) fn last_updated_at(&self) -> Option<SystemTime> {
         self.last_updated_at
@@ -155,6 +168,7 @@ impl State {
         let mut stats_update = update.stats_update;
         let new_list = &mut self.new_tasks;
         new_list.clear();
+        let linters = &self.linters;
 
         let metas = &mut self.metas;
         let new_tasks = update.new_tasks.into_iter().filter_map(|mut task| {
@@ -200,21 +214,21 @@ impl State {
                 fields,
                 formatted_fields,
                 stats,
-                completed_for: 0,
                 target: meta.target.clone(),
+                warnings: Vec::new(),
             };
-            task.update();
+            task.lint(linters);
             let task = Rc::new(RefCell::new(task));
             new_list.push(Rc::downgrade(&task));
             Some((id, task))
         });
         self.tasks.extend(new_tasks);
-
         for (id, stats) in stats_update {
             if let Some(task) = self.tasks.get_mut(&id) {
-                let mut t = task.borrow_mut();
-                t.stats = stats.into();
-                t.update();
+                let mut task = task.borrow_mut();
+                tracing::trace!(?task, "processing stats update for");
+                task.stats = stats.into();
+                task.lint(linters);
             }
         }
     }
@@ -249,14 +263,19 @@ impl State {
             return;
         }
 
-        self.tasks.retain(|_, task| {
-            let mut task = task.borrow_mut();
-            if task.completed_for == 0 {
-                return true;
-            }
-            task.completed_for += 1;
-            task.completed_for <= Self::RETAIN_COMPLETED_FOR
-        })
+        if let (Some(now), Some(retain_for)) = (self.last_updated_at, self.retain_for) {
+            self.tasks.retain(|_, task| {
+                let task = task.borrow();
+
+                task.stats
+                    .dropped_at
+                    .map(|d| {
+                        let dropped_for = now.duration_since(d).unwrap();
+                        retain_for > dropped_for
+                    })
+                    .unwrap_or(true)
+            })
+        }
     }
 
     // temporality methods
@@ -271,6 +290,10 @@ impl State {
 
     pub(crate) fn is_paused(&self) -> bool {
         matches!(self.temporality, Temporality::Paused)
+    }
+
+    pub(crate) fn warnings(&self) -> impl Iterator<Item = &Linter<Task>> {
+        self.linters.iter().filter(|linter| linter.count() > 0)
     }
 }
 
@@ -384,10 +407,18 @@ impl Task {
         self.self_wakes().percent_of(self.wakes())
     }
 
-    fn update(&mut self) {
-        let completed = self.stats.total.is_some() && self.completed_for == 0;
-        if completed {
-            self.completed_for = 1;
+    pub(crate) fn warnings(&self) -> &[Linter<Task>] {
+        &self.warnings[..]
+    }
+
+    fn lint(&mut self, linters: &[Linter<Task>]) {
+        self.warnings.clear();
+        for lint in linters {
+            tracing::debug!(?lint, task = ?self, "checking...");
+            if let Some(warning) = lint.check(self) {
+                tracing::info!(?warning, task = ?self, "found a warning!");
+                self.warnings.push(warning)
+            }
         }
     }
 }
@@ -412,7 +443,15 @@ impl From<proto::tasks::Stats> for Stats {
             Duration::from_secs(secs) + Duration::from_nanos(nanos)
         }
 
-        let total = pb.total_time.map(pb_duration);
+        let created_at = pb
+            .created_at
+            .expect("task span was never created")
+            .try_into()
+            .unwrap();
+
+        let dropped_at: Option<SystemTime> = pb.dropped_at.map(|v| v.try_into().unwrap());
+        let total = dropped_at.map(|d| d.duration_since(created_at).unwrap());
+
         let poll_stats = pb.poll_stats.expect("task should have poll stats");
         let busy = poll_stats.busy_time.map(pb_duration).unwrap_or_default();
         let idle = total.map(|total| total - busy);
@@ -423,11 +462,8 @@ impl From<proto::tasks::Stats> for Stats {
             last_poll_started: poll_stats.last_poll_started.map(|v| v.try_into().unwrap()),
             last_poll_ended: poll_stats.last_poll_ended.map(|v| v.try_into().unwrap()),
             polls: poll_stats.polls,
-            created_at: pb
-                .created_at
-                .expect("task span was never created")
-                .try_into()
-                .unwrap(),
+            created_at,
+            dropped_at,
             wakes: pb.wakes,
             waker_clones: pb.waker_clones,
             waker_drops: pb.waker_drops,
@@ -481,6 +517,8 @@ impl SortBy {
             Self::State => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().state()))
             }
+            Self::Warns => tasks
+                .sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().warnings().len())),
             Self::Total => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().total(now)))
             }
@@ -503,6 +541,7 @@ impl TryFrom<usize> for SortBy {
         match idx {
             idx if idx == Self::Tid as usize => Ok(Self::Tid),
             idx if idx == Self::State as usize => Ok(Self::State),
+            idx if idx == Self::Warns as usize => Ok(Self::Warns),
             idx if idx == Self::Name as usize => Ok(Self::Name),
             idx if idx == Self::Total as usize => Ok(Self::Total),
             idx if idx == Self::Busy as usize => Ok(Self::Busy),
@@ -692,11 +731,12 @@ impl TaskState {
         const IDLE_UTF8: &str = "\u{23F8}";
         const COMPLETED_UTF8: &str = "\u{23F9}";
         match self {
-            Self::Running => {
-                Span::styled(styles.if_utf8(RUNNING_UTF8, ">"), styles.fg(Color::Green))
-            }
-            Self::Idle => Span::raw(styles.if_utf8(IDLE_UTF8, ":")),
-            Self::Completed => Span::raw(styles.if_utf8(COMPLETED_UTF8, "!")),
+            Self::Running => Span::styled(
+                styles.if_utf8(RUNNING_UTF8, "BUSY"),
+                styles.fg(Color::Green),
+            ),
+            Self::Idle => Span::raw(styles.if_utf8(IDLE_UTF8, "IDLE")),
+            Self::Completed => Span::raw(styles.if_utf8(COMPLETED_UTF8, "DONE")),
         }
     }
 }
