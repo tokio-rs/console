@@ -1,6 +1,7 @@
 use crate::{
     input,
     tasks::{Details, DetailsRef, Task},
+    util::Percentage,
     view::{
         self, bold,
         mini_histogram::{HistogramMetadata, MiniHistogram},
@@ -154,22 +155,26 @@ impl TaskView {
         if let Some(name) = task.name() {
             metrics.push(Spans::from(vec![bold("Name: "), Span::raw(name)]));
         }
+
         metrics.push(Spans::from(vec![
             bold("Target: "),
             Span::raw(task.target()),
         ]));
-        metrics.push(Spans::from(vec![
-            bold("Total Time: "),
-            dur(styles, task.total(now)),
-        ]));
-        metrics.push(Spans::from(vec![
-            bold("Busy: "),
-            dur(styles, task.busy(now)),
-        ]));
-        metrics.push(Spans::from(vec![
-            bold("Idle: "),
-            dur(styles, task.idle(now)),
-        ]));
+
+        let total = task.total(now);
+
+        let dur_percent = |name: &'static str, amt: Duration| -> Spans {
+            let percent = amt.as_secs_f64().percent_of(total.as_secs_f64());
+            Spans::from(vec![
+                bold(name),
+                dur(styles, amt),
+                Span::from(format!(" ({:.2}%)", percent)),
+            ])
+        };
+
+        metrics.push(Spans::from(vec![bold("Total Time: "), dur(styles, total)]));
+        metrics.push(dur_percent("Busy: ", task.busy(now)));
+        metrics.push(dur_percent("Idle: ", task.idle(now)));
 
         let mut waker_stats = vec![Spans::from(vec![
             bold("Current wakers: "),
