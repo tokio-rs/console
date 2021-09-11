@@ -83,7 +83,6 @@ impl List {
         // sense to have a lot of precision in timestamps (and this makes sure
         // there's room for the unit!)
         const DUR_PRECISION: usize = 4;
-        const POLLS_LEN: usize = 5;
 
         let now = if let Some(now) = state.last_updated_at() {
             now
@@ -108,6 +107,7 @@ impl List {
         let mut warn_width = view::Width::new(Self::HEADER[0].len() as u16);
         let mut id_width = view::Width::new(Self::HEADER[1].len() as u16);
         let mut name_width = view::Width::new(Self::HEADER[3].len() as u16);
+        let mut polls_width = view::Width::new(Self::HEADER[7].len() as u16);
         let mut target_width = view::Width::new(Self::HEADER[8].len() as u16);
         let mut num_idle = 0;
         let mut num_running = 0;
@@ -115,6 +115,7 @@ impl List {
             let id_width = &mut id_width;
             let target_width = &mut target_width;
             let name_width = &mut name_width;
+            let polls_width = &mut polls_width;
             let warn_width = &mut warn_width;
             let num_running = &mut num_running;
             let num_idle = &mut num_idle;
@@ -154,7 +155,7 @@ impl List {
                     dur_cell(task.total(now)),
                     dur_cell(task.busy(now)),
                     dur_cell(task.idle(now)),
-                    Cell::from(format!("{:>width$}", task.total_polls(), width = POLLS_LEN)),
+                    Cell::from(polls_width.update_str(task.total_polls().to_string())),
                     Cell::from(target_width.update_str(task.target()).to_owned()),
                     Cell::from(Spans::from(
                         task.formatted_fields()
@@ -271,7 +272,7 @@ impl List {
             layout::Constraint::Length(DUR_LEN as u16),
             layout::Constraint::Length(DUR_LEN as u16),
             layout::Constraint::Length(DUR_LEN as u16),
-            layout::Constraint::Length(POLLS_LEN as u16),
+            polls_width.constraint(),
             target_width.constraint(),
             fields_width,
         ];
