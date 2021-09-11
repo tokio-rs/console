@@ -17,6 +17,12 @@ impl Percentage for u64 {
     }
 }
 
+impl Percentage for f64 {
+    fn percent_of(self, total: Self) -> Self {
+        percentage(total, self)
+    }
+}
+
 pub(crate) fn percentage(total: f64, amount: f64) -> f64 {
     debug_assert!(
         total >= amount,
