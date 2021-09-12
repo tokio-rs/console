@@ -5,6 +5,8 @@ use tui::{
     text::Span,
 };
 
+pub(crate) const DUR_PRECISION: usize = 4;
+
 #[derive(Debug, Clone)]
 pub struct Styles {
     palette: Palette,
@@ -60,6 +62,13 @@ impl Styles {
         } else {
             ascii
         }
+    }
+
+    pub fn dur<'a>(&self, dur: std::time::Duration) -> Span<'a> {
+        // TODO(eliza): can we not have to use `format!` to make a string here? is
+        // there a way to just give TUI a `fmt::Debug` implementation, or does it
+        // have to be given a string in order to do layout stuff?
+        self.time_units(format!("{:.prec$?}", dur, prec = DUR_PRECISION))
     }
 
     pub fn time_units<'a>(&self, text: impl Into<Cow<'a, str>>) -> Span<'a> {

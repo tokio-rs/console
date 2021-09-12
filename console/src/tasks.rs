@@ -26,6 +26,7 @@ pub(crate) struct State {
     current_task_details: DetailsRef,
     temporality: Temporality,
     retain_for: Option<Duration>,
+    wake_to_poll_times_histogram: Option<Histogram<u64>>,
 }
 
 #[derive(Debug)]
@@ -251,6 +252,16 @@ impl State {
 
             *self.current_task_details.borrow_mut() = Some(details);
         }
+    }
+
+    pub(crate) fn wake_to_poll_times_histogram_ref(&self) -> Option<&Histogram<u64>> {
+        self.wake_to_poll_times_histogram.as_ref()
+    }
+
+    pub(crate) fn update_wake_to_poll_histogram(&mut self, data: Vec<u8>) {
+        self.wake_to_poll_times_histogram = hdrhistogram::serialization::Deserializer::new()
+            .deserialize(&mut Cursor::new(&data))
+            .ok();
     }
 
     pub(crate) fn unset_task_details(&mut self) {

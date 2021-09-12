@@ -102,6 +102,9 @@ async fn main() -> color_eyre::Result<()> {
                 if let Some(task_update) = instrument_update.task_update {
                     tasks.update_tasks(&view.styles, task_update, instrument_update.new_metadata, now);
                 }
+                if let Some(serialized_histogram) = instrument_update.wake_to_poll_times_histogram {
+                    tasks.update_wake_to_poll_histogram(serialized_histogram);
+                }
             }
             details_update = details_rx.recv() => {
                 if let Some(details_update) = details_update {

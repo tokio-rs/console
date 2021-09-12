@@ -1,15 +1,17 @@
 use crate::{
     input,
     tasks::{self, TaskRef, TaskState},
-    view::{self, bold},
+    view::{self, bold, mini_histogram::MiniHistogram},
 };
 use std::convert::TryFrom;
 use tui::{
-    layout,
+    layout::{self, Layout},
     style::{self, Color, Style},
     text::{self, Span, Spans, Text},
     widgets::{self, Cell, ListItem, Paragraph, Row, Table, TableState},
 };
+
+use super::percentiles::Percentiles;
 
 #[derive(Debug)]
 pub(crate) struct List {
@@ -232,29 +234,31 @@ impl List {
         let layout = layout::Layout::default()
             .direction(layout::Direction::Vertical)
             .margin(0);
-        let (controls_area, tasks_area, warnings_area) = if warnings.is_empty() {
+        let (controls_area, tasks_area, wake_to_poll_area, warnings_area) = if warnings.is_empty() {
             let chunks = layout
                 .constraints(
                     [
                         layout::Constraint::Length(1),
-                        layout::Constraint::Min(area.height - 1),
+                        layout::Constraint::Min(area.height - 10),
+                        layout::Constraint::Length(9),
                     ]
                     .as_ref(),
                 )
                 .split(area);
-            (chunks[0], chunks[1], None)
+            (chunks[0], chunks[1], chunks[2], None)
         } else {
             let chunks = layout
                 .constraints(
                     [
                         layout::Constraint::Length(1),
                         layout::Constraint::Length(warnings.len() as u16 + 2),
-                        layout::Constraint::Min(area.height - 1),
+                        layout::Constraint::Min(area.height - 10),
+                        layout::Constraint::Length(9),
                     ]
                     .as_ref(),
                 )
                 .split(area);
-            (chunks[0], chunks[2], Some(chunks[1]))
+            (chunks[0], chunks[2], chunks[3], Some(chunks[1]))
         };
 
         // Fill all remaining characters in the frame with the task's fields.
@@ -301,6 +305,7 @@ impl List {
         ]));
 
         frame.render_widget(Paragraph::new(controls), controls_area);
+        self.render_wake_to_poll_dur(styles, frame, wake_to_poll_area, state);
 
         if let Some(area) = warnings_area {
             let block = styles
@@ -310,6 +315,65 @@ impl List {
         }
 
         self.sorted_tasks.retain(|t| t.upgrade().is_some());
+    }
+
+    fn render_wake_to_poll_dur<B: tui::backend::Backend>(
+        &self,
+        styles: &view::Styles,
+        frame: &mut tui::terminal::Frame<B>,
+        area: layout::Rect,
+        state: &tasks::State,
+    ) {
+        let histogram = state.wake_to_poll_times_histogram_ref();
+
+        // Only render the histogram if UTF-8 is enabled,
+        // because sparkline requires UTF-8 characters
+        let percentiles_area = if styles.utf8 {
+            let areas = Layout::default()
+                .direction(layout::Direction::Horizontal)
+                .constraints(
+                    [
+                        // 32 chars is long enough for the title "Wake to Poll Times Percentiles"
+                        layout::Constraint::Length(32),
+                        layout::Constraint::Min(50),
+                    ]
+                    .as_ref(),
+                )
+                .split(area);
+            let (percentiles_area, histogram_area) = (areas[0], areas[1]);
+
+            if let Some(histogram) = histogram {
+                let histogram_widget = MiniHistogram::default()
+                    .block(styles.border_block().title("Wake to Poll Times Histogram"))
+                    .histogram(histogram)
+                    .duration_precision(2);
+                frame.render_widget(histogram_widget, histogram_area);
+            } else {
+                let histogram_widget = styles.border_block().title("Wake to Poll Times Histogram");
+                frame.render_widget(histogram_widget, histogram_area);
+            }
+
+            percentiles_area
+        } else {
+            area
+        };
+
+        if let Some(histogram) = histogram {
+            let percentiles_widget = Percentiles::default()
+                .block(
+                    styles
+                        .border_block()
+                        .title("Wake to Poll Times Percentiles"),
+                )
+                .styles(styles)
+                .histogram(histogram);
+            frame.render_widget(percentiles_widget, percentiles_area);
+        } else {
+            let percentiles_widget = styles
+                .border_block()
+                .title("Wake to Poll Times Percentiles");
+            frame.render_widget(percentiles_widget, percentiles_area);
+        }
     }
 
     fn scroll_with(&mut self, f: impl Fn(&Vec<TaskRef>, usize) -> usize) {

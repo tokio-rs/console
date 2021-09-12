@@ -57,6 +57,9 @@ message Update {
 
     // Any new span metadata that was registered since the last update.
     common.RegisterMetadata new_metadata = 5;
+
+    // HdrHistogram.rs `Histogram` serialized to binary in the V2 format
+    optional bytes wake_to_poll_times_histogram = 6;
 }
 
 message PauseResponse {

@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use hdrhistogram::Histogram;
 use tui::{
     layout::Rect,
     style::Style,
@@ -18,10 +19,8 @@ pub(crate) struct MiniHistogram<'a> {
     block: Option<Block<'a>>,
     /// Widget style
     style: Style,
-    /// Values for the buckets of the histogram
-    data: &'a [u64],
-    /// Metadata about the histogram
-    metadata: HistogramMetadata,
+    /// Histogram to render
+    histogram: Option<&'a Histogram<u64>>,
     /// The maximum value to take to compute the maximum bar height (if nothing is specified, the
     /// widget uses the max of the dataset)
     max: Option<u64>,
@@ -48,8 +47,7 @@ impl<'a> Default for MiniHistogram<'a> {
         MiniHistogram {
             block: None,
             style: Default::default(),
-            data: &[],
-            metadata: Default::default(),
+            histogram: None,
             max: None,
             bar_set: symbols::bar::NINE_LEVELS,
             duration_precision: 4,
@@ -72,16 +70,25 @@ impl<'a> Widget for MiniHistogram<'a> {
             return;
         }
 
-        let max_qty_label = self.metadata.max_bucket.to_string();
-        let min_qty_label = self.metadata.min_bucket.to_string();
+        // Bit of a deadlock: We cannot know the highest bucket value without determining the number of buckets,
+        // and we cannot determine the number of buckets without knowing the width of the chart area which depends on
+        // the number of digits in the highest bucket value.
+        // So just assume here the number of digits in the highest bucket value is 3.
+        // If we overshoot, there will be empty columns/buckets at the right end of the chart.
+        // If we undershoot, the rightmost 1-2 columns/buckets will be hidden.
+        // We could get the max bucket value from the previous render though...
+        let (data, metadata) = self.chart_data(inner_area.width - 3);
+
+        let max_qty_label = metadata.max_bucket.to_string();
+        let min_qty_label = metadata.min_bucket.to_string();
         let max_record_label = format!(
             "{:.prec$?}",
-            Duration::from_nanos(self.metadata.max_value),
+            Duration::from_nanos(metadata.max_value),
             prec = self.duration_precision,
         );
         let min_record_label = format!(
             "{:.prec$?}",
-            Duration::from_nanos(self.metadata.min_value),
+            Duration::from_nanos(metadata.min_value),
             prec = self.duration_precision,
         );
         let y_axis_label_width = max_qty_label.len() as u16;
@@ -103,7 +110,7 @@ impl<'a> Widget for MiniHistogram<'a> {
             width: inner_area.width - y_axis_label_width,
             height: inner_area.height - 1,
         };
-        self.render_bars(bars_area, buf);
+        self.render_bars(bars_area, buf, data);
     }
 }
 
@@ -143,14 +150,18 @@ impl<'a> MiniHistogram<'a> {
         );
     }
 
-    fn render_bars(&mut self, area: tui::layout::Rect, buf: &mut tui::buffer::Buffer) {
+    fn render_bars(
+        &mut self,
+        area: tui::layout::Rect,
+        buf: &mut tui::buffer::Buffer,
+        data: Vec<u64>,
+    ) {
         let max = match self.max {
             Some(v) => v,
-            None => *self.data.iter().max().unwrap_or(&1u64),
+            None => *data.iter().max().unwrap_or(&1u64),
         };
-        let max_index = std::cmp::min(area.width as usize, self.data.len());
-        let mut data = self
-            .data
+        let max_index = std::cmp::min(area.width as usize, data.len());
+        let mut data = data
             .iter()
             .take(max_index)
             .map(|e| {
@@ -216,14 +227,8 @@ impl<'a> MiniHistogram<'a> {
     }
 
     #[allow(dead_code)]
-    pub fn data(mut self, data: &'a [u64]) -> MiniHistogram<'a> {
-        self.data = data;
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn metadata(mut self, metadata: HistogramMetadata) -> MiniHistogram<'a> {
-        self.metadata = metadata;
+    pub fn histogram(mut self, histogram: &'a Histogram<u64>) -> MiniHistogram<'a> {
+        self.histogram = Some(histogram);
         self
     }
 
@@ -237,5 +242,49 @@ impl<'a> MiniHistogram<'a> {
     pub fn bar_set(mut self, bar_set: symbols::bar::Set) -> MiniHistogram<'a> {
         self.bar_set = bar_set;
         self
+    }
+
+    /// From the histogram, build a visual representation by trying to make as
+    /// many buckets as the width of the render area.
+    fn chart_data(&self, width: u16) -> (Vec<u64>, HistogramMetadata) {
+        self.histogram
+            .map(|histogram| {
+                let step_size =
+                    ((histogram.max() - histogram.min()) as f64 / width as f64).ceil() as u64 + 1;
+                // `iter_linear` panics if step_size is 0
+                let data = if step_size > 0 {
+                    let mut found_first_nonzero = false;
+                    let data: Vec<u64> = histogram
+                        .iter_linear(step_size)
+                        .filter_map(|value| {
+                            let count = value.count_since_last_iteration();
+                            // Remove the 0s from the leading side of the buckets.
+                            // Because HdrHistogram can return empty buckets depending
+                            // on its internal state, as it approximates values.
+                            if count == 0 && !found_first_nonzero {
+                                None
+                            } else {
+                                found_first_nonzero = true;
+                                Some(count)
+                            }
+                        })
+                        .collect();
+                    data
+                } else {
+                    Vec::new()
+                };
+                let max_bucket = data.iter().max().copied().unwrap_or_default();
+                let min_bucket = data.iter().min().copied().unwrap_or_default();
+                (
+                    data,
+                    HistogramMetadata {
+                        max_value: histogram.max(),
+                        min_value: histogram.min(),
+                        max_bucket,
+                        min_bucket,
+                    },
+                )
+            })
+            .unwrap_or_default()
     }
 }

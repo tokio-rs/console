@@ -7,6 +7,7 @@ use tui::{
 };
 
 mod mini_histogram;
+mod percentiles;
 mod styles;
 mod task;
 mod tasks;

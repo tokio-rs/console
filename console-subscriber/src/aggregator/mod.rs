@@ -97,6 +97,8 @@ pub(crate) struct Aggregator {
 
     /// The time "state" of the aggregator, such as paused or live.
     temporality: Temporality,
+
+    wake_to_poll_times_histogram: Histogram<u64>,
 }
 
 #[derive(Debug)]
@@ -317,6 +319,9 @@ impl Aggregator {
                 .as_ref()
                 .map(|path| Recorder::new(path).expect("creating recorder")),
             temporality: Temporality::Live,
+            // significant figures should be in the [0-5] range and memory usage
+            // grows exponentially with higher a sigfig
+            wake_to_poll_times_histogram: Histogram::<u64>::new(2).unwrap(),
         }
     }
 
@@ -467,6 +472,8 @@ impl Aggregator {
             new_metadata: Some(proto::RegisterMetadata {
                 metadata: (*self.all_metadata).clone(),
             }),
+            wake_to_poll_times_histogram: serialize_histogram(&self.wake_to_poll_times_histogram)
+                .ok(),
         };
 
         if subscription.update(update) {
@@ -552,6 +559,8 @@ impl Aggregator {
                     .collect(),
                 stats_update: self.async_op_stats.as_proto(Include::UpdatedOnly),
             }),
+            wake_to_poll_times_histogram: serialize_histogram(&self.wake_to_poll_times_histogram)
+                .ok(),
         };
 
         self.watchers
@@ -616,6 +625,13 @@ impl Aggregator {
                 let id = self.ids.id_for(id);
                 if let Some(mut task_stats) = self.task_stats.update(&id) {
                     task_stats.poll_stats.update_on_span_enter(at);
+
+                    if let Some(last_wake) = task_stats.last_wake {
+                        let wake_to_poll = at.duration_since(last_wake).unwrap();
+                        self.wake_to_poll_times_histogram
+                            .record(wake_to_poll.as_nanos().try_into().unwrap_or(u64::MAX))
+                            .unwrap();
+                    }
                 }
 
                 if let Some(mut async_op_stats) = self.async_op_stats.update(&id) {
