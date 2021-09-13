@@ -1,20 +1,35 @@
 use crate::TasksLayer;
 use std::thread;
 use tokio::runtime;
-use tracing_subscriber::{layer::Layered, prelude::*, EnvFilter, Registry};
+use tracing_subscriber::{
+    filter::{Filtered, LevelFilter, Targets},
+    layer::Layered,
+    prelude::*,
+    Registry,
+};
 
-type ConsoleSubscriberLayer = Layered<TasksLayer, Layered<EnvFilter, Registry>>;
+type ConsoleSubscriberLayer = Layered<Filtered<TasksLayer, Targets, Registry>, Registry>;
 
-/// Starts the console subscriber server on its own thread.
+/// Initializes the console [tracing `Subscriber`][sub] and starts the console
+/// subscriber [`Server`] on its own background thread.
 ///
 /// This function represents the easiest way to get started using
 /// tokio-console.
+///
+/// In addition to the [`TasksLayer`], which collects instrumentation data
+/// consumed by the console, the default [`Subscriber`][sub] initialized by this
+/// function also includes a [`tracing_subscriber::fmt`] layer, which logs
+/// tracing spans and events to stdout. Which spans and events are logged will
+/// be determined by the `RUST_LOG` environment variable.
 ///
 /// **Note**: this function sets the [default `tracing` subscriber][default]
 /// for your application. If you need to add additional layers to this
 /// subscriber, see [`build`].
 ///
 /// [default]: https://docs.rs/tracing/latest/tracing/dispatcher/index.html#setting-the-default-subscriber
+/// [sub]: https://docs.rs/tracing/latest/tracing/trait.Subscriber.html
+/// [`tracing_subscriber::fmt`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/fmt/index.html
+/// [`Server`]: crate::Server
 ///
 /// ## Configuration
 ///
@@ -28,7 +43,7 @@ type ConsoleSubscriberLayer = Layered<TasksLayer, Layered<EnvFilter, Registry>>;
 /// | `TOKIO_CONSOLE_BIND`                | A HOST:PORT description, such as `localhost:1234`                         | `127.0.0.1:6669`  |
 /// | `TOKIO_CONSOLE_PUBLISH_INTERVAL_MS` | The number of milliseconds to wait between sending updates to the console | 1000ms (1s)       |
 /// | `TOKIO_CONSOLE_RECORD_PATH`         | The file path to save a recording                                         | None              |
-/// | `RUST_LOG`                          | Configure the tracing filter. See [`EnvFilter`] for further information   | `tokio=trace`     |
+/// | `RUST_LOG`                          | Configures what events are logged events. See [`Targets`] for details.    | "error"           |
 ///
 /// ## Further customization
 ///
@@ -42,29 +57,53 @@ type ConsoleSubscriberLayer = Layered<TasksLayer, Layered<EnvFilter, Registry>>;
 /// //  .with(..potential additional layer..)
 ///     .init();
 /// ```
+///
+/// [`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/filter/struct.Targets.html
 pub fn init() {
-    build().init()
+    let fmt_filter = std::env::var("RUST_LOG")
+        .ok()
+        .and_then(|rust_log| match rust_log.parse::<Targets>() {
+            Ok(targets) => Some(targets),
+            Err(e) => {
+                eprintln!("failed to parse `RUST_LOG={:?}`: {}", rust_log, e);
+                None
+            }
+        })
+        .unwrap_or_else(|| Targets::default().with_default(LevelFilter::ERROR));
+    build()
+        .with(tracing_subscriber::fmt::layer().with_filter(fmt_filter))
+        .init()
 }
 
 /// Returns a new `tracing` [subscriber] configured with a [`TasksLayer`]
 /// and a [filter] that enables the spans and events required by the console.
 ///
+/// This function spawns the console subscriber's [`Server`] in its own Tokio
+/// runtime in a background thread.
+///
 /// Unlike [`init`], this function does not set the default subscriber, allowing
 /// additional [`Layer`]s to be added.
 ///
 /// [subscriber]: https://docs.rs/tracing/latest/tracing/subscriber/trait.Subscriber.html
-/// [filter]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
+/// [filter]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.Targets.html
 /// [`Layer`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html
+/// [`Server`]: crate::Server
 ///
 /// ## Configuration
 ///
 /// `console_subscriber::build` supports all of the environmental
-/// configuration described at [`console_subscriber::init`][init]
+/// configuration described at [`console_subscriber::init`].
 ///
 /// ## Differences from `init`
 ///
+/// Unlike [`console_subscriber::init`], this function does *not* add a
+/// [`tracing_subscriber::fmt`] layer to the configured `Subscriber`. This means
+/// that this function will not log spans and events based on the value of the
+/// `RUST_LOG` environment variable. Instead, a user-provided [`fmt::Layer`] can
+/// be added in order to customize the log format.
+///
 /// You must call [`.init()`] on the final subscriber in order to [set the
-/// subscriber as the default][set_default].
+/// subscriber as the default][default].
 ///
 /// ## Examples
 ///
@@ -76,16 +115,20 @@ pub fn init() {
 ///     .init();
 /// ```
 /// [`.init()`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/util/trait.SubscriberInitExt.html
-/// [set_default]: https://docs.rs/tracing/latest/tracing/subscriber/fn.set_default.html
+/// [default]: https://docs.rs/tracing/latest/tracing/dispatcher/index.html#setting-the-default-subscriber
+/// [sub]: https://docs.rs/tracing/latest/tracing/trait.Subscriber.html
+/// [`tracing_subscriber::fmt`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/fmt/index.html
+/// [`fmt::Layer`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/fmt/struct.Layer.html
+/// [`console_subscriber::init`]: crate::init()
 #[must_use = "build() without init() will not set the default tracing subscriber"]
 pub fn build() -> ConsoleSubscriberLayer {
     let (layer, server) = TasksLayer::builder().with_default_env().build();
 
-    let filter = EnvFilter::from_default_env()
-        .add_directive("tokio=trace".parse().unwrap())
-        .add_directive("runtime=trace".parse().unwrap());
+    let filter = Targets::new()
+        .with_target("tokio", LevelFilter::TRACE)
+        .with_target("runtime", LevelFilter::TRACE);
 
-    let console_subscriber = tracing_subscriber::registry().with(filter).with(layer);
+    let console_subscriber = tracing_subscriber::registry().with(layer.with_filter(filter));
 
     thread::Builder::new()
         .name("console_subscriber".into())

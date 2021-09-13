@@ -65,15 +65,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 async fn spawn_tasks(min: u64, max: u64) {
     loop {
         for i in min..max {
+            tracing::trace!(i, "spawning wait task");
             tokio::task::Builder::new().name("wait").spawn(wait(i));
-            tokio::time::sleep(Duration::from_secs(max) - Duration::from_secs(i)).await;
+
+            let sleep = Duration::from_secs(max) - Duration::from_secs(i);
+            tracing::trace!(?sleep, "sleeping...");
+            tokio::time::sleep(sleep).await;
         }
     }
 }
 
 #[tracing::instrument]
 async fn wait(seconds: u64) {
+    tracing::debug!("waiting...");
     tokio::time::sleep(Duration::from_secs(seconds)).await;
+    tracing::trace!("done!");
 }
 
 #[tracing::instrument]
