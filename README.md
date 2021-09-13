@@ -41,7 +41,7 @@ toolkit consists of multiple components:
 
 [gRPC]: https://grpc.io/
 [protocol buffers]: https://developers.google.com/protocol-buffers
-[the protobuf definitions]: ./proto
+[the protobuf definitions]: https://github.com/tokio-rs/console/tree/main/console-api/proto
 [`tonic`]: https://lib.rs/crates/tonic
 [Tokio]: https://tokio.rs
 
