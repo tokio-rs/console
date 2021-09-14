@@ -1,3 +1,4 @@
+use crate::state::{truncate_registry_path, Field, Metadata};
 use crate::view;
 use console_api as proto;
 use std::{
@@ -12,8 +13,6 @@ use tui::{
     style::{Color, Modifier},
     text::Span,
 };
-
-use crate::state::{Field, Metadata};
 
 #[derive(Default, Debug)]
 pub(crate) struct ResourcesState {
@@ -130,7 +129,7 @@ impl ResourcesState {
             new_list.clear();
         }
 
-        let new_resources = update.new_resources.into_iter().filter_map(|resource| {
+        let new_resources = update.new_resources.into_iter().filter_map(|mut resource| {
             if resource.id.is_none() {
                 tracing::warn!(?resource, "skipping resource with no id");
             }
@@ -153,6 +152,15 @@ impl ResourcesState {
             let id = resource.id?.id;
             let stats = ResourceStats::from_proto(stats_update.remove(&id)?, meta, styles);
             let kind = resource.kind?.into();
+
+            // remove cargo part of the file path
+            resource.location = resource.location.map(|mut l| {
+                if let Some(file) = l.file.take() {
+                    let truncated = truncate_registry_path(file);
+                    l.file = Some(truncated);
+                }
+                l
+            });
             let resource = Resource {
                 id,
                 kind,
