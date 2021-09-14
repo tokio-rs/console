@@ -779,6 +779,7 @@ impl Aggregator {
                             return;
                         }
                     };
+
                     let upd_key = FieldKey {
                         resource_id,
                         field_name,

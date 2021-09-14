@@ -1,3 +1,4 @@
+use self::resources::ResourcesState;
 use crate::view;
 use crate::warnings::Linter;
 use console_api as proto;
@@ -17,6 +18,7 @@ use tui::{
     text::Span,
 };
 
+pub mod resources;
 pub mod tasks;
 
 pub(crate) type DetailsRef = Rc<RefCell<Option<Details>>>;
@@ -27,6 +29,7 @@ pub(crate) struct State {
     last_updated_at: Option<SystemTime>,
     temporality: Temporality,
     tasks_state: TasksState,
+    resources_state: ResourcesState,
     current_task_details: DetailsRef,
     retain_for: Option<Duration>,
 }
@@ -105,6 +108,15 @@ impl State {
                 current_view.is_tasks_view(),
             )
         }
+
+        if let Some(resources_update) = update.resource_update {
+            self.resources_state.update_resources(
+                styles,
+                resources_update,
+                &self.metas,
+                current_view.is_resources_view(),
+            )
+        }
     }
 
     pub(crate) fn retain_active(&mut self) {
@@ -114,6 +126,7 @@ impl State {
 
         if let (Some(now), Some(retain_for)) = (self.last_updated_at(), self.retain_for) {
             self.tasks_state.retain_active(now, retain_for);
+            self.resources_state.retain_active(now, retain_for);
         }
     }
 
@@ -127,6 +140,10 @@ impl State {
 
     pub(crate) fn tasks_state_mut(&mut self) -> &mut TasksState {
         &mut self.tasks_state
+    }
+
+    pub(crate) fn resources_state_mut(&mut self) -> &mut ResourcesState {
+        &mut self.resources_state
     }
 
     pub(crate) fn update_task_details(&mut self, update: proto::tasks::TaskDetails) {

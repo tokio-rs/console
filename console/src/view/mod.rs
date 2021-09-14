@@ -1,4 +1,4 @@
-use crate::view::{table::TableListState, tasks::TasksTable};
+use crate::view::{resources::ResourcesTable, table::TableListState, tasks::TasksTable};
 use crate::{input, state::State};
 use std::{borrow::Cow, cmp};
 use tui::{
@@ -8,6 +8,7 @@ use tui::{
 };
 
 mod mini_histogram;
+mod resources;
 mod styles;
 mod table;
 mod task;
@@ -31,6 +32,7 @@ pub struct View {
     /// --- e.g., if the user previously selected a particular sorting, we want
     /// it to remain sorted that way when we return to it.
     tasks_list: TableListState<TasksTable>,
+    resources_list: TableListState<ResourcesTable>,
     state: ViewState,
     pub(crate) styles: Styles,
 }
@@ -38,6 +40,8 @@ pub struct View {
 pub(crate) enum ViewState {
     /// The table list of all tasks.
     TasksList,
+    /// The table list of all resources.
+    ResourcesList,
     /// Inspecting a single task instance.
     TaskInstance(self::task::TaskView),
 }
@@ -65,6 +69,12 @@ macro_rules! key {
             ..
         })
     };
+    (F($code:literal)) => {
+        input::Event::Key(input::KeyEvent {
+            code: input::KeyCode::F($code),
+            ..
+        })
+    };
 }
 
 impl View {
@@ -72,6 +82,7 @@ impl View {
         Self {
             state: ViewState::TasksList,
             tasks_list: TableListState::<TasksTable>::default(),
+            resources_list: TableListState::<ResourcesTable>::default(),
             styles,
         }
     }
@@ -93,9 +104,25 @@ impl View {
                             ));
                         }
                     }
+                    key!(F(2)) => {
+                        self.state = ResourcesList;
+                    }
                     _ => {
                         // otherwise pass on to view
                         self.tasks_list.update_input(event);
+                    }
+                }
+            }
+            ResourcesList => {
+                // The enter key changes views, so handle here since we can
+                // mutate the currently selected view.
+                match event {
+                    key!(F(1)) => {
+                        self.state = TasksList;
+                    }
+                    _ => {
+                        // otherwise pass on to view
+                        self.resources_list.update_input(event);
                     }
                 }
             }
@@ -123,10 +150,12 @@ impl View {
         area: layout::Rect,
         state: &mut State,
     ) {
-        let styles = &self.styles;
         match self.state {
             ViewState::TasksList => {
-                self.tasks_list.render(styles, frame, area, state);
+                self.tasks_list.render(&self.styles, frame, area, state);
+            }
+            ViewState::ResourcesList => {
+                self.resources_list.render(&self.styles, frame, area, state);
             }
             ViewState::TaskInstance(ref mut view) => {
                 let now = state
@@ -147,6 +176,10 @@ impl View {
 impl ViewState {
     pub(crate) fn is_tasks_view(&self) -> bool {
         matches!(self, Self::TasksList)
+    }
+
+    pub(crate) fn is_resources_view(&self) -> bool {
+        matches!(self, Self::ResourcesList)
     }
 }
 
