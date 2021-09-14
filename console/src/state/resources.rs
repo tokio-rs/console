@@ -45,6 +45,7 @@ pub(crate) struct Resource {
     stats: ResourceStats,
     target: Arc<str>,
     concrete_type: String,
+    location: Option<proto::Location>,
 }
 
 pub(crate) type ResourceRef = Weak<RefCell<Resource>>;
@@ -159,6 +160,7 @@ impl ResourcesState {
                 target: meta.target.clone(),
                 concrete_type: resource.concrete_type,
                 meta_id,
+                location: resource.location,
             };
             let resource = Rc::new(RefCell::new(resource));
             new_list.push(Rc::downgrade(&resource));
@@ -224,6 +226,13 @@ impl Resource {
 
     pub(crate) fn dropped(&self) -> bool {
         self.stats.total.is_some()
+    }
+
+    pub(crate) fn location(&self) -> String {
+        if let Some(location) = self.location.as_ref() {
+            return format!("{} ", location);
+        }
+        "unknown location".to_string()
     }
 }
 

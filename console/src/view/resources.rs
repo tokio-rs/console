@@ -24,8 +24,15 @@ impl TableList for ResourcesTable {
     type Row = Resource;
     type Sort = SortBy;
 
-    const HEADER: &'static [&'static str] =
-        &["ID", "Kind", "Total", "Target", "Type", "Attributes"];
+    const HEADER: &'static [&'static str] = &[
+        "ID",
+        "Kind",
+        "Total",
+        "Target",
+        "Type",
+        "Location",
+        "Attributes",
+    ];
 
     fn render<B: tui::backend::Backend>(
         table_list_state: &mut TableListState<Self>,
@@ -61,12 +68,14 @@ impl TableList for ResourcesTable {
         let mut kind_width = view::Width::new(Self::HEADER[1].len() as u16);
         let mut target_width = view::Width::new(Self::HEADER[3].len() as u16);
         let mut type_width = view::Width::new(Self::HEADER[4].len() as u16);
+        let mut location_width = view::Width::new(Self::HEADER[5].len() as u16);
 
         let rows = {
             let id_width = &mut id_width;
             let kind_width = &mut kind_width;
             let target_width = &mut target_width;
             let type_width = &mut type_width;
+            let location_width = &mut location_width;
 
             table_list_state
                 .sorted_items
@@ -85,6 +94,7 @@ impl TableList for ResourcesTable {
                         dur_cell(resource.total(now)),
                         Cell::from(target_width.update_str(resource.target()).to_owned()),
                         Cell::from(type_width.update_str(resource.concrete_type()).to_owned()),
+                        Cell::from(location_width.update_str(resource.location())),
                         Cell::from(Spans::from(
                             resource
                                 .formatted_attributes()
@@ -158,6 +168,7 @@ impl TableList for ResourcesTable {
             layout::Constraint::Length(DUR_LEN as u16),
             target_width.constraint(),
             type_width.constraint(),
+            location_width.constraint(),
             attributes_width,
         ];
 
