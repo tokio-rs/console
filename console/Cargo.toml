@@ -1,11 +1,9 @@
 [package]
-name = "console"
+name = "tokio-console"
 version = "0.1.0"
 authors = ["Eliza Weisman <eliza@buoyant.io>", "David Barsky <me@davidbarsky.com>"]
 edition = "2018"
 repository = "https://github.com/tokio-rs/console"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 atty = "0.2"

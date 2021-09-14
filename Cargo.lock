@@ -238,31 +238,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "console"
-version = "0.1.0"
-dependencies = [
- "atty",
- "chrono",
- "clap",
- "color-eyre",
- "console-api",
- "crossterm",
- "futures",
- "h2",
- "hdrhistogram",
- "humantime",
- "once_cell",
- "prost-types",
- "regex",
- "tokio",
- "tonic",
- "tracing",
- "tracing-journald",
- "tracing-subscriber",
- "tui",
-]
-
-[[package]]
 name = "console-api"
 version = "0.1.0"
 dependencies = [
@@ -1353,6 +1328,31 @@ dependencies = [
  "tokio-macros",
  "tracing",
  "winapi",
+]
+
+[[package]]
+name = "tokio-console"
+version = "0.1.0"
+dependencies = [
+ "atty",
+ "chrono",
+ "clap",
+ "color-eyre",
+ "console-api",
+ "crossterm",
+ "futures",
+ "h2",
+ "hdrhistogram",
+ "humantime",
+ "once_cell",
+ "prost-types",
+ "regex",
+ "tokio",
+ "tonic",
+ "tracing",
+ "tracing-journald",
+ "tracing-subscriber",
+ "tui",
 ]
 
 [[package]]
