@@ -2,7 +2,7 @@
   command = """
     rustup install nightly --profile minimal \
         && cargo doc --no-deps --all-features -p console-subscriber -p console-api \
-        && cargo doc --no-deps --all-features --document-private-items -p console
+        && cargo doc --no-deps --all-features --document-private-items -p tokio-console
     """
   environment = { RUSTDOCFLAGS= "--cfg docsrs -D warnings" }
   publish = "target/doc"
