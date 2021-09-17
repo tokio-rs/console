@@ -143,7 +143,7 @@ impl Warn<Task> for LostWaker {
     }
 
     fn check(&self, task: &Task) -> bool {
-        !task.is_completed() && task.waker_count() == 0
+        !task.is_completed() && task.waker_count() == 0 && !task.is_running() && !task.is_awakened()
     }
 
     fn format(&self, _: &Task) -> String {

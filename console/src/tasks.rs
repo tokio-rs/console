@@ -407,6 +407,13 @@ impl Task {
         self.self_wakes().percent_of(self.wakes())
     }
 
+    /// Returns whether this task has signaled via its waker to run again.
+    ///
+    /// Once the task has been polled, this is changed back to false.
+    pub(crate) fn is_awakened(&self) -> bool {
+        self.last_wake() > self.stats.last_poll_started
+    }
+
     pub(crate) fn warnings(&self) -> &[Linter<Task>] {
         &self.warnings[..]
     }
