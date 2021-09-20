@@ -40,7 +40,7 @@ message Resource {
     // The kind of resource (e.g timer, mutex)
     Kind kind = 4;
     // The location in code where the resource was created.
-    common.Location location = 4;
+    common.Location location = 5;
 
     message Kind {
         oneof kind {
