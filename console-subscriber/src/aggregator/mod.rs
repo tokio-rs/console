@@ -772,7 +772,13 @@ impl Aggregator {
             } => {
                 let resource_id = self.ids.id_for(resource_id);
                 if let Some(mut stats) = self.resource_stats.update(&resource_id) {
-                    let field_name = update.field.name.clone().expect("field misses name");
+                    let field_name = match update.field.name.clone() {
+                        Some(name) => name,
+                        None => {
+                            tracing::warn!(?update.field, "field missing name, skipping...");
+                            return;
+                        }
+                    };
                     let upd_key = FieldKey {
                         resource_id,
                         field_name,

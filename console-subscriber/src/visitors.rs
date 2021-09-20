@@ -44,9 +44,10 @@ pub(crate) struct FieldVisitor {
 }
 
 /// Used to extract the fields needed to construct
-/// an Event::Spawn from the metadata of a tracing span
+/// an `Event::Spawn` from the metadata of a tracing span
 /// that has the following shape:
 ///
+/// ```
 /// tracing::trace_span!(
 ///     target: "tokio::task",
 ///     "runtime.spawn",
@@ -56,10 +57,14 @@ pub(crate) struct FieldVisitor {
 ///     loc.line = 555,
 ///     loc.col = 5,
 /// );
+/// ```
 ///
-/// Fields:
-/// concrete_type - indicates the concrete rust type for this resource
-/// kind - indicates the type of resource (i.e. timer, sync, io )
+/// # Fields
+///
+/// This visitor has special behavior for `loc.line`, `loc.file`, and `loc.col`
+/// fields, which are interpreted as a Rust source code location where the task
+/// was spawned, if they are present. Other fields are recorded as arbitrary
+/// key-value pairs.
 pub(crate) struct TaskVisitor {
     field_visitor: FieldVisitor,
     line: Option<u32>,
