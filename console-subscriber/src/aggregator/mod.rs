@@ -150,14 +150,15 @@ struct Resource {
     metadata: &'static Metadata<'static>,
     concrete_type: String,
     kind: resource::Kind,
+    location: Option<proto::Location>,
 }
 
 /// Represents a key for a `proto::field::Name`. Because the
 /// proto::field::Name might not be unique we also include the
-/// metadata id in this key
+/// resource id in this key
 #[derive(Hash, PartialEq, Eq)]
 struct FieldKey {
-    meta_id: u64,
+    resource_id: u64,
     field_name: proto::field::Name,
 }
 
@@ -173,6 +174,7 @@ struct Task {
     id: Id,
     metadata: &'static Metadata<'static>,
     fields: Vec<proto::Field>,
+    location: Option<proto::Location>,
 }
 
 struct TaskStats {
@@ -590,7 +592,7 @@ impl Aggregator {
                 metadata,
                 at,
                 fields,
-                ..
+                location,
             } => {
                 let id = self.ids.id_for(id);
                 self.tasks.insert(
@@ -599,6 +601,7 @@ impl Aggregator {
                         id,
                         metadata,
                         fields,
+                        location,
                         // TODO: parents
                     },
                 );
@@ -703,6 +706,7 @@ impl Aggregator {
                 metadata,
                 kind,
                 concrete_type,
+                location,
                 ..
             } => {
                 let id = self.ids.id_for(id);
@@ -713,6 +717,7 @@ impl Aggregator {
                         kind,
                         metadata,
                         concrete_type,
+                        location,
                     },
                 );
 
@@ -767,7 +772,11 @@ impl Aggregator {
             } => {
                 let resource_id = self.ids.id_for(resource_id);
                 if let Some(mut stats) = self.resource_stats.update(&resource_id) {
-                    let upd_key = (&update.field).into();
+                    let field_name = update.field.name.clone().expect("field misses name");
+                    let upd_key = FieldKey {
+                        resource_id,
+                        field_name,
+                    };
                     match stats.attributes.entry(upd_key) {
                         Entry::Occupied(ref mut attr) => {
                             update_attribute(attr.get_mut(), update);
@@ -860,6 +869,7 @@ impl ToProto for Task {
             metadata: Some(self.metadata.into()),
             parents: Vec::new(), // TODO: implement parents nicely
             fields: self.fields.clone(),
+            location: self.location.clone(),
         }
     }
 }
@@ -890,6 +900,7 @@ impl ToProto for Resource {
             kind: Some(self.kind.clone()),
             metadata: Some(self.metadata.into()),
             concrete_type: self.concrete_type.clone(),
+            location: self.location.clone(),
         }
     }
 }
@@ -929,21 +940,6 @@ impl ToProto for AsyncOpStats {
             dropped_at: self.dropped_at.map(Into::into),
             resource_id: self.resource_id.map(Into::into),
             task_id: self.task_id.map(Into::into),
-        }
-    }
-}
-
-impl From<&proto::Field> for FieldKey {
-    fn from(field: &proto::Field) -> Self {
-        let meta_id = field
-            .metadata_id
-            .as_ref()
-            .expect("field misses metadata id")
-            .id;
-        let field_name = field.name.clone().expect("field misses name");
-        FieldKey {
-            meta_id,
-            field_name,
         }
     }
 }

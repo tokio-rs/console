@@ -30,7 +30,7 @@ use aggregator::Aggregator;
 pub use builder::Builder;
 use callsites::Callsites;
 use stack::SpanStack;
-use visitors::{AsyncOpVisitor, FieldVisitor, ResourceVisitor, WakerVisitor};
+use visitors::{AsyncOpVisitor, ResourceVisitor, TaskVisitor, WakerVisitor};
 
 pub use init::{build, init};
 
@@ -110,6 +110,7 @@ enum Event {
         metadata: &'static Metadata<'static>,
         at: SystemTime,
         fields: Vec<proto::Field>,
+        location: Option<proto::Location>,
     },
     Enter {
         id: span::Id,
@@ -134,6 +135,7 @@ enum Event {
         at: SystemTime,
         concrete_type: String,
         kind: resource::Kind,
+        location: Option<proto::Location>,
     },
     PollOp {
         metadata: &'static Metadata<'static>,
@@ -355,18 +357,20 @@ where
         let metadata = attrs.metadata();
         if self.is_spawn(metadata) {
             let at = SystemTime::now();
-            let mut field_visitor = FieldVisitor::new(metadata.into());
-            attrs.record(&mut field_visitor);
+            let mut task_visitor = TaskVisitor::new(metadata.into());
+            attrs.record(&mut task_visitor);
+            let (fields, location) = task_visitor.result();
             self.send(Event::Spawn {
                 id: id.clone(),
                 at,
                 metadata,
-                fields: field_visitor.result(),
+                fields,
+                location,
             });
         } else if self.is_resource(metadata) {
             let mut resource_visitor = ResourceVisitor::default();
             attrs.record(&mut resource_visitor);
-            if let Some((concrete_type, kind)) = resource_visitor.result() {
+            if let Some((concrete_type, kind, location)) = resource_visitor.result() {
                 let at = SystemTime::now();
                 self.send(Event::Resource {
                     id: id.clone(),
@@ -374,6 +378,7 @@ where
                     at,
                     concrete_type,
                     kind,
+                    location,
                 });
             } // else unknown resource span format
         } else if self.is_async_op(metadata) {

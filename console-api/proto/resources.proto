@@ -37,8 +37,10 @@ message Resource {
     common.MetaId metadata = 2;
     // The resources's concrete rust type.
     string concrete_type = 3;
+    // The location in code where the resource was created.
+    common.Location location = 4;
     // The kind of resource (e.g timer, mutex)
-    Kind kind = 4;
+    Kind kind = 5;
 
     message Kind {
         oneof kind {
