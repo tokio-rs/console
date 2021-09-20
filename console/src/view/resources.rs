@@ -176,7 +176,7 @@ impl TableList for ResourcesTable {
             .header(header)
             .block(block)
             .widths(widths)
-            .highlight_symbol(">> ")
+            .highlight_symbol(view::TABLE_HIGHLIGHT_SYMBOL)
             .highlight_style(Style::default().add_modifier(style::Modifier::BOLD));
 
         frame.render_stateful_widget(table, tasks_area, &mut table_list_state.table_state);

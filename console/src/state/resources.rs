@@ -154,7 +154,7 @@ impl ResourcesState {
             let kind = resource.kind?.into();
 
             // remove cargo part of the file path
-            resource.location = resource.location.map(|mut l| {
+            let location = resource.location.take().map(|mut l| {
                 if let Some(file) = l.file.take() {
                     let truncated = truncate_registry_path(file);
                     l.file = Some(truncated);
@@ -168,7 +168,7 @@ impl ResourcesState {
                 target: meta.target.clone(),
                 concrete_type: resource.concrete_type,
                 meta_id,
-                location: resource.location,
+                location,
             };
             let resource = Rc::new(RefCell::new(resource));
             new_list.push(Rc::downgrade(&resource));
