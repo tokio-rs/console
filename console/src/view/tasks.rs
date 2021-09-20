@@ -1,89 +1,40 @@
 use crate::{
-    input,
-    tasks::{self, TaskRef, TaskState},
-    view::{self, bold},
+    state::{
+        tasks::{SortBy, Task, TaskState},
+        State,
+    },
+    view::{
+        self, bold,
+        table::{self, TableList, TableListState},
+        DUR_LEN, DUR_PRECISION,
+    },
 };
-use std::convert::TryFrom;
 use tui::{
     layout,
     style::{self, Color, Style},
-    text::{self, Span, Spans, Text},
-    widgets::{self, Cell, ListItem, Paragraph, Row, Table, TableState},
+    text::{Span, Spans, Text},
+    widgets::{self, Cell, ListItem, Paragraph, Row, Table},
 };
 
-#[derive(Debug)]
-pub(crate) struct List {
-    sorted_tasks: Vec<TaskRef>,
-    sort_by: tasks::SortBy,
-    table_state: TableState,
-    selected_column: usize,
-    sort_descending: bool,
-}
+#[derive(Debug, Default)]
+pub(crate) struct TasksTable {}
 
-impl List {
+impl TableList for TasksTable {
+    type Row = Task;
+    type Sort = SortBy;
+
     const HEADER: &'static [&'static str] = &[
         "Warn", "ID", "State", "Name", "Total", "Busy", "Idle", "Polls", "Target", "Fields",
     ];
 
-    pub(crate) fn len(&self) -> usize {
-        self.sorted_tasks.len()
-    }
-
-    pub(crate) fn update_input(&mut self, event: input::Event) {
-        // Clippy likes to remind us that we could use an `if let` here, since
-        // the match only has one arm...but this is a `match` because I
-        // anticipate adding more cases later...
-        #[allow(clippy::single_match)]
-        match event {
-            input::Event::Key(event) => self.key_input(event),
-            _ => {
-                // do nothing for now
-                // TODO(eliza): mouse input would be cool...
-            }
-        }
-    }
-
-    fn key_input(&mut self, input::KeyEvent { code, .. }: input::KeyEvent) {
-        use input::KeyCode::*;
-        match code {
-            Left => {
-                if self.selected_column == 0 {
-                    self.selected_column = Self::HEADER.len() - 1;
-                } else {
-                    self.selected_column -= 1;
-                }
-            }
-            Right => {
-                if self.selected_column == Self::HEADER.len() - 1 {
-                    self.selected_column = 0;
-                } else {
-                    self.selected_column += 1;
-                }
-            }
-            Char('i') => self.sort_descending = !self.sort_descending,
-            Down => self.scroll_next(),
-            Up => self.scroll_prev(),
-            _ => {} // do nothing for now...
-        }
-        if let Ok(sort_by) = tasks::SortBy::try_from(self.selected_column) {
-            self.sort_by = sort_by;
-        }
-    }
-
-    pub(crate) fn render<B: tui::backend::Backend>(
-        &mut self,
+    fn render<B: tui::backend::Backend>(
+        table_list_state: &mut TableListState<Self>,
         styles: &view::Styles,
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
-        state: &mut tasks::State,
+        state: &mut State,
     ) {
-        const STATE_LEN: u16 = List::HEADER[2].len() as u16;
-        const DUR_LEN: usize = 10;
-        // This data is only updated every second, so it doesn't make a ton of
-        // sense to have a lot of precision in timestamps (and this makes sure
-        // there's room for the unit!)
-        const DUR_PRECISION: usize = 4;
-
+        let state_len: u16 = Self::HEADER[2].len() as u16;
         let now = if let Some(now) = state.last_updated_at() {
             now
         } else {
@@ -91,8 +42,13 @@ impl List {
             return;
         };
 
-        self.sorted_tasks.extend(state.take_new_tasks());
-        self.sort_by.sort(now, &mut self.sorted_tasks);
+        table_list_state
+            .sorted_items
+            .extend(state.tasks_state_mut().take_new_tasks());
+
+        table_list_state
+            .sort_by
+            .sort(now, &mut table_list_state.sorted_items);
 
         let dur_cell = |dur: std::time::Duration| -> Cell<'static> {
             Cell::from(styles.time_units(format!(
@@ -109,6 +65,7 @@ impl List {
         let mut name_width = view::Width::new(Self::HEADER[3].len() as u16);
         let mut polls_width = view::Width::new(Self::HEADER[7].len() as u16);
         let mut target_width = view::Width::new(Self::HEADER[8].len() as u16);
+
         let mut num_idle = 0;
         let mut num_running = 0;
         let rows = {
@@ -120,56 +77,59 @@ impl List {
             let num_running = &mut num_running;
             let num_idle = &mut num_idle;
 
-            self.sorted_tasks.iter().filter_map(move |task| {
-                let task = task.upgrade()?;
-                let task = task.borrow();
-                let state = task.state();
+            table_list_state
+                .sorted_items
+                .iter()
+                .filter_map(move |task| {
+                    let task = task.upgrade()?;
+                    let task = task.borrow();
+                    let state = task.state();
 
-                // Count task states
-                match state {
-                    TaskState::Running => *num_running += 1,
-                    TaskState::Idle => *num_idle += 1,
-                    _ => {}
-                };
-                let n_warnings = task.warnings().len();
-                let warnings = if n_warnings > 0 {
-                    let n_warnings = n_warnings.to_string();
-                    warn_width.update_len(n_warnings.len() + 2); // add 2 for the warning icon + whitespace
-                    Cell::from(Spans::from(vec![
-                        styles.warning_narrow(),
-                        Span::from(n_warnings),
-                    ]))
-                } else {
-                    Cell::from("")
-                };
+                    // Count task states
+                    match state {
+                        TaskState::Running => *num_running += 1,
+                        TaskState::Idle => *num_idle += 1,
+                        _ => {}
+                    };
+                    let n_warnings = task.warnings().len();
+                    let warnings = if n_warnings > 0 {
+                        let n_warnings = n_warnings.to_string();
+                        warn_width.update_len(n_warnings.len() + 2); // add 2 for the warning icon + whitespace
+                        Cell::from(Spans::from(vec![
+                            styles.warning_narrow(),
+                            Span::from(n_warnings),
+                        ]))
+                    } else {
+                        Cell::from("")
+                    };
 
-                let mut row = Row::new(vec![
-                    warnings,
-                    Cell::from(id_width.update_str(format!(
-                        "{:>width$}",
-                        task.id(),
-                        width = id_width.chars() as usize
-                    ))),
-                    Cell::from(task.state().render(styles)),
-                    Cell::from(name_width.update_str(task.name().unwrap_or("").to_string())),
-                    dur_cell(task.total(now)),
-                    dur_cell(task.busy(now)),
-                    dur_cell(task.idle(now)),
-                    Cell::from(polls_width.update_str(task.total_polls().to_string())),
-                    Cell::from(target_width.update_str(task.target()).to_owned()),
-                    Cell::from(Spans::from(
-                        task.formatted_fields()
-                            .iter()
-                            .flatten()
-                            .cloned()
-                            .collect::<Vec<_>>(),
-                    )),
-                ]);
-                if state == TaskState::Completed {
-                    row = row.style(styles.terminated());
-                }
-                Some(row)
-            })
+                    let mut row = Row::new(vec![
+                        warnings,
+                        Cell::from(id_width.update_str(format!(
+                            "{:>width$}",
+                            task.id(),
+                            width = id_width.chars() as usize
+                        ))),
+                        Cell::from(task.state().render(styles)),
+                        Cell::from(name_width.update_str(task.name().unwrap_or("").to_string())),
+                        dur_cell(task.total(now)),
+                        dur_cell(task.busy(now)),
+                        dur_cell(task.idle(now)),
+                        Cell::from(polls_width.update_str(task.total_polls().to_string())),
+                        Cell::from(target_width.update_str(task.target()).to_owned()),
+                        Cell::from(Spans::from(
+                            task.formatted_fields()
+                                .iter()
+                                .flatten()
+                                .cloned()
+                                .collect::<Vec<_>>(),
+                        )),
+                    ]);
+                    if state == TaskState::Completed {
+                        row = row.style(styles.terminated());
+                    }
+                    Some(row)
+                })
         };
 
         let (selected_style, header_style) = if let Some(cyan) = styles.color(Color::Cyan) {
@@ -184,7 +144,7 @@ impl List {
 
         let header = Row::new(Self::HEADER.iter().enumerate().map(|(idx, &value)| {
             let cell = Cell::from(value);
-            if idx == self.selected_column {
+            if idx == table_list_state.selected_column {
                 cell.style(selected_style)
             } else {
                 cell
@@ -193,14 +153,14 @@ impl List {
         .height(1)
         .style(header_style);
 
-        let table = if self.sort_descending {
+        let table = if table_list_state.sort_descending {
             Table::new(rows)
         } else {
             Table::new(rows.rev())
         };
 
         let block = styles.border_block().title(vec![
-            bold(format!("Tasks ({}) ", self.len())),
+            bold(format!("Tasks ({}) ", table_list_state.len())),
             TaskState::Running.render(styles),
             Span::from(format!(" Running ({}) ", num_running)),
             TaskState::Idle.render(styles),
@@ -219,6 +179,7 @@ impl List {
             + target_width.chars();
         */
         let warnings = state
+            .tasks_state()
             .warnings()
             .map(|warning| {
                 ListItem::new(Text::from(Spans::from(vec![
@@ -232,6 +193,7 @@ impl List {
         let layout = layout::Layout::default()
             .direction(layout::Direction::Vertical)
             .margin(0);
+
         let (controls_area, tasks_area, warnings_area) = if warnings.is_empty() {
             let chunks = layout
                 .constraints(
@@ -267,7 +229,7 @@ impl List {
         let widths = &[
             warn_width.constraint(),
             id_width.constraint(),
-            layout::Constraint::Length(STATE_LEN),
+            layout::Constraint::Length(state_len),
             name_width.constraint(),
             layout::Constraint::Length(DUR_LEN as u16),
             layout::Constraint::Length(DUR_LEN as u16),
@@ -281,26 +243,11 @@ impl List {
             .header(header)
             .block(block)
             .widths(widths)
-            .highlight_symbol(">> ")
+            .highlight_symbol(view::TABLE_HIGHLIGHT_SYMBOL)
             .highlight_style(Style::default().add_modifier(style::Modifier::BOLD));
 
-        frame.render_stateful_widget(table, tasks_area, &mut self.table_state);
-
-        let controls = tui::text::Text::from(Spans::from(vec![
-            Span::raw("controls: "),
-            bold(styles.if_utf8("\u{2190}\u{2192}", "left, right")),
-            text::Span::raw(" = select column (sort), "),
-            bold(styles.if_utf8("\u{2191}\u{2193}", "up, down")),
-            text::Span::raw(" = scroll, "),
-            bold(styles.if_utf8("\u{21B5}", "enter")),
-            text::Span::raw(" = task details, "),
-            bold("i"),
-            text::Span::raw(" = invert sort (highest/lowest), "),
-            bold("q"),
-            text::Span::raw(" = quit"),
-        ]));
-
-        frame.render_widget(Paragraph::new(controls), controls_area);
+        frame.render_stateful_widget(table, tasks_area, &mut table_list_state.table_state);
+        frame.render_widget(Paragraph::new(table::controls(styles)), controls_area);
 
         if let Some(area) = warnings_area {
             let block = styles
@@ -309,73 +256,8 @@ impl List {
             frame.render_widget(widgets::List::new(warnings).block(block), area);
         }
 
-        self.sorted_tasks.retain(|t| t.upgrade().is_some());
-    }
-
-    fn scroll_with(&mut self, f: impl Fn(&Vec<TaskRef>, usize) -> usize) {
-        // If the list of sorted tasks is empty, don't try to scroll...
-        if self.sorted_tasks.is_empty() {
-            self.table_state.select(None);
-            return;
-        }
-
-        // Increment the currently selected row, or if no row is selected, start
-        // at the first row.
-        let i = self.table_state.selected().unwrap_or(0);
-        let i = f(&self.sorted_tasks, i);
-        self.table_state.select(Some(i));
-    }
-
-    fn scroll_next(&mut self) {
-        self.scroll_with(|tasks, i| {
-            if i >= tasks.len() - 1 {
-                // If the last task is currently selected, wrap around to the
-                // first task.
-                0
-            } else {
-                // Otherwise, increase the selected index by 1.
-                i + 1
-            }
-        });
-    }
-
-    fn scroll_prev(&mut self) {
-        self.scroll_with(|tasks, i| {
-            if i == 0 {
-                // If the first task is currently selected, wrap around to the
-                // last task.
-                tasks.len() - 1
-            } else {
-                // Otherwise, decrease the selected task by 1.
-                i - 1
-            }
-        })
-    }
-
-    pub(crate) fn selected_task(&self) -> TaskRef {
-        self.table_state
-            .selected()
-            .map(|i| {
-                let selected = if self.sort_descending {
-                    i
-                } else {
-                    self.sorted_tasks.len() - i - 1
-                };
-                self.sorted_tasks[selected].clone()
-            })
-            .unwrap_or_default()
-    }
-}
-
-impl Default for List {
-    fn default() -> Self {
-        let sort_by = tasks::SortBy::default();
-        List {
-            sorted_tasks: Default::default(),
-            sort_by,
-            table_state: Default::default(),
-            selected_column: sort_by as usize,
-            sort_descending: false,
-        }
+        table_list_state
+            .sorted_items
+            .retain(|t| t.upgrade().is_some());
     }
 }

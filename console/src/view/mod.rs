@@ -1,4 +1,5 @@
-use crate::{input, tasks::State};
+use crate::view::{table::TableListState, tasks::TasksTable};
+use crate::{input, state::State};
 use std::{borrow::Cow, cmp};
 use tui::{
     layout,
@@ -8,9 +9,18 @@ use tui::{
 
 mod mini_histogram;
 mod styles;
+mod table;
 mod task;
 mod tasks;
 pub(crate) use self::styles::{Palette, Styles};
+pub(crate) use self::table::SortBy;
+
+const DUR_LEN: usize = 10;
+// This data is only updated every second, so it doesn't make a ton of
+// sense to have a lot of precision in timestamps (and this makes sure
+// there's room for the unit!)
+const DUR_PRECISION: usize = 4;
+const TABLE_HIGHLIGHT_SYMBOL: &str = ">> ";
 
 pub struct View {
     /// The tasks list is stored separately from the currently selected state,
@@ -20,12 +30,12 @@ pub struct View {
     /// details view), we want to leave the task list's state the way we left it
     /// --- e.g., if the user previously selected a particular sorting, we want
     /// it to remain sorted that way when we return to it.
-    list: tasks::List,
+    tasks_list: TableListState<TasksTable>,
     state: ViewState,
     pub(crate) styles: Styles,
 }
 
-enum ViewState {
+pub(crate) enum ViewState {
     /// The table list of all tasks.
     TasksList,
     /// Inspecting a single task instance.
@@ -61,12 +71,12 @@ impl View {
     pub fn new(styles: Styles) -> Self {
         Self {
             state: ViewState::TasksList,
-            list: tasks::List::default(),
+            tasks_list: TableListState::<TasksTable>::default(),
             styles,
         }
     }
 
-    pub(crate) fn update_input(&mut self, event: input::Event, tasks: &State) -> UpdateKind {
+    pub(crate) fn update_input(&mut self, event: input::Event, state: &State) -> UpdateKind {
         use ViewState::*;
         let mut update_kind = UpdateKind::Other;
         match self.state {
@@ -75,15 +85,17 @@ impl View {
                 // mutate the currently selected view.
                 match event {
                     key!(Enter) => {
-                        if let Some(task) = self.list.selected_task().upgrade() {
+                        if let Some(task) = self.tasks_list.selected_item().upgrade() {
                             update_kind = UpdateKind::SelectTask(task.borrow().id());
-                            self.state =
-                                TaskInstance(self::task::TaskView::new(task, tasks.details_ref()));
+                            self.state = TaskInstance(self::task::TaskView::new(
+                                task,
+                                state.task_details_ref(),
+                            ));
                         }
                     }
                     _ => {
                         // otherwise pass on to view
-                        self.list.update_input(event);
+                        self.tasks_list.update_input(event);
                     }
                 }
             }
@@ -109,21 +121,32 @@ impl View {
         &mut self,
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
-        tasks: &mut crate::tasks::State,
+        state: &mut State,
     ) {
+        let styles = &self.styles;
         match self.state {
             ViewState::TasksList => {
-                self.list.render(&self.styles, frame, area, tasks);
+                self.tasks_list.render(styles, frame, area, state);
             }
             ViewState::TaskInstance(ref mut view) => {
-                let now = tasks
+                let now = state
                     .last_updated_at()
                     .expect("task view implies we've received an update");
                 view.render(&self.styles, frame, area, now);
             }
         }
 
-        tasks.retain_active();
+        state.retain_active();
+    }
+
+    pub(crate) fn current_view(&self) -> &ViewState {
+        &self.state
+    }
+}
+
+impl ViewState {
+    pub(crate) fn is_tasks_view(&self) -> bool {
+        matches!(self, Self::TasksList)
     }
 }
 
