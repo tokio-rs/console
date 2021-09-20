@@ -146,10 +146,7 @@ impl View {
 
 impl ViewState {
     pub(crate) fn is_tasks_view(&self) -> bool {
-        if let Self::TasksList = self {
-            return true;
-        }
-        false
+        matches!(self, Self::TasksList)
     }
 }
 
