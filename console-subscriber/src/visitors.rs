@@ -53,7 +53,7 @@ pub(crate) struct FieldVisitor {
 ///     "runtime.spawn",
 ///     kind = "local",
 ///     task.name = "some_name",
-///     loc.file = "some_file.rs"
+///     loc.file = "some_file.rs",
 ///     loc.line = 555,
 ///     loc.col = 5,
 /// );
