@@ -105,7 +105,16 @@ notes:
   [build]
   rustflags = ["--cfg", "tokio_unstable"]
   ```
-* the `tokio::task` [`tracing` target] must be enabled
+* the `tokio` and `runtime` [`tracing` targets] must be enabled at the [`TRACE`
+  level].
+
+  if you're using the using [`console_subscriber::init()`][init] or
+  [`console_subscriber::build()`][build] APIs, these targets are enabled
+  automatically.
+
+  if you are manually configuring the `tracing` subscriber using the
+  [`EnvFilter`] or [`Targets`] filters from [`tracing-subscriber`], add
+  `"tokio=trace,runtime=trace"` to your filter configuration.
 
 to **run the console command line tool**, simply
 ```shell
@@ -134,5 +143,10 @@ cargo run --example $name
 [`console-api`]: ./console-api
 [`console-subscriber`]: ./console-subscriber
 [`console`]: ./console
-[`Layer`]: https://docs.rs/tracing-subscriber/0.2.18/tracing_subscriber/layer/trait.Layer.html
-[`tracing` target]: https://docs.rs/tracing/0.1.26/tracing/struct.Metadata.html
+[`Layer`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html
+[`tracing` target]: https://docs.rs/tracing/latest/tracing/struct.Metadata.html
+[`TRACE` level]: https://docs.rs/tracing/latest/tracing/struct.Level.html#associatedconstant.TRACE
+[build]: https://tokio-console.netlify.app/console_subscriber/fn.build.html
+[init]: https://tokio-console.netlify.app/console_subscriber/fn.init.html
+[`EnvFilter`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
+[`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.Targets.html
