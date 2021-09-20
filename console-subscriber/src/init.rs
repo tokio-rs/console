@@ -2,13 +2,13 @@ use crate::TasksLayer;
 use std::thread;
 use tokio::runtime;
 use tracing_subscriber::{
-    filter::{Filtered, LevelFilter, Targets},
+    filter::{FilterFn, Filtered, LevelFilter, Targets},
     layer::Layered,
     prelude::*,
     Registry,
 };
 
-type ConsoleSubscriberLayer = Layered<Filtered<TasksLayer, Targets, Registry>, Registry>;
+type ConsoleSubscriberLayer = Layered<Filtered<TasksLayer, FilterFn, Registry>, Registry>;
 
 /// Initializes the console [tracing `Subscriber`][sub] and starts the console
 /// subscriber [`Server`] on its own background thread.
@@ -122,12 +122,20 @@ pub fn init() {
 /// [`console_subscriber::init`]: crate::init()
 #[must_use = "build() without init() will not set the default tracing subscriber"]
 pub fn build() -> ConsoleSubscriberLayer {
+    fn console_filter(meta: &tracing::Metadata<'_>) -> bool {
+        // events will have *targets* beginning with "runtime"
+        if meta.is_event() {
+            return meta.target().starts_with("runtime");
+        }
+
+        // spans will have *names* beginning with "runtime". for backwards
+        // compatibility with older Tokio versions, enable anything with the `tokio`
+        // target as well.
+        meta.name().starts_with("runtime.") || meta.target().starts_with("tokio")
+    }
+
     let (layer, server) = TasksLayer::builder().with_default_env().build();
-
-    let filter = Targets::new()
-        .with_target("tokio", LevelFilter::TRACE)
-        .with_target("runtime", LevelFilter::TRACE);
-
+    let filter = FilterFn::new(console_filter as for<'r, 's> fn(&'r tracing::Metadata<'s>) -> bool);
     let console_subscriber = tracing_subscriber::registry().with(layer.with_filter(filter));
 
     thread::Builder::new()
