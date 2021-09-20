@@ -1,6 +1,9 @@
 use crate::{
     input,
-    tasks::{Details, DetailsRef, Task},
+    state::{
+        tasks::{Details, Task},
+        DetailsRef,
+    },
     util::Percentage,
     view::{
         self, bold,

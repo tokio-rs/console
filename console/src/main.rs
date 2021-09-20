@@ -1,10 +1,9 @@
 use color_eyre::{eyre::eyre, Help, SectionExt};
 use console_api::tasks::TaskDetails;
-use tasks::State;
+use state::State;
 
 use clap::Clap;
 use futures::stream::StreamExt;
-use std::convert::TryInto;
 use tokio::sync::{mpsc, watch};
 use tui::{
     layout::{Constraint, Direction, Layout},
@@ -18,7 +17,7 @@ use crate::view::UpdateKind;
 mod config;
 mod conn;
 mod input;
-mod tasks;
+mod state;
 mod term;
 mod util;
 mod view;
@@ -45,10 +44,10 @@ async fn main() -> color_eyre::Result<()> {
     // A channel to send the task details update stream (no need to keep outdated details in the memory)
     let (details_tx, mut details_rx) = mpsc::channel::<TaskDetails>(2);
 
-    let mut tasks = State::default()
+    let mut state = State::default()
         // TODO(eliza): allow configuring the list of linters via the
         // CLI/possibly a config file?
-        .with_linters(vec![
+        .with_task_linters(vec![
             warnings::Linter::new(warnings::SelfWakePercent::default()),
             warnings::Linter::new(warnings::LostWaker),
         ])
@@ -67,16 +66,16 @@ async fn main() -> color_eyre::Result<()> {
                 }
 
                 if input::is_space(&input) {
-                    if tasks.is_paused() {
+                    if state.is_paused() {
                         conn.resume().await;
-                        tasks.resume();
+                        state.resume();
                     } else {
                         conn.pause().await;
-                        tasks.pause();
+                        state.pause();
                     }
                 }
 
-                let update_kind = view.update_input(input, &tasks);
+                let update_kind = view.update_input(input, &state);
                 // Using the result of update_input to manage the details watcher task
                 let _ = update_tx.send(update_kind);
                 match update_kind {
@@ -87,25 +86,22 @@ async fn main() -> color_eyre::Result<()> {
                             },
                             Err(error) => {
                                 tracing::warn!(%error, "error watching task details");
-                                tasks.unset_task_details();
+                                state.unset_task_details();
                         }
                         }
                     },
                     UpdateKind::ExitTaskView => {
-                        tasks.unset_task_details();
+                        state.unset_task_details();
                     }
                     _ => {}
                 }
             },
             instrument_update = conn.next_update() => {
-                let now = instrument_update.now.map(|v| v.try_into().unwrap());
-                if let Some(task_update) = instrument_update.task_update {
-                    tasks.update_tasks(&view.styles, task_update, instrument_update.new_metadata, now);
-                }
+                state.update(&view.styles,view.current_view(), instrument_update);
             }
             details_update = details_rx.recv() => {
                 if let Some(details_update) = details_update {
-                    tasks.update_task_details(details_update);
+                    state.update_task_details(details_update);
                 }
             },
         }
@@ -117,14 +113,14 @@ async fn main() -> color_eyre::Result<()> {
                 .split(f.size());
 
             let mut header_text = conn.render(&view.styles);
-            if tasks.is_paused() {
+            if state.is_paused() {
                 header_text
                     .0
                     .push(Span::styled(" PAUSED", view.styles.fg(Color::Red)));
             }
             let header = Paragraph::new(header_text).wrap(Wrap { trim: true });
             f.render_widget(header, chunks[0]);
-            view.render(f, chunks[1], &mut tasks);
+            view.render(f, chunks[1], &mut state);
         })?;
     }
 }
