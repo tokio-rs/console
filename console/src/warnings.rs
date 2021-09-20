@@ -1,4 +1,4 @@
-use crate::tasks::Task;
+use crate::state::tasks::Task;
 use std::{fmt::Debug, rc::Rc};
 
 /// A warning for a particular type of monitored entity (e.g. task or resource).
