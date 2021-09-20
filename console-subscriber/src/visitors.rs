@@ -10,6 +10,10 @@ use tracing_core::{
     span,
 };
 
+const LOCATION_FILE: &str = "loc.file";
+const LOCATION_LINE: &str = "loc.line";
+const LOCATION_COLUMN: &str = "loc.col";
+
 /// Used to extract the fields needed to construct
 /// an Event::Resource from the metadata of a tracing span
 /// that has the following shape:
@@ -27,6 +31,9 @@ use tracing_core::{
 pub(crate) struct ResourceVisitor {
     concrete_type: Option<String>,
     kind: Option<resource::Kind>,
+    line: Option<u32>,
+    file: Option<String>,
+    column: Option<u32>,
 }
 
 /// Used to extract all fields from the metadata
@@ -34,6 +41,35 @@ pub(crate) struct ResourceVisitor {
 pub(crate) struct FieldVisitor {
     fields: Vec<proto::Field>,
     meta_id: proto::MetaId,
+}
+
+/// Used to extract the fields needed to construct
+/// an `Event::Spawn` from the metadata of a tracing span
+/// that has the following shape:
+///
+/// ```
+/// tracing::trace_span!(
+///     target: "tokio::task",
+///     "runtime.spawn",
+///     kind = "local",
+///     task.name = "some_name",
+///     loc.file = "some_file.rs",
+///     loc.line = 555,
+///     loc.col = 5,
+/// );
+/// ```
+///
+/// # Fields
+///
+/// This visitor has special behavior for `loc.line`, `loc.file`, and `loc.col`
+/// fields, which are interpreted as a Rust source code location where the task
+/// was spawned, if they are present. Other fields are recorded as arbitrary
+/// key-value pairs.
+pub(crate) struct TaskVisitor {
+    field_visitor: FieldVisitor,
+    line: Option<u32>,
+    file: Option<String>,
+    column: Option<u32>,
 }
 
 /// Used to extract the fields needed to construct
@@ -119,8 +155,22 @@ impl ResourceVisitor {
     const RES_KIND_FIELD_NAME: &'static str = "kind";
     const RES_KIND_TIMER: &'static str = "timer";
 
-    pub(crate) fn result(self) -> Option<(String, resource::Kind)> {
-        self.concrete_type.zip(self.kind)
+    pub(crate) fn result(self) -> Option<(String, resource::Kind, Option<proto::Location>)> {
+        let concrete_type = self.concrete_type?;
+        let kind = self.kind?;
+
+        let location = if self.file.is_some() && self.line.is_some() && self.column.is_some() {
+            Some(proto::Location {
+                file: self.file,
+                line: self.line,
+                column: self.column,
+                ..Default::default()
+            })
+        } else {
+            None
+        };
+
+        Some((concrete_type, kind, location))
     }
 }
 
@@ -139,6 +189,15 @@ impl Visit for ResourceVisitor {
                 });
                 self.kind = Some(resource::Kind { kind });
             }
+            LOCATION_FILE => self.file = Some(value.to_string()),
+            _ => {}
+        }
+    }
+
+    fn record_u64(&mut self, field: &tracing_core::Field, value: u64) {
+        match field.name() {
+            LOCATION_LINE => self.line = Some(value as u32),
+            LOCATION_COLUMN => self.column = Some(value as u32),
             _ => {}
         }
     }
@@ -153,6 +212,63 @@ impl FieldVisitor {
     }
     pub(crate) fn result(self) -> Vec<proto::Field> {
         self.fields
+    }
+}
+
+impl TaskVisitor {
+    pub(crate) fn new(meta_id: proto::MetaId) -> Self {
+        TaskVisitor {
+            field_visitor: FieldVisitor::new(meta_id),
+            line: None,
+            file: None,
+            column: None,
+        }
+    }
+
+    pub(crate) fn result(self) -> (Vec<proto::Field>, Option<proto::Location>) {
+        let fields = self.field_visitor.result();
+        let location = if self.file.is_some() && self.line.is_some() && self.column.is_some() {
+            Some(proto::Location {
+                file: self.file,
+                line: self.line,
+                column: self.column,
+                ..Default::default()
+            })
+        } else {
+            None
+        };
+
+        (fields, location)
+    }
+}
+
+impl Visit for TaskVisitor {
+    fn record_debug(&mut self, field: &field::Field, value: &dyn std::fmt::Debug) {
+        self.field_visitor.record_debug(field, value);
+    }
+
+    fn record_i64(&mut self, field: &tracing_core::Field, value: i64) {
+        self.field_visitor.record_i64(field, value);
+    }
+
+    fn record_u64(&mut self, field: &tracing_core::Field, value: u64) {
+        match field.name() {
+            LOCATION_LINE => self.line = Some(value as u32),
+            LOCATION_COLUMN => self.column = Some(value as u32),
+            _ => self.field_visitor.record_u64(field, value),
+        }
+    }
+
+    fn record_bool(&mut self, field: &tracing_core::Field, value: bool) {
+        self.field_visitor.record_bool(field, value);
+    }
+
+    fn record_str(&mut self, field: &tracing_core::Field, value: &str) {
+        if field.name() == LOCATION_FILE {
+            self.file = Some(value.to_string());
+        } else {
+            self.field_visitor.record_str(field, value);
+        }
     }
 }
 

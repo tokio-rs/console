@@ -73,6 +73,8 @@ message Task {
     // These IDs may correspond to `tracing` spans which are *not* tasks, if
     // additional trace data is being collected.
     repeated common.SpanId parents = 5;
+    // The location in code where the task was spawned.
+    common.Location location = 6;
 
     enum Kind {
         SPAWN = 0;
