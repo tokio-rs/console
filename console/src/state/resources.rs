@@ -1,3 +1,4 @@
+use crate::intern::{self, InternedStr};
 use crate::state::{truncate_registry_path, Field, Metadata, Visibility};
 use crate::view;
 use console_api as proto;
@@ -33,7 +34,7 @@ pub(crate) enum SortBy {
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub(crate) enum Kind {
     Timer,
-    Other(String),
+    Other(InternedStr),
 }
 
 #[derive(Debug)]
@@ -42,8 +43,8 @@ pub(crate) struct Resource {
     meta_id: u64,
     kind: Kind,
     stats: ResourceStats,
-    target: Arc<str>,
-    concrete_type: String,
+    target: InternedStr,
+    concrete_type: InternedStr,
     location: String,
 }
 
@@ -119,8 +120,9 @@ impl ResourcesState {
     pub(crate) fn update_resources(
         &mut self,
         styles: &view::Styles,
-        update: proto::resources::ResourceUpdate,
+        strings: &mut intern::Strings,
         metas: &HashMap<u64, Metadata>,
+        update: proto::resources::ResourceUpdate,
         visibility: Visibility,
     ) {
         let mut stats_update = update.stats_update;
@@ -148,7 +150,7 @@ impl ResourcesState {
                     return None;
                 }
             };
-            let kind = match resource.kind?.try_into() {
+            let kind = match Kind::from_proto(resource.kind?, strings) {
                 Ok(kind) => kind,
                 Err(err) => {
                     tracing::warn!(%err, "resource kind cannot be parsed");
@@ -157,7 +159,7 @@ impl ResourcesState {
             };
 
             let id = resource.id?.id;
-            let stats = ResourceStats::from_proto(stats_update.remove(&id)?, meta, styles);
+            let stats = ResourceStats::from_proto(stats_update.remove(&id)?, meta, styles, strings);
 
             // remove cargo part of the file path
             let location = resource
@@ -177,7 +179,7 @@ impl ResourcesState {
                 kind,
                 stats,
                 target: meta.target.clone(),
-                concrete_type: resource.concrete_type,
+                concrete_type: strings.string(resource.concrete_type),
                 meta_id,
                 location,
             };
@@ -191,7 +193,7 @@ impl ResourcesState {
             if let Some(resource) = self.resources.get_mut(&id) {
                 let mut r = resource.borrow_mut();
                 if let Some(meta) = metas.get(&r.meta_id) {
-                    r.stats = ResourceStats::from_proto(stats, meta, styles);
+                    r.stats = ResourceStats::from_proto(stats, meta, styles, strings);
                 }
             }
         }
@@ -253,14 +255,19 @@ impl Resource {
 }
 
 impl ResourceStats {
-    fn from_proto(pb: proto::resources::Stats, meta: &Metadata, styles: &view::Styles) -> Self {
+    fn from_proto(
+        pb: proto::resources::Stats,
+        meta: &Metadata,
+        styles: &view::Styles,
+        strings: &mut intern::Strings,
+    ) -> Self {
         let mut pb = pb;
         let mut attributes = pb
             .attributes
             .drain(..)
             .filter_map(|pb| {
                 let field = pb.field?;
-                let field = Field::from_proto(field, meta)?;
+                let field = Field::from_proto(field, meta, strings)?;
                 Some(Attribute {
                     field,
                     unit: pb.unit,
@@ -287,10 +294,11 @@ impl ResourceStats {
     }
 }
 
-impl TryFrom<proto::resources::resource::Kind> for Kind {
-    type Error = String;
-
-    fn try_from(pb: proto::resources::resource::Kind) -> Result<Self, Self::Error> {
+impl Kind {
+    fn from_proto(
+        pb: proto::resources::resource::Kind,
+        strings: &mut intern::Strings,
+    ) -> Result<Self, String> {
         use proto::resources::resource::kind::Kind::Known as PbKnown;
         use proto::resources::resource::kind::Kind::Other as PBOther;
         use proto::resources::resource::kind::Known::Timer as PbTimer;
@@ -298,7 +306,7 @@ impl TryFrom<proto::resources::resource::Kind> for Kind {
         match pb.kind.expect("a resource should have a kind field") {
             PbKnown(known) if known == (PbTimer as i32) => Ok(Kind::Timer),
             PbKnown(known) => Err(format!("failed to parse known kind from {}", known)),
-            PBOther(other) => Ok(Kind::Other(other)),
+            PBOther(other) => Ok(Kind::Other(strings.string(other))),
         }
     }
 }
