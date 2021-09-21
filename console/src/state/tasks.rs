@@ -1,4 +1,4 @@
-use super::{Field, Metadata};
+use crate::state::{Field, Metadata, Visibility};
 use crate::{util::Percentage, view, warnings::Linter};
 use console_api as proto;
 use hdrhistogram::Histogram;
@@ -97,13 +97,14 @@ impl TasksState {
         styles: &view::Styles,
         update: proto::tasks::TaskUpdate,
         metas: &HashMap<u64, Metadata>,
-        clear_new_list: bool,
+        visibility: Visibility,
     ) {
         let mut stats_update = update.stats_update;
         let new_list = &mut self.new_tasks;
-        if clear_new_list {
+        if matches!(visibility, Visibility::Show) {
             new_list.clear();
         }
+
         let linters = &self.linters;
 
         let new_tasks = update.new_tasks.into_iter().filter_map(|mut task| {
