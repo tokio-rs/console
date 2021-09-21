@@ -1,4 +1,4 @@
-use crate::state::{truncate_registry_path, Field, Metadata};
+use crate::state::{truncate_registry_path, Field, Metadata, Visibility};
 use crate::view;
 use console_api as proto;
 use std::{
@@ -50,18 +50,18 @@ pub(crate) struct Resource {
 pub(crate) type ResourceRef = Weak<RefCell<Resource>>;
 
 #[derive(Debug)]
+pub(crate) struct Attribute {
+    field: Field,
+    unit: Option<String>,
+}
+
+#[derive(Debug)]
 struct ResourceStats {
     created_at: SystemTime,
     dropped_at: Option<SystemTime>,
     total: Option<Duration>,
     attributes: Vec<Attribute>,
     formatted_attributes: Vec<Vec<Span<'static>>>,
-}
-
-#[derive(Debug)]
-pub(crate) struct Attribute {
-    field: Field,
-    unit: Option<String>,
 }
 
 impl Default for SortBy {
@@ -121,11 +121,11 @@ impl ResourcesState {
         styles: &view::Styles,
         update: proto::resources::ResourceUpdate,
         metas: &HashMap<u64, Metadata>,
-        clear_new_list: bool,
+        visibility: Visibility,
     ) {
         let mut stats_update = update.stats_update;
         let new_list = &mut self.new_resources;
-        if clear_new_list {
+        if matches!(visibility, Visibility::Show) {
             new_list.clear();
         }
 

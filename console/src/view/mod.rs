@@ -171,16 +171,6 @@ impl View {
     }
 }
 
-impl ViewState {
-    pub(crate) fn is_tasks_view(&self) -> bool {
-        matches!(self, Self::TasksList)
-    }
-
-    pub(crate) fn is_resources_view(&self) -> bool {
-        matches!(self, Self::ResourcesList)
-    }
-}
-
 pub(crate) fn bold<'a>(text: impl Into<Cow<'a, str>>) -> Span<'a> {
     Span::styled(text, Style::default().add_modifier(style::Modifier::BOLD))
 }

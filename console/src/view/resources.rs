@@ -55,15 +55,6 @@ impl TableList for ResourcesTable {
             .sort_by
             .sort(now, &mut table_list_state.sorted_items);
 
-        let dur_cell = |dur: std::time::Duration| -> Cell<'static> {
-            Cell::from(styles.time_units(format!(
-                "{:>width$.prec$?}",
-                dur,
-                width = DUR_LEN,
-                prec = DUR_PRECISION,
-            )))
-        };
-
         let mut id_width = view::Width::new(Self::HEADER[0].len() as u16);
         let mut kind_width = view::Width::new(Self::HEADER[1].len() as u16);
         let mut target_width = view::Width::new(Self::HEADER[3].len() as u16);
@@ -91,7 +82,12 @@ impl TableList for ResourcesTable {
                             width = id_width.chars() as usize
                         ))),
                         Cell::from(kind_width.update_str(resource.kind()).to_owned()),
-                        dur_cell(resource.total(now)),
+                        Cell::from(styles.time_units(format!(
+                            "{:>width$.prec$?}",
+                            resource.total(now),
+                            width = DUR_LEN,
+                            prec = DUR_PRECISION,
+                        ))),
                         Cell::from(target_width.update_str(resource.target()).to_owned()),
                         Cell::from(type_width.update_str(resource.concrete_type()).to_owned()),
                         Cell::from(location_width.update_str(resource.location().to_owned())),

@@ -33,11 +33,9 @@ pub(crate) struct State {
     current_task_details: DetailsRef,
     retain_for: Option<Duration>,
 }
-
-#[derive(Debug)]
-enum Temporality {
-    Live,
-    Paused,
+pub(crate) enum Visibility {
+    Show,
+    Hide,
 }
 
 #[derive(Debug)]
@@ -61,6 +59,12 @@ pub(crate) enum FieldValue {
     U64(u64),
     I64(i64),
     Debug(String),
+}
+
+#[derive(Debug)]
+enum Temporality {
+    Live,
+    Paused,
 }
 
 impl State {
@@ -101,21 +105,23 @@ impl State {
         }
 
         if let Some(tasks_update) = update.task_update {
-            self.tasks_state.update_tasks(
-                styles,
-                tasks_update,
-                &self.metas,
-                current_view.is_tasks_view(),
-            )
+            let visibility = if matches!(current_view, view::ViewState::TasksList) {
+                Visibility::Show
+            } else {
+                Visibility::Hide
+            };
+            self.tasks_state
+                .update_tasks(styles, tasks_update, &self.metas, visibility)
         }
 
         if let Some(resources_update) = update.resource_update {
-            self.resources_state.update_resources(
-                styles,
-                resources_update,
-                &self.metas,
-                current_view.is_resources_view(),
-            )
+            let visibility = if matches!(current_view, view::ViewState::ResourcesList) {
+                Visibility::Show
+            } else {
+                Visibility::Hide
+            };
+            self.resources_state
+                .update_resources(styles, resources_update, &self.metas, visibility)
         }
     }
 
