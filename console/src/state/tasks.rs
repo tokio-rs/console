@@ -1,6 +1,6 @@
-use super::{Field, Metadata};
 use crate::{
     intern::{self, InternedStr},
+    state::{Field, Metadata, Visibility},
     util::Percentage,
     view,
     warnings::Linter,
@@ -102,13 +102,14 @@ impl TasksState {
         strings: &mut intern::Strings,
         metas: &HashMap<u64, Metadata>,
         update: proto::tasks::TaskUpdate,
-        clear_new_list: bool,
+        visibility: Visibility,
     ) {
         let mut stats_update = update.stats_update;
         let new_list = &mut self.new_tasks;
-        if clear_new_list {
+        if matches!(visibility, Visibility::Show) {
             new_list.clear();
         }
+
         let linters = &self.linters;
 
         let new_tasks = update.new_tasks.into_iter().filter_map(|mut task| {

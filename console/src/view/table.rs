@@ -81,6 +81,7 @@ impl<T: TableList> TableListState<T> {
             Up => self.scroll_prev(),
             _ => {} // do nothing for now...
         }
+
         if let Ok(sort_by) = T::Sort::try_from(self.selected_column) {
             self.sort_by = sort_by;
         }

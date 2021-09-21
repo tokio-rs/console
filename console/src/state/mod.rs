@@ -1,3 +1,4 @@
+use self::resources::ResourcesState;
 use crate::{
     intern::{self, InternedStr},
     view,
@@ -19,6 +20,7 @@ use tui::{
     text::Span,
 };
 
+pub mod resources;
 pub mod tasks;
 
 pub(crate) type DetailsRef = Rc<RefCell<Option<Details>>>;
@@ -29,15 +31,14 @@ pub(crate) struct State {
     last_updated_at: Option<SystemTime>,
     temporality: Temporality,
     tasks_state: TasksState,
+    resources_state: ResourcesState,
     current_task_details: DetailsRef,
     retain_for: Option<Duration>,
     strings: intern::Strings,
 }
-
-#[derive(Debug)]
-enum Temporality {
-    Live,
-    Paused,
+pub(crate) enum Visibility {
+    Show,
+    Hide,
 }
 
 #[derive(Debug)]
@@ -61,6 +62,12 @@ pub(crate) enum FieldValue {
     U64(u64),
     I64(i64),
     Debug(String),
+}
+
+#[derive(Debug)]
+enum Temporality {
+    Live,
+    Paused,
 }
 
 impl State {
@@ -102,13 +109,28 @@ impl State {
         }
 
         if let Some(tasks_update) = update.task_update {
+            let visibility = if matches!(current_view, view::ViewState::TasksList) {
+                Visibility::Show
+            } else {
+                Visibility::Hide
+            };
             self.tasks_state.update_tasks(
                 styles,
                 &mut self.strings,
                 &self.metas,
                 tasks_update,
-                current_view.is_tasks_view(),
+                visibility,
             )
+        }
+
+        if let Some(resources_update) = update.resource_update {
+            let visibility = if matches!(current_view, view::ViewState::ResourcesList) {
+                Visibility::Show
+            } else {
+                Visibility::Hide
+            };
+            self.resources_state
+                .update_resources(styles, resources_update, &self.metas, visibility)
         }
     }
 
@@ -119,6 +141,7 @@ impl State {
 
         if let (Some(now), Some(retain_for)) = (self.last_updated_at(), self.retain_for) {
             self.tasks_state.retain_active(now, retain_for);
+            self.resources_state.retain_active(now, retain_for);
         }
     }
 
@@ -132,6 +155,10 @@ impl State {
 
     pub(crate) fn tasks_state_mut(&mut self) -> &mut TasksState {
         &mut self.tasks_state
+    }
+
+    pub(crate) fn resources_state_mut(&mut self) -> &mut ResourcesState {
+        &mut self.resources_state
     }
 
     pub(crate) fn update_task_details(&mut self, update: proto::tasks::TaskDetails) {

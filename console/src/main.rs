@@ -8,11 +8,11 @@ use tokio::sync::{mpsc, watch};
 use tui::{
     layout::{Constraint, Direction, Layout},
     style::Color,
-    text::Span,
+    text::{Span, Spans},
     widgets::{Paragraph, Wrap},
 };
 
-use crate::view::UpdateKind;
+use crate::view::{bold, UpdateKind};
 
 mod config;
 mod conn;
@@ -110,7 +110,14 @@ async fn main() -> color_eyre::Result<()> {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(0)
-                .constraints([Constraint::Length(1), Constraint::Percentage(95)].as_ref())
+                .constraints(
+                    [
+                        Constraint::Length(1),
+                        Constraint::Length(1),
+                        Constraint::Percentage(95),
+                    ]
+                    .as_ref(),
+                )
                 .split(f.size());
 
             let mut header_text = conn.render(&view.styles);
@@ -120,8 +127,18 @@ async fn main() -> color_eyre::Result<()> {
                     .push(Span::styled(" PAUSED", view.styles.fg(Color::Red)));
             }
             let header = Paragraph::new(header_text).wrap(Wrap { trim: true });
+            let view_controls = Paragraph::new(Spans::from(vec![
+                Span::raw("views: "),
+                bold("t"),
+                Span::raw(" = tasks, "),
+                bold("r"),
+                Span::raw(" = resources"),
+            ]))
+            .wrap(Wrap { trim: true });
+
             f.render_widget(header, chunks[0]);
-            view.render(f, chunks[1], &mut state);
+            f.render_widget(view_controls, chunks[1]);
+            view.render(f, chunks[2], &mut state);
         })?;
     }
 }
