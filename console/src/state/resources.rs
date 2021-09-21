@@ -7,7 +7,6 @@ use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
     rc::{Rc, Weak},
-    sync::Arc,
     time::{Duration, SystemTime},
 };
 use tui::{
