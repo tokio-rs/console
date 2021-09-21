@@ -129,8 +129,13 @@ impl State {
             } else {
                 Visibility::Hide
             };
-            self.resources_state
-                .update_resources(styles, resources_update, &self.metas, visibility)
+            self.resources_state.update_resources(
+                styles,
+                &mut self.strings,
+                &self.metas,
+                resources_update,
+                visibility,
+            )
         }
     }
 
