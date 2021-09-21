@@ -125,7 +125,7 @@ pub fn build() -> ConsoleSubscriberLayer {
     fn console_filter(meta: &tracing::Metadata<'_>) -> bool {
         // events will have *targets* beginning with "runtime"
         if meta.is_event() {
-            return meta.target().starts_with("runtime");
+            return meta.target().starts_with("runtime") || meta.target().starts_with("tokio");
         }
 
         // spans will have *names* beginning with "runtime". for backwards
