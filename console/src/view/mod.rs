@@ -69,9 +69,9 @@ macro_rules! key {
             ..
         })
     };
-    (F($code:literal)) => {
+    (Char($code:literal)) => {
         input::Event::Key(input::KeyEvent {
-            code: input::KeyCode::F($code),
+            code: input::KeyCode::Char($code),
             ..
         })
     };
@@ -104,7 +104,7 @@ impl View {
                             ));
                         }
                     }
-                    key!(F(2)) => {
+                    key!(Char('r')) => {
                         self.state = ResourcesList;
                     }
                     _ => {
@@ -114,10 +114,8 @@ impl View {
                 }
             }
             ResourcesList => {
-                // The enter key changes views, so handle here since we can
-                // mutate the currently selected view.
                 match event {
-                    key!(F(1)) => {
+                    key!(Char('t')) => {
                         self.state = TasksList;
                     }
                     _ => {

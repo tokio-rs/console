@@ -44,7 +44,7 @@ pub(crate) struct Resource {
     stats: ResourceStats,
     target: Arc<str>,
     concrete_type: String,
-    location: Option<proto::Location>,
+    location: String,
 }
 
 pub(crate) type ResourceRef = Weak<RefCell<Resource>>;
@@ -148,19 +148,30 @@ impl ResourcesState {
                     return None;
                 }
             };
+            let kind = match resource.kind?.try_into() {
+                Ok(kind) => kind,
+                Err(err) => {
+                    tracing::warn!(%err, "resource kind cannot be parsed");
+                    return None;
+                }
+            };
 
             let id = resource.id?.id;
             let stats = ResourceStats::from_proto(stats_update.remove(&id)?, meta, styles);
-            let kind = resource.kind?.into();
 
             // remove cargo part of the file path
-            let location = resource.location.take().map(|mut l| {
-                if let Some(file) = l.file.take() {
-                    let truncated = truncate_registry_path(file);
-                    l.file = Some(truncated);
-                }
-                l
-            });
+            let location = resource
+                .location
+                .take()
+                .map(|mut l| {
+                    if let Some(file) = l.file.take() {
+                        let truncated = truncate_registry_path(file);
+                        l.file = Some(truncated);
+                    }
+                    format!("{} ", l)
+                })
+                .unwrap_or_else(|| "unknown location".to_string());
+
             let resource = Resource {
                 id,
                 kind,
@@ -236,11 +247,8 @@ impl Resource {
         self.stats.total.is_some()
     }
 
-    pub(crate) fn location(&self) -> String {
-        if let Some(location) = self.location.as_ref() {
-            return format!("{} ", location);
-        }
-        "unknown location".to_string()
+    pub(crate) fn location(&self) -> &str {
+        &self.location
     }
 }
 
@@ -263,7 +271,7 @@ impl ResourceStats {
         let formatted_attributes = Attribute::make_formatted(styles, &mut attributes);
         let created_at = pb
             .created_at
-            .expect("task span was never created")
+            .expect("resource span was never created")
             .try_into()
             .unwrap();
         let dropped_at: Option<SystemTime> = pb.dropped_at.map(|v| v.try_into().unwrap());
@@ -279,16 +287,18 @@ impl ResourceStats {
     }
 }
 
-impl From<proto::resources::resource::Kind> for Kind {
-    fn from(pb: proto::resources::resource::Kind) -> Self {
+impl TryFrom<proto::resources::resource::Kind> for Kind {
+    type Error = String;
+
+    fn try_from(pb: proto::resources::resource::Kind) -> Result<Self, Self::Error> {
         use proto::resources::resource::kind::Kind::Known as PbKnown;
         use proto::resources::resource::kind::Kind::Other as PBOther;
         use proto::resources::resource::kind::Known::Timer as PbTimer;
 
         match pb.kind.expect("a resource should have a kind field") {
-            PbKnown(known) if known == (PbTimer as i32) => Kind::Timer,
-            PbKnown(known) => panic!("failed to parseknown kind from {}", known),
-            PBOther(other) => Kind::Other(other),
+            PbKnown(known) if known == (PbTimer as i32) => Ok(Kind::Timer),
+            PbKnown(known) => Err(format!("failed to parse known kind from {}", known)),
+            PBOther(other) => Ok(Kind::Other(other)),
         }
     }
 }
