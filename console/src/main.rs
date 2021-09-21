@@ -17,6 +17,7 @@ use crate::view::UpdateKind;
 mod config;
 mod conn;
 mod input;
+mod intern;
 mod state;
 mod term;
 mod util;
