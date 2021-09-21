@@ -312,7 +312,9 @@ impl Task {
     ///
     /// Once the task has been polled, this is changed back to false.
     pub(crate) fn is_awakened(&self) -> bool {
-        self.last_wake() > self.stats.last_poll_started
+        // Before the first poll, the task is waiting on the executor to run it
+        // for the first time.
+        self.total_polls() == 0 || self.last_wake() > self.stats.last_poll_started
     }
 
     pub(crate) fn warnings(&self) -> &[Linter<Task>] {
