@@ -148,17 +148,7 @@ the console command-line tool supports a number of additional flags to configure
 its behavior. the `-h` or `--help` flag will print a list of supported
 command-line flags and arguments:
 
-```shell
-$ cargo run -- --help
-   Compiling tokio-console v0.1.0 (/home/eliza/Code/console/console)
-    Finished dev [unoptimized + debuginfo] target(s) in 4.96s
-     Running `target/debug/tokio-console --help`
-tokio-console 0.1.0
-
-Eliza Weisman <eliza@buoyant.io>, David Barsky <me@davidbarsky.com>
-
-
-
+```
 USAGE:
     tokio-console [FLAGS] [OPTIONS] [TARGET_ADDR]
 
