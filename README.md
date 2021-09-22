@@ -209,17 +209,32 @@ OPTIONS:
 
         --retain-for <RETAIN_FOR>
             How long to continue displaying completed tasks and dropped resources after they have
-            been closed. Accepted values are:
+            been closed.
 
-            - Durations, parsed as a combination of time spans (such as `5days 2min 2s`).
+            This accepts either a duration, parsed as a combination of time spans (such as `5days
+            2min 2s`), or `none` to disable removing completed tasks and dropped resources.
 
             Each time span is an integer number followed by a suffix. Supported suffixes are:
 
-            * `nsec`, `ns` -- nanoseconds * `usec`, `us` -- microseconds * `msec`, `ms` --
-            milliseconds * `seconds`, `second`, `sec`, `s` * `minutes`, `minute`, `min`, `m` *
-            `hours`, `hour`, `hr`, `h` * `days`, `day`, `d` * `weeks`, `week`, `w` * `months`,
-            `month`, `M` -- defined as 30.44 days * `years`, `year`, `y` -- defined as 365.25 days -
-            `none` to disable removing completed task spans [default: 6s]
+            * `nsec`, `ns` -- nanoseconds
+
+            * `usec`, `us` -- microseconds
+
+            * `msec`, `ms` -- milliseconds
+
+            * `seconds`, `second`, `sec`, `s`
+
+            * `minutes`, `minute`, `min`, `m`
+
+            * `hours`, `hour`, `hr`, `h`
+
+            * `days`, `day`, `d`
+
+            * `weeks`, `week`, `w`
+
+            * `months`, `month`, `M` -- defined as 30.44 days
+
+            * `years`, `year`, `y` -- defined as 365.25 days [default: 6s]
 ```
 
 ## for development:
