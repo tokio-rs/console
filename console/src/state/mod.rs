@@ -148,6 +148,10 @@ impl State {
             self.tasks_state.retain_active(now, retain_for);
             self.resources_state.retain_active(now, retain_for);
         }
+
+        // After dropping idle tasks & resources, prune any interned strings
+        // that are no longer referenced.
+        self.strings.retain_referenced();
     }
 
     pub(crate) fn task_details_ref(&self) -> DetailsRef {

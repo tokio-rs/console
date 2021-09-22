@@ -49,6 +49,35 @@ impl Strings {
         self.strings.insert(string.clone());
         string
     }
+
+    /// Drop any interned strings that are not currently referenced.
+    pub(crate) fn retain_referenced(&mut self) {
+        const FOUR_KILOBYTES: usize = 4 * 1024;
+
+        let len0 = self.strings.len();
+        self.strings.retain(|s| Rc::strong_count(&s.0) > 1);
+
+        // Did we actually drop anything?
+        let len = self.strings.len();
+        if len < len0 {
+            // How much unused capacity does the hashmap currently contain?
+            let free_cap = (self.strings.capacity() - len) * std::mem::size_of::<String>();
+            // If the hashmap has more than 4kb of free capacity, shrink it to
+            // fit the current size.
+            let should_shrink = free_cap >= FOUR_KILOBYTES;
+
+            tracing::trace!(
+                strings.len = len,
+                dropped = len0 - len,
+                should_shrink,
+                "dropped un-referenced strings",
+            );
+
+            if should_shrink {
+                self.strings.shrink_to_fit();
+            }
+        }
+    }
 }
 
 // === impl InternedStr ===
