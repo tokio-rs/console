@@ -6,5 +6,8 @@ members = [
 ]
 resolver = "2"
 
-[patch.crates-io]
-tokio = { git = 'https://github.com/zaharidichev/tokio', branch = 'zd/instrument-sleep' }
+# Patch the dependency on tokio to get Sleep resource instrumentation.
+# This can be un-patched when the commit is released.
+[patch.crates-io.tokio]
+git = "https://github.com/tokio-rs/tokio"
+rev = "b9834f6d8b3563e6907456d19fe418cfe19983c3"
