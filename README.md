@@ -1,12 +1,12 @@
-# tokio-console prototypes
+# tokio-console
 
 [![API Documentation(`main`)](https://img.shields.io/netlify/0e5ffd50-e1fa-416e-b147-a04dab28cfb1?label=docs%20%28main%29)][main-docs]
 [![MIT licensed][mit-badge]][mit-url]
 [![Build Status][actions-badge]][actions-url]
 [![Discord chat][discord-badge]][discord-url]
 
-⚠️ **extremely serious warning:** this is _pre-alpha_, proof-of-concept
-software! currently, the wire format has _no stability guarantees_ &mdash;
+⚠️ **extremely serious warning:** this is _pre-alpha_ software undergoing active
+development! currently, the wire format has _no stability guarantees_ &mdash;
 the crates in this repository are not guaranteed to be interoperable except
 within the same Git revision. when these crates are published to crates.io, the
 wire format will follow semver, but currently, anything could happen!
@@ -23,7 +23,7 @@ wire format will follow semver, but currently, anything could happen!
 
 ## what's all this, then?
 
-this repository contains a prototype implementation of TurboWish/tokio-console,
+this repository contains an implementation of TurboWish/tokio-console,
 a diagnostics and debugging tool for asynchronous Rust programs. the diagnostic
 toolkit consists of multiple components:
 
