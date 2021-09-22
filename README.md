@@ -84,6 +84,7 @@ others.
 [**@matprec**]: https://github.com/matprec
 [**@pnkfelix**]: https://github.com/pnkfelix
 ## using it
+### instrumenting your program
 
 to **instrument an application using Tokio**, add a dependency on the
 [`console-subscriber`] crate, and **add this one-liner** to the top of your
@@ -116,11 +117,101 @@ notes:
   [`EnvFilter`] or [`Targets`] filters from [`tracing-subscriber`], add
   `"tokio=trace,runtime=trace"` to your filter configuration.
 
-to **run the console command line tool**, simply
+### running the console
+
+to **run the console command-line tool**, simply
 ```shell
 $ cargo run
 ```
 in this repository.
+
+by default, this will attempt to connect to an instrumented application running
+on localhost on port 6669. if the application is running somewhere else, or is
+serving the console endpoint on a different port, a target address can be passed
+as an argument to the console (either as an `<IP>:<PORT>` or
+`<DNS_NAME>:<PORT>`). for example:
+
+```shell
+$ cargo run -- http://my.great.console.app.local:5555
+```
+
+the console command-line tool supports a number of additional flags to configure
+its behavior. the `-h` or `--help` flag will print a list of supported
+command-line flags and arguments:
+
+```shell
+$ cargo run -- --help
+   Compiling tokio-console v0.1.0 (/home/eliza/Code/console/console)
+    Finished dev [unoptimized + debuginfo] target(s) in 4.96s
+     Running `target/debug/tokio-console --help`
+tokio-console 0.1.0
+
+Eliza Weisman <eliza@buoyant.io>, David Barsky <me@davidbarsky.com>
+
+
+
+USAGE:
+    tokio-console [FLAGS] [OPTIONS] [TARGET_ADDR]
+
+ARGS:
+    <TARGET_ADDR>
+            The address of a console-enabled process to connect to.
+
+            This may be an IP address and port, or a DNS name. [default: http://127.0.0.1:6669]
+
+FLAGS:
+        --ascii-only
+            Explicitly use only ASCII characters
+
+    -h, --help
+            Print help information
+
+        --no-colors
+            Disable ANSI colors entirely
+
+        --no-duration-colors
+            Disable color-coding for duration units
+
+        --no-terminated-colors
+            Disable color-coding for terminated tasks
+
+    -V, --version
+            Print version information
+
+OPTIONS:
+        --colorterm <truecolor>
+            Overrides the value of the `COLORTERM` environment variable.
+
+            If this is set to `24bit` or `truecolor`, 24-bit RGB color support will be enabled.
+            [env: COLORTERM=truecolor] [possible values: 24bit, truecolor]
+
+        --lang <LANG>
+            Overrides the terminal's default language [env: LANG=en_US.UTF-8] [default: en_us.UTF-8]
+
+        --log <ENV_FILTER>
+            Log level filter for the console's internal diagnostics.
+
+            The console will log to stderr if a log level filter is provided. Since the console
+            application runs interactively, stderr should generally be redirected to a file to avoid
+            interfering with the console's text output. [env: RUST_LOG=] [default: off]
+
+        --palette <PALETTE>
+            Explicitly set which color palette to use [possible values: 8, 16, 256, all, off]
+
+        --retain-for <RETAIN_FOR>
+            How long to continue displaying completed tasks and dropped resources after they have
+            been closed. Accepted values are:
+
+            - Durations, parsed as a combination of time spans (such as `5days 2min 2s`).
+
+            Each time span is an integer number followed by a suffix. Supported suffixes are:
+
+            * `nsec`, `ns` -- nanoseconds * `usec`, `us` -- microseconds * `msec`, `ms` --
+            milliseconds * `seconds`, `second`, `sec`, `s` * `minutes`, `minute`, `min`, `m` *
+            `hours`, `hour`, `hr`, `h` * `days`, `day`, `d` * `weeks`, `week`, `w` * `months`,
+            `month`, `M` -- defined as 30.44 days * `years`, `year`, `y` -- defined as 365.25 days -
+            `none` to disable removing completed task spans [default: 6s]
+```
 
 ## for development:
 
