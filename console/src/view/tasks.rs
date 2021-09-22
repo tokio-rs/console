@@ -24,7 +24,8 @@ impl TableList for TasksTable {
     type Sort = SortBy;
 
     const HEADER: &'static [&'static str] = &[
-        "Warn", "ID", "State", "Name", "Total", "Busy", "Idle", "Polls", "Target", "Fields",
+        "Warn", "ID", "State", "Name", "Total", "Busy", "Idle", "Polls", "Target", "Location",
+        "Fields",
     ];
 
     fn render<B: tui::backend::Backend>(
@@ -65,12 +66,14 @@ impl TableList for TasksTable {
         let mut name_width = view::Width::new(Self::HEADER[3].len() as u16);
         let mut polls_width = view::Width::new(Self::HEADER[7].len() as u16);
         let mut target_width = view::Width::new(Self::HEADER[8].len() as u16);
+        let mut location_width = view::Width::new(Self::HEADER[9].len() as u16);
 
         let mut num_idle = 0;
         let mut num_running = 0;
         let rows = {
             let id_width = &mut id_width;
             let target_width = &mut target_width;
+            let location_width = &mut location_width;
             let name_width = &mut name_width;
             let polls_width = &mut polls_width;
             let warn_width = &mut warn_width;
@@ -117,6 +120,7 @@ impl TableList for TasksTable {
                         dur_cell(task.idle(now)),
                         Cell::from(polls_width.update_str(task.total_polls().to_string())),
                         Cell::from(target_width.update_str(task.target()).to_owned()),
+                        Cell::from(location_width.update_str(task.location().to_owned())),
                         Cell::from(Spans::from(
                             task.formatted_fields()
                                 .iter()
@@ -236,6 +240,7 @@ impl TableList for TasksTable {
             layout::Constraint::Length(DUR_LEN as u16),
             polls_width.constraint(),
             target_width.constraint(),
+            location_width.constraint(),
             fields_width,
         ];
 

@@ -1,5 +1,5 @@
 use crate::intern::{self, InternedStr};
-use crate::state::{truncate_registry_path, Field, Metadata, Visibility};
+use crate::state::{format_location, Field, Metadata, Visibility};
 use crate::view;
 use console_api as proto;
 use std::{
@@ -130,7 +130,7 @@ impl ResourcesState {
             new_list.clear();
         }
 
-        let new_resources = update.new_resources.into_iter().filter_map(|mut resource| {
+        let new_resources = update.new_resources.into_iter().filter_map(|resource| {
             if resource.id.is_none() {
                 tracing::warn!(?resource, "skipping resource with no id");
             }
@@ -159,19 +159,7 @@ impl ResourcesState {
 
             let id = resource.id?.id;
             let stats = ResourceStats::from_proto(stats_update.remove(&id)?, meta, styles, strings);
-
-            // remove cargo part of the file path
-            let location = resource
-                .location
-                .take()
-                .map(|mut l| {
-                    if let Some(file) = l.file.take() {
-                        let truncated = truncate_registry_path(file);
-                        l.file = Some(truncated);
-                    }
-                    format!("{} ", l)
-                })
-                .unwrap_or_else(|| "unknown location".to_string());
+            let location = format_location(resource.location);
 
             let resource = Resource {
                 id,

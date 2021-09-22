@@ -1,6 +1,6 @@
 use crate::{
     intern::{self, InternedStr},
-    state::{Field, Metadata, Visibility},
+    state::{format_location, Field, Metadata, Visibility},
     util::Percentage,
     view,
     warnings::Linter,
@@ -62,6 +62,7 @@ pub(crate) struct Task {
     name: Option<InternedStr>,
     /// Currently active warnings for this task.
     warnings: Vec<Linter<Task>>,
+    location: String,
 }
 
 #[derive(Debug)]
@@ -149,6 +150,8 @@ impl TasksState {
             let formatted_fields = Field::make_formatted(styles, &mut fields);
             let id = task.id?.id;
             let stats = stats_update.remove(&id)?.into();
+            let location = format_location(task.location);
+
             let mut task = Task {
                 name,
                 id,
@@ -157,6 +160,7 @@ impl TasksState {
                 stats,
                 target: meta.target.clone(),
                 warnings: Vec::new(),
+                location,
             };
             task.lint(linters);
             let task = Rc::new(RefCell::new(task));
@@ -335,6 +339,10 @@ impl Task {
                 self.warnings.push(warning)
             }
         }
+    }
+
+    pub(crate) fn location(&self) -> &str {
+        &self.location
     }
 }
 
