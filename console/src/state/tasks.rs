@@ -1,5 +1,10 @@
-use crate::state::{Field, Metadata, Visibility};
-use crate::{util::Percentage, view, warnings::Linter};
+use crate::{
+    intern::{self, InternedStr},
+    state::{Field, Metadata, Visibility},
+    util::Percentage,
+    view,
+    warnings::Linter,
+};
 use console_api as proto;
 use hdrhistogram::Histogram;
 use std::{
@@ -7,7 +12,6 @@ use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
     rc::{Rc, Weak},
-    sync::Arc,
     time::{Duration, SystemTime},
 };
 use tui::{style::Color, text::Span};
@@ -54,8 +58,8 @@ pub(crate) struct Task {
     fields: Vec<Field>,
     formatted_fields: Vec<Vec<Span<'static>>>,
     stats: TaskStats,
-    target: Arc<str>,
-    name: Option<Arc<str>>,
+    target: InternedStr,
+    name: Option<InternedStr>,
     /// Currently active warnings for this task.
     warnings: Vec<Linter<Task>>,
 }
@@ -95,8 +99,9 @@ impl TasksState {
     pub(crate) fn update_tasks(
         &mut self,
         styles: &view::Styles,
-        update: proto::tasks::TaskUpdate,
+        strings: &mut intern::Strings,
         metas: &HashMap<u64, Metadata>,
+        update: proto::tasks::TaskUpdate,
         visibility: Visibility,
     ) {
         let mut stats_update = update.stats_update;
@@ -131,10 +136,10 @@ impl TasksState {
                 .fields
                 .drain(..)
                 .filter_map(|pb| {
-                    let field = Field::from_proto(pb, meta)?;
+                    let field = Field::from_proto(pb, meta, strings)?;
                     // the `task.name` field gets its own column, if it's present.
                     if &*field.name == Field::NAME {
-                        name = Some(field.value.to_string().into());
+                        name = Some(strings.string(field.value.to_string()));
                         return None;
                     }
                     Some(field)

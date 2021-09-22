@@ -1,6 +1,9 @@
 use self::resources::ResourcesState;
-use crate::view;
-use crate::warnings::Linter;
+use crate::{
+    intern::{self, InternedStr},
+    view,
+    warnings::Linter,
+};
 use console_api as proto;
 use std::{
     cell::RefCell,
@@ -9,7 +12,6 @@ use std::{
     fmt,
     io::Cursor,
     rc::Rc,
-    sync::Arc,
     time::{Duration, SystemTime},
 };
 use tasks::{Details, Task, TasksState};
@@ -32,6 +34,7 @@ pub(crate) struct State {
     resources_state: ResourcesState,
     current_task_details: DetailsRef,
     retain_for: Option<Duration>,
+    strings: intern::Strings,
 }
 pub(crate) enum Visibility {
     Show,
@@ -40,15 +43,15 @@ pub(crate) enum Visibility {
 
 #[derive(Debug)]
 pub(crate) struct Metadata {
-    field_names: Vec<Arc<str>>,
-    target: Arc<str>,
+    field_names: Vec<InternedStr>,
+    target: InternedStr,
     id: u64,
     //TODO: add more metadata as needed
 }
 
 #[derive(Debug)]
 pub(crate) struct Field {
-    pub(crate) name: Arc<str>,
+    pub(crate) name: InternedStr,
     pub(crate) value: FieldValue,
 }
 
@@ -95,11 +98,12 @@ impl State {
             self.last_updated_at = Some(now);
         }
 
+        let strings = &mut self.strings;
         if let Some(new_metadata) = update.new_metadata {
             let metas = new_metadata.metadata.into_iter().filter_map(|meta| {
                 let id = meta.id?.id;
                 let metadata = meta.metadata?;
-                Some((id, Metadata::from_proto(metadata, id)))
+                Some((id, Metadata::from_proto(metadata, id, strings)))
             });
             self.metas.extend(metas);
         }
@@ -110,8 +114,13 @@ impl State {
             } else {
                 Visibility::Hide
             };
-            self.tasks_state
-                .update_tasks(styles, tasks_update, &self.metas, visibility)
+            self.tasks_state.update_tasks(
+                styles,
+                &mut self.strings,
+                &self.metas,
+                tasks_update,
+                visibility,
+            )
         }
 
         if let Some(resources_update) = update.resource_update {
@@ -120,8 +129,13 @@ impl State {
             } else {
                 Visibility::Hide
             };
-            self.resources_state
-                .update_resources(styles, resources_update, &self.metas, visibility)
+            self.resources_state.update_resources(
+                styles,
+                &mut self.strings,
+                &self.metas,
+                resources_update,
+                visibility,
+            )
         }
     }
 
@@ -194,10 +208,14 @@ impl Default for Temporality {
 }
 
 impl Metadata {
-    fn from_proto(pb: proto::Metadata, id: u64) -> Self {
+    fn from_proto(pb: proto::Metadata, id: u64, strings: &mut intern::Strings) -> Self {
         Self {
-            field_names: pb.field_names.into_iter().map(|n| n.into()).collect(),
-            target: pb.target.into(),
+            field_names: pb
+                .field_names
+                .into_iter()
+                .map(|n| strings.string(n))
+                .collect(),
+            target: strings.string(pb.target),
             id,
         }
     }
@@ -222,10 +240,11 @@ impl Field {
             value,
         }: proto::Field,
         meta: &Metadata,
+        strings: &mut intern::Strings,
     ) -> Option<Self> {
         use proto::field::Name;
-        let name: Arc<str> = match name? {
-            Name::StrName(n) => n.into(),
+        let name = match name? {
+            Name::StrName(n) => strings.string(n),
             Name::NameIdx(idx) => {
                 let meta_id = metadata_id.map(|m| m.id);
                 if meta_id != Some(meta.id) {
