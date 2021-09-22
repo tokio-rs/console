@@ -6,5 +6,11 @@ members = [
 ]
 resolver = "2"
 
-[patch.crates-io]
-tokio = { git = 'https://github.com/zaharidichev/tokio', branch = 'zd/structured-task-location' }
+# Patch the dependency on tokio to get Sleep resource instrumentation and
+# structured spawn location. This can be un-patched when the following
+# commits are released:
+# - https://github.com/tokio-rs/tokio/commit/b9b59e4f15ad80775315ac1615a127c29725cb77
+# - https://github.com/tokio-rs/tokio/commit/b9834f6d8b3563e6907456d19fe418cfe19983c3
+[patch.crates-io.tokio]
+git = "https://github.com/tokio-rs/tokio"
+rev = "b9b59e4f15ad80775315ac1615a127c29725cb77"
