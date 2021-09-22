@@ -415,3 +415,14 @@ fn truncate_registry_path(s: String) -> String {
         Cow::Borrowed(_) => s.to_string(),
     };
 }
+
+fn format_location(loc: Option<proto::Location>) -> String {
+    loc.map(|mut l| {
+        if let Some(file) = l.file.take() {
+            let truncated = truncate_registry_path(file);
+            l.file = Some(truncated);
+        }
+        format!("{} ", l)
+    })
+    .unwrap_or_else(|| "<unknown location>".to_string())
+}

@@ -1,6 +1,6 @@
 use crate::{
     intern::{self, InternedStr},
-    state::{Field, Metadata, Visibility},
+    state::{format_location, Field, Metadata, Visibility},
     util::Percentage,
     view,
     warnings::Linter,
@@ -41,6 +41,8 @@ pub(crate) enum SortBy {
     Busy = 5,
     Idle = 6,
     Polls = 7,
+    Target = 8,
+    Location = 9,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -62,6 +64,7 @@ pub(crate) struct Task {
     name: Option<InternedStr>,
     /// Currently active warnings for this task.
     warnings: Vec<Linter<Task>>,
+    location: String,
 }
 
 #[derive(Debug)]
@@ -149,6 +152,8 @@ impl TasksState {
             let formatted_fields = Field::make_formatted(styles, &mut fields);
             let id = task.id?.id;
             let stats = stats_update.remove(&id)?.into();
+            let location = format_location(task.location);
+
             let mut task = Task {
                 name,
                 id,
@@ -157,6 +162,7 @@ impl TasksState {
                 stats,
                 target: meta.target.clone(),
                 warnings: Vec::new(),
+                location,
             };
             task.lint(linters);
             let task = Rc::new(RefCell::new(task));
@@ -336,6 +342,10 @@ impl Task {
             }
         }
     }
+
+    pub(crate) fn location(&self) -> &str {
+        &self.location
+    }
 }
 
 impl From<proto::tasks::Stats> for TaskStats {
@@ -408,6 +418,11 @@ impl SortBy {
             Self::Polls => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().stats.polls))
             }
+            Self::Target => {
+                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().target.clone()))
+            }
+            Self::Location => tasks
+                .sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().location.clone())),
         }
     }
 }
@@ -430,6 +445,8 @@ impl TryFrom<usize> for SortBy {
             idx if idx == Self::Busy as usize => Ok(Self::Busy),
             idx if idx == Self::Idle as usize => Ok(Self::Idle),
             idx if idx == Self::Polls as usize => Ok(Self::Polls),
+            idx if idx == Self::Target as usize => Ok(Self::Target),
+            idx if idx == Self::Location as usize => Ok(Self::Location),
             _ => Err(()),
         }
     }

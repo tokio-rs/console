@@ -1312,8 +1312,8 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.11.0"
-source = "git+https://github.com/zaharidichev/tokio?branch=zd/instrument-sleep#e404e9b1596d746997078f130f279356e65b61c0"
+version = "1.12.0"
+source = "git+https://github.com/tokio-rs/tokio?rev=b9b59e4f15ad80775315ac1615a127c29725cb77#b9b59e4f15ad80775315ac1615a127c29725cb77"
 dependencies = [
  "autocfg",
  "bytes",
@@ -1368,7 +1368,7 @@ dependencies = [
 [[package]]
 name = "tokio-macros"
 version = "1.3.0"
-source = "git+https://github.com/zaharidichev/tokio?branch=zd/instrument-sleep#e404e9b1596d746997078f130f279356e65b61c0"
+source = "git+https://github.com/tokio-rs/tokio?rev=b9b59e4f15ad80775315ac1615a127c29725cb77#b9b59e4f15ad80775315ac1615a127c29725cb77"
 dependencies = [
  "proc-macro2",
  "quote",

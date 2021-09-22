@@ -148,20 +148,25 @@ impl TaskView {
         ]);
 
         // Just preallocate capacity for ID, name, target, total, busy, and idle.
-        let mut metrics = Vec::with_capacity(6);
-        metrics.push(Spans::from(vec![
+        let mut overview = Vec::with_capacity(7);
+        overview.push(Spans::from(vec![
             bold("ID: "),
             Span::raw(format!("{} ", task.id())),
             task.state().render(styles),
         ]));
 
         if let Some(name) = task.name() {
-            metrics.push(Spans::from(vec![bold("Name: "), Span::raw(name)]));
+            overview.push(Spans::from(vec![bold("Name: "), Span::raw(name)]));
         }
 
-        metrics.push(Spans::from(vec![
+        overview.push(Spans::from(vec![
             bold("Target: "),
             Span::raw(task.target()),
+        ]));
+
+        overview.push(Spans::from(vec![
+            bold("Location: "),
+            Span::raw(task.location()),
         ]));
 
         let total = task.total(now);
@@ -175,9 +180,9 @@ impl TaskView {
             ])
         };
 
-        metrics.push(Spans::from(vec![bold("Total Time: "), dur(styles, total)]));
-        metrics.push(dur_percent("Busy: ", task.busy(now)));
-        metrics.push(dur_percent("Idle: ", task.idle(now)));
+        overview.push(Spans::from(vec![bold("Total Time: "), dur(styles, total)]));
+        overview.push(dur_percent("Busy: ", task.busy(now)));
+        overview.push(dur_percent("Idle: ", task.idle(now)));
 
         let mut waker_stats = vec![Spans::from(vec![
             bold("Current wakers: "),
@@ -246,7 +251,7 @@ impl TaskView {
             frame.render_widget(warnings, warnings_area);
         }
 
-        let task_widget = Paragraph::new(metrics).block(styles.border_block().title("Task"));
+        let task_widget = Paragraph::new(overview).block(styles.border_block().title("Task"));
         let wakers_widget = Paragraph::new(waker_stats).block(styles.border_block().title("Waker"));
         let fields_widget = Paragraph::new(fields).block(styles.border_block().title("Fields"));
         let percentiles_widget = Paragraph::new(
