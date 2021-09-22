@@ -148,7 +148,7 @@ impl TaskView {
         ]);
 
         // Just preallocate capacity for ID, name, target, total, busy, and idle.
-        let mut overview = Vec::with_capacity(6);
+        let mut overview = Vec::with_capacity(7);
         overview.push(Spans::from(vec![
             bold("ID: "),
             Span::raw(format!("{} ", task.id())),

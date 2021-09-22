@@ -41,6 +41,8 @@ pub(crate) enum SortBy {
     Busy = 5,
     Idle = 6,
     Polls = 7,
+    Target = 8,
+    Location = 9,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -416,6 +418,11 @@ impl SortBy {
             Self::Polls => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().stats.polls))
             }
+            Self::Target => {
+                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().target.clone()))
+            }
+            Self::Location => tasks
+                .sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().location.clone())),
         }
     }
 }
@@ -438,6 +445,8 @@ impl TryFrom<usize> for SortBy {
             idx if idx == Self::Busy as usize => Ok(Self::Busy),
             idx if idx == Self::Idle as usize => Ok(Self::Idle),
             idx if idx == Self::Polls as usize => Ok(Self::Polls),
+            idx if idx == Self::Target as usize => Ok(Self::Target),
+            idx if idx == Self::Location as usize => Ok(Self::Location),
             _ => Err(()),
         }
     }
