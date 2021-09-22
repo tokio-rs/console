@@ -1,20 +1,29 @@
-# tokio-console prototypes
+# tokio-console
 
-[![API Documentation (`main`)](https://img.shields.io/netlify/0e5ffd50-e1fa-416e-b147-a04dab28cfb1?label=docs%20%28main%29)][main-docs]
+[![API Documentation(`main`)](https://img.shields.io/netlify/0e5ffd50-e1fa-416e-b147-a04dab28cfb1?label=docs%20%28main%29)][main-docs]
+[![MIT licensed][mit-badge]][mit-url]
+[![Build Status][actions-badge]][actions-url]
+[![Discord chat][discord-badge]][discord-url]
 
-⚠️ **extremely serious warning:** this is _pre-alpha_, proof-of-concept
-software! currently, the wire format has _no stability guarantees_ &mdash;
+⚠️ **extremely serious warning:** this is _pre-alpha_ software undergoing active
+development! currently, the wire format has _no stability guarantees_ &mdash;
 the crates in this repository are not guaranteed to be interoperable except
 within the same Git revision. when these crates are published to crates.io, the
 wire format will follow semver, but currently, anything could happen!
 
-[API Documentation (`main` branch)][main-docs]
+[Chat][discord-url] | [API Documentation (`main` branch)][main-docs]
 
 [main-docs]: https://tokio-console.netlify.app
+[mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[mit-url]: LICENSE
+[actions-badge]: https://github.com/tokio-rs/console/workflows/CI/badge.svg
+[actions-url]:https://github.com/tokio-rs/console/actions?query=workflow%3ACI
+[discord-badge]: https://img.shields.io/discord/500028886025895936?logo=discord&label=discord&logoColor=white
+[discord-url]: https://discord.gg/EeF3cQw
 
 ## what's all this, then?
 
-this repository contains a prototype implementation of TurboWish/tokio-console,
+this repository contains an implementation of TurboWish/tokio-console,
 a diagnostics and debugging tool for asynchronous Rust programs. the diagnostic
 toolkit consists of multiple components:
 
@@ -84,6 +93,7 @@ others.
 [**@matprec**]: https://github.com/matprec
 [**@pnkfelix**]: https://github.com/pnkfelix
 ## using it
+### instrumenting your program
 
 to **instrument an application using Tokio**, add a dependency on the
 [`console-subscriber`] crate, and **add this one-liner** to the top of your
@@ -116,11 +126,106 @@ notes:
   [`EnvFilter`] or [`Targets`] filters from [`tracing-subscriber`], add
   `"tokio=trace,runtime=trace"` to your filter configuration.
 
-to **run the console command line tool**, simply
+### running the console
+
+to **run the console command-line tool**, simply
 ```shell
 $ cargo run
 ```
 in this repository.
+
+by default, this will attempt to connect to an instrumented application running
+on localhost on port 6669. if the application is running somewhere else, or is
+serving the console endpoint on a different port, a target address can be passed
+as an argument to the console (either as an `<IP>:<PORT>` or
+`<DNS_NAME>:<PORT>`). for example:
+
+```shell
+$ cargo run -- http://my.great.console.app.local:5555
+```
+
+the console command-line tool supports a number of additional flags to configure
+its behavior. the `-h` or `--help` flag will print a list of supported
+command-line flags and arguments:
+
+```
+USAGE:
+    tokio-console [FLAGS] [OPTIONS] [TARGET_ADDR]
+
+ARGS:
+    <TARGET_ADDR>
+            The address of a console-enabled process to connect to.
+
+            This may be an IP address and port, or a DNS name. [default: http://127.0.0.1:6669]
+
+FLAGS:
+        --ascii-only
+            Explicitly use only ASCII characters
+
+    -h, --help
+            Print help information
+
+        --no-colors
+            Disable ANSI colors entirely
+
+        --no-duration-colors
+            Disable color-coding for duration units
+
+        --no-terminated-colors
+            Disable color-coding for terminated tasks
+
+    -V, --version
+            Print version information
+
+OPTIONS:
+        --colorterm <truecolor>
+            Overrides the value of the `COLORTERM` environment variable.
+
+            If this is set to `24bit` or `truecolor`, 24-bit RGB color support will be enabled.
+            [env: COLORTERM=truecolor] [possible values: 24bit, truecolor]
+
+        --lang <LANG>
+            Overrides the terminal's default language [env: LANG=en_US.UTF-8] [default: en_us.UTF-8]
+
+        --log <ENV_FILTER>
+            Log level filter for the console's internal diagnostics.
+
+            The console will log to stderr if a log level filter is provided. Since the console
+            application runs interactively, stderr should generally be redirected to a file to avoid
+            interfering with the console's text output. [env: RUST_LOG=] [default: off]
+
+        --palette <PALETTE>
+            Explicitly set which color palette to use [possible values: 8, 16, 256, all, off]
+
+        --retain-for <RETAIN_FOR>
+            How long to continue displaying completed tasks and dropped resources after they have
+            been closed.
+
+            This accepts either a duration, parsed as a combination of time spans (such as `5days
+            2min 2s`), or `none` to disable removing completed tasks and dropped resources.
+
+            Each time span is an integer number followed by a suffix. Supported suffixes are:
+
+            * `nsec`, `ns` -- nanoseconds
+
+            * `usec`, `us` -- microseconds
+
+            * `msec`, `ms` -- milliseconds
+
+            * `seconds`, `second`, `sec`, `s`
+
+            * `minutes`, `minute`, `min`, `m`
+
+            * `hours`, `hour`, `hr`, `h`
+
+            * `days`, `day`, `d`
+
+            * `weeks`, `week`, `w`
+
+            * `months`, `month`, `M` -- defined as 30.44 days
+
+            * `years`, `year`, `y` -- defined as 365.25 days [default: 6s]
+```
 
 ## for development:
 
