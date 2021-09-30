@@ -234,7 +234,7 @@ dependencies = [
  "tonic",
  "tracing",
  "tracing-core",
- "tracing-subscriber 0.2.25",
+ "tracing-subscriber 0.3.1",
 ]
 
 [[package]]
@@ -1478,7 +1478,6 @@ version = "0.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e0d2eaa99c3c2e41547cfa109e910a68ea03823cccad4a0525dcbc9b01e8c71"
 dependencies = [
- "parking_lot",
  "sharded-slab",
  "thread_local",
  "tracing-core",
@@ -1493,6 +1492,7 @@ dependencies = [
  "ansi_term",
  "lazy_static",
  "matchers",
+ "parking_lot",
  "regex",
  "sharded-slab",
  "smallvec",

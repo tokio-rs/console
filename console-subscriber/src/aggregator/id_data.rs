@@ -94,8 +94,12 @@ impl<T> IdData<T> {
         stats.data.retain_and_shrink(|id, (stats, dirty)| {
             if let Some(dropped_at) = stats.dropped_at() {
                 let dropped_for = now.duration_since(dropped_at).unwrap_or_default();
-                // if there are any clients watching, retain all dirty tasks regardless of age
-                if (*dirty && has_watchers) || dropped_for > retention {
+                let should_drop =
+                    // if there are any clients watching, retain all dirty tasks regardless of age
+                    (*dirty && has_watchers)
+                    || dropped_for > retention;
+
+                if should_drop {
                     dropped_ids.insert(*id);
                 }
                 return !should_drop;

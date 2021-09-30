@@ -218,8 +218,7 @@ impl TasksLayer {
         let (tx, events) = mpsc::channel(config.event_buffer_capacity);
         let (subscribe, rpcs) = mpsc::channel(256);
 
-        let aggregator = Aggregator::new(events, rpcs, &config)
-            .with_subscriber(tracing::subscriber::NoSubscriber::default());
+        let aggregator = Aggregator::new(events, rpcs, &config);
         let flush = aggregator.flush().clone();
 
         // Conservatively, start to trigger a flush when half the channel is full.
@@ -563,8 +562,10 @@ impl Server {
         let aggregate = self
             .aggregator
             .take()
-            .expect("cannot start server multiple times");
-        let aggregate = spawn_named(aggregate.run(), "console::aggregate");
+            .expect("cannot start server multiple times")
+            .run()
+            .with_subscriber(tracing::subscriber::NoSubscriber::default());
+        let aggregate = spawn_named(aggregate, "console::aggregate");
         let addr = self.addr;
         let serve = builder
             .add_service(proto::instrument::instrument_server::InstrumentServer::new(
