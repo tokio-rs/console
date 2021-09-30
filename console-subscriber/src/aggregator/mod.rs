@@ -341,7 +341,6 @@ impl Aggregator {
                 // triggered when the event buffer is approaching capacity
                 _ = self.flush_capacity.should_flush.notified() => {
                     self.flush_capacity.triggered.store(false, Release);
-                    tracing::debug!("approaching capacity; draining buffer");
                     false
                 }
 
@@ -360,10 +359,7 @@ impl Aggregator {
                         Some(Command::Resume) => {
                             self.temporality = Temporality::Live;
                         }
-                        None => {
-                            tracing::debug!("rpc channel closed, terminating");
-                            return;
-                        }
+                        None => return,
                     };
 
                     false
@@ -390,10 +386,7 @@ impl Aggregator {
                     }
                     // The channel closed, no more events will be emitted...time
                     // to stop aggregating.
-                    None => {
-                        tracing::debug!("event channel closed; terminating");
-                        return;
-                    }
+                    None => return,
                 };
             }
 
@@ -775,7 +768,10 @@ impl Aggregator {
                     let field_name = match update.field.name.clone() {
                         Some(name) => name,
                         None => {
-                            tracing::warn!(?update.field, "field missing name, skipping...");
+                            eprintln!(
+                                "warning: field {:?} missing name, skipping...",
+                                update.field
+                            );
                             return;
                         }
                     };
@@ -1008,8 +1004,8 @@ fn update_attribute(attribute: &mut Attribute, update: AttributeUpdate) {
 
             Some(AttributeUpdateOp::Override) => *v = upd,
 
-            None => tracing::warn!(
-                "numeric attribute update {:?} needs to have an op field",
+            None => eprintln!(
+                "warning: numeric attribute update {:?} needs to have an op field",
                 update_name
             ),
         },
@@ -1021,17 +1017,16 @@ fn update_attribute(attribute: &mut Attribute, update: AttributeUpdate) {
 
             Some(AttributeUpdateOp::Override) => *v = upd,
 
-            None => tracing::warn!(
-                "numeric attribute update {:?} needs to have an op field",
+            None => eprintln!(
+                "warning: numeric attribute update {:?} needs to have an op field",
                 update_name
             ),
         },
 
         (val, update) => {
-            tracing::warn!(
-                "attribute {:?} cannot be updated by update {:?}",
-                val,
-                update
+            eprintln!(
+                "warning: attribute {:?} cannot be updated by update {:?}",
+                val, update
             );
         }
     }

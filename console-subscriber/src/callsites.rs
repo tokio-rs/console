@@ -4,7 +4,7 @@ use std::{
     fmt, ptr,
     sync::atomic::{AtomicPtr, AtomicUsize, Ordering},
 };
-use tracing_core::{callsite, Metadata};
+use tracing::{callsite, Metadata};
 
 pub(crate) struct Callsites<const MAX_CALLSITES: usize> {
     ptrs: [AtomicPtr<Metadata<'static>>; MAX_CALLSITES],

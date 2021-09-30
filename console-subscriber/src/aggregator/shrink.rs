@@ -54,13 +54,6 @@ where
         self.retain(f);
 
         if self.len() < len0 {
-            tracing::debug!(
-                len = self.len(),
-                dropped = len0.saturating_sub(self.len()),
-                data.key = %type_name::<K>(),
-                data.val = %type_name::<V>(),
-                "dropped unused entries"
-            );
             self.try_shrink();
         }
     }
@@ -108,12 +101,6 @@ impl<T> ShrinkVec<T> {
         self.retain(f);
 
         if self.len() < len0 {
-            tracing::debug!(
-                len = self.len(),
-                dropped = len0.saturating_sub(self.len()),
-                data = %type_name::<T>(),
-                "dropped unused data"
-            );
             self.try_shrink();
         }
     }
@@ -171,14 +158,6 @@ impl Shrink {
         // Has the required interval elapsed since the last shrink?
         self.since_shrink = self.since_shrink.saturating_add(1);
         if self.since_shrink < self.shrink_every {
-            tracing::trace!(
-                self.since_shrink,
-                self.shrink_every,
-                capacity_bytes = capacity * mem::size_of::<T>(),
-                used_bytes = len * mem::size_of::<T>(),
-                data = %type_name::<T>(),
-                "should_shrink: shrink interval has not elapsed"
-            );
             return false;
         }
 
@@ -187,31 +166,11 @@ impl Shrink {
         let used_bytes = len * mem::size_of::<T>();
         let diff = capacity_bytes.saturating_sub(used_bytes);
         if diff < self.min_bytes {
-            tracing::trace!(
-                self.since_shrink,
-                self.shrink_every,
-                self.min_bytes,
-                freed_bytes = diff,
-                capacity_bytes,
-                used_bytes,
-                data = %type_name::<T>(),
-                "should_shrink: would not free sufficient bytes"
-            );
             return false;
         }
 
         // Reset the clock! time to shrink!
         self.since_shrink = 0;
-        tracing::debug!(
-            self.since_shrink,
-            self.shrink_every,
-            self.min_bytes,
-            freed_bytes = diff,
-            capacity_bytes,
-            used_bytes,
-            data = %type_name::<T>(),
-            "should_shrink: shrinking!"
-        );
         true
     }
 }
