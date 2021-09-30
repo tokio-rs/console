@@ -11,8 +11,9 @@ use std::{
 use thread_local::ThreadLocal;
 use tokio::sync::{mpsc, oneshot};
 use tracing_core::{
+    dispatcher::{self, Dispatch},
     span,
-    subscriber::{self, Subscriber},
+    subscriber::{self, NoSubscriber, Subscriber},
     Metadata,
 };
 use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
@@ -78,6 +79,9 @@ pub struct TasksLayer {
     ///
     /// TODO: Take some time to determine more reasonable numbers
     state_update_callsites: Callsites<32>,
+
+    /// Used for unsetting the default dispatcher inside of span callbacks.
+    no_dispatch: Dispatch,
 }
 
 pub struct Server {
@@ -237,6 +241,7 @@ impl TasksLayer {
             poll_op_callsites: Callsites::default(),
             state_update_callsites: Callsites::default(),
             current_spans: ThreadLocal::new(),
+            no_dispatch: Dispatch::new(NoSubscriber::default()),
         };
         (layer, server)
     }
@@ -314,9 +319,10 @@ impl TasksLayer {
 
         match self.tx.try_reserve() {
             Ok(permit) => permit.send(event),
-            Err(TrySendError::Closed(_)) => tracing::warn!(
-                "console server task has terminated; task stats will no longer be updated"
-            ),
+            Err(TrySendError::Closed(_)) => {
+                // we should warn here eventually, but nop for now because we
+                // can't trigger tracing events...
+            }
             Err(TrySendError::Full(_)) => {
                 // this shouldn't happen, since we trigger a flush when
                 // approaching the high water line...but if the executor wait
@@ -485,6 +491,7 @@ where
             return;
         }
 
+        let _default = dispatcher::set_default(&self.no_dispatch);
         self.current_spans
             .get_or_default()
             .borrow_mut()
@@ -501,6 +508,7 @@ where
             return;
         }
 
+        let _default = dispatcher::set_default(&self.no_dispatch);
         if let Some(spans) = self.current_spans.get() {
             spans.borrow_mut().pop(id);
         }
@@ -516,6 +524,7 @@ where
             return;
         }
 
+        let _default = dispatcher::set_default(&self.no_dispatch);
         self.send(Event::Close {
             at: SystemTime::now(),
             id,
