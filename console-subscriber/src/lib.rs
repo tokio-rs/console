@@ -219,7 +219,7 @@ impl TasksLayer {
         let (subscribe, rpcs) = mpsc::channel(256);
 
         let aggregator = Aggregator::new(events, rpcs, &config)
-            .with_subscriber(tracing::subscriber::NoSubscriber);
+            .with_subscriber(tracing::subscriber::NoSubscriber::default());
         let flush = aggregator.flush().clone();
 
         // Conservatively, start to trigger a flush when half the channel is full.
