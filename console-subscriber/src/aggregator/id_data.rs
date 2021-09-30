@@ -80,16 +80,6 @@ impl<T> IdData<T> {
         has_watchers: bool,
         ids: &mut Ids,
     ) {
-        let _span = tracing::debug_span!(
-            "drop_closed",
-            entity = %std::any::type_name::<T>(),
-            stats = %std::any::type_name::<R>(),
-        )
-        .entered();
-
-        // drop closed entities
-        tracing::trace!(?retention, has_watchers, "dropping closed");
-
         let mut dropped_ids = HashSet::new();
         stats.data.retain_and_shrink(|id, (stats, dirty)| {
             if let Some(dropped_at) = stats.dropped_at() {
