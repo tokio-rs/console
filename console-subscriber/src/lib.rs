@@ -10,8 +10,9 @@ use std::{
 };
 use thread_local::ThreadLocal;
 use tokio::sync::{mpsc, oneshot};
-use tracing_core::{
+use tracing::{
     dispatcher::{self, Dispatch},
+    instrument::WithSubscriber,
     span,
     subscriber::{self, NoSubscriber, Subscriber},
     Metadata,
@@ -217,7 +218,8 @@ impl TasksLayer {
         let (tx, events) = mpsc::channel(config.event_buffer_capacity);
         let (subscribe, rpcs) = mpsc::channel(256);
 
-        let aggregator = Aggregator::new(events, rpcs, &config);
+        let aggregator = Aggregator::new(events, rpcs, &config)
+            .with_subscriber(tracing::subscriber::NoSubscriber);
         let flush = aggregator.flush().clone();
 
         // Conservatively, start to trigger a flush when half the channel is full.
