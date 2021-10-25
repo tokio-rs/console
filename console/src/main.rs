@@ -2,7 +2,7 @@ use color_eyre::{eyre::eyre, Help, SectionExt};
 use console_api::tasks::TaskDetails;
 use state::State;
 
-use clap::Clap;
+use clap::Parser as Clap;
 use futures::stream::StreamExt;
 use tokio::sync::{mpsc, watch};
 use tui::{
