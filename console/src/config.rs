@@ -1,5 +1,5 @@
 use crate::view::Palette;
-use clap::{ArgGroup, Clap, ValueHint};
+use clap::{ArgGroup, Parser as Clap, ValueHint};
 use std::process::Command;
 use std::str::FromStr;
 use std::time::Duration;
