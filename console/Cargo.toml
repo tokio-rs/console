@@ -6,16 +6,15 @@ repository = "https://github.com/tokio-rs/console"
 
 [dependencies]
 atty = "0.2"
-console-api = { path = "../console-api", features = ["transport"]}
+console-api = { path = "../console-api", features = ["transport"] }
 clap = "3.0.0-beta.5"
-tokio = { version = "1", features = ["full", "rt-multi-thread"]}
+tokio = { version = "1", features = ["full", "rt-multi-thread"] }
 tonic = { version = "0.5", features = ["transport"] }
 futures = "0.3"
 tui = { version = "0.16.0", default-features = false, features = ["crossterm"] }
-chrono = "0.4"
 tracing = "0.1"
-tracing-subscriber = "0.2.16"
-tracing-journald = "0.1"
+tracing-subscriber = { version = "0.3.0", features = ["env-filter"] }
+tracing-journald = "0.2"
 prost-types = "0.8"
 crossterm = { version = "0.20", features = ["event-stream"] }
 color-eyre = { version = "0.5", features = ["issue-url"] }
