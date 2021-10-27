@@ -359,7 +359,7 @@ where
         subscriber::Interest::always()
     }
 
-    fn new_span(&self, attrs: &span::Attributes<'_>, id: &span::Id, _: Context<'_, S>) {
+    fn on_new_span(&self, attrs: &span::Attributes<'_>, id: &span::Id, _: Context<'_, S>) {
         let metadata = attrs.metadata();
         if self.is_spawn(metadata) {
             let at = SystemTime::now();
