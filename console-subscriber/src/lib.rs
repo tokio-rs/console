@@ -222,7 +222,7 @@ impl TasksLayer {
 
         // Conservatively, start to trigger a flush when half the channel is full.
         // This tries to reduce the chance of losing events to a full channel.
-        let flush_under_capacity = config.event_buffer_capacity / 2;
+        let flush_under_capacity = config.event_buffer_capacity / 4;
 
         let server = Server {
             aggregator: Some(aggregator),
@@ -248,7 +248,7 @@ impl TasksLayer {
 }
 
 impl TasksLayer {
-    pub const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 1024 * 10;
+    pub const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 1024 * 100;
     pub const DEFAULT_CLIENT_BUFFER_CAPACITY: usize = 1024 * 4;
     pub const DEFAULT_PUBLISH_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -406,6 +406,7 @@ where
     fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
         let metadata = event.metadata();
         if self.waker_callsites.contains(event.metadata()) {
+            tracing::debug!(?event, "waker op event");
             let at = SystemTime::now();
             let mut visitor = WakerVisitor::default();
             event.record(&mut visitor);
@@ -424,6 +425,7 @@ where
             }
             // else unknown waker event... what to do? can't trace it from here...
         } else if self.poll_op_callsites.contains(event.metadata()) {
+            tracing::debug!(?event, "poll op event");
             match ctx.event_span(event) {
                 Some(resource_span) if self.is_resource(resource_span.metadata()) => {
                     let mut poll_op_visitor = PollOpVisitor::default();
@@ -463,6 +465,7 @@ where
                 ),
             }
         } else if self.state_update_callsites.contains(event.metadata()) {
+            tracing::debug!(?event, "state update");
             match ctx.event_span(event) {
                 Some(resource_span) if self.is_resource(resource_span.metadata()) => {
                     let meta_id = event.metadata().into();
