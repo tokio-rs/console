@@ -102,7 +102,7 @@ pub(crate) struct Aggregator {
 #[derive(Debug)]
 pub(crate) struct Flush {
     pub(crate) should_flush: Notify,
-    pub(crate) triggered: AtomicBool,
+    triggered: AtomicBool,
 }
 
 // An entity (e.g Task, Resource) that at some point in
@@ -340,7 +340,6 @@ impl Aggregator {
 
                 // triggered when the event buffer is approaching capacity
                 _ = self.flush_capacity.should_flush.notified() => {
-                    self.flush_capacity.triggered.store(false, Release);
                     tracing::debug!("approaching capacity; draining buffer");
                     false
                 }
@@ -379,6 +378,7 @@ impl Aggregator {
             // exited. that would result in a busy-loop. instead, we only want
             // to be woken when the flush interval has elapsed, or when the
             // channel is almost full.
+            let mut drained = false;
             while let Some(event) = self.events.recv().now_or_never() {
                 match event {
                     Some(event) => {
@@ -386,7 +386,8 @@ impl Aggregator {
                         if let Some(ref recorder) = self.recorder {
                             recorder.record(&event);
                         }
-                        self.update_state(event)
+                        self.update_state(event);
+                        drained = true;
                     }
                     // The channel closed, no more events will be emitted...time
                     // to stop aggregating.
@@ -403,6 +404,9 @@ impl Aggregator {
                 self.publish();
             }
             self.cleanup_closed();
+            if drained {
+                self.flush_capacity.has_flushed();
+            }
         }
     }
 
@@ -837,6 +841,13 @@ impl Flush {
         } else {
             // someone else already did it, that's fine...
         }
+    }
+
+    /// Indicates that the buffer has been successfully flushed.
+    fn has_flushed(&self) {
+        let _ = self
+            .triggered
+            .compare_exchange(true, false, AcqRel, Acquire);
     }
 }
 
