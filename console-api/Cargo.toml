@@ -2,6 +2,8 @@
 name = "console-api"
 version = "0.1.0"
 edition = "2018"
+license = "MIT"
+
 [features]
 # Generate code that is compatible with Tonic's `transport` module.
 transport = ["tonic-build/transport", "tonic/transport"]

@@ -2,6 +2,7 @@
 name = "tokio-console"
 version = "0.1.0"
 edition = "2018"
+license = "MIT"
 repository = "https://github.com/tokio-rs/console"
 
 [dependencies]
