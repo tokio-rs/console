@@ -425,9 +425,11 @@ where
             // else unknown waker event... what to do? can't trace it from here...
         } else if self.poll_op_callsites.contains(event.metadata()) {
             match ctx.event_span(event) {
+                // poll op event should have a resource span parent
                 Some(resource_span) if self.is_resource(resource_span.metadata()) => {
                     let mut poll_op_visitor = PollOpVisitor::default();
                     event.record(&mut poll_op_visitor);
+                    // poll op event should be emitted in the context of an async op and task spans
                     if let Some((op_name, is_ready)) = poll_op_visitor.result() {
                         let task_and_async_op_ids = self.current_spans.get().and_then(|stack| {
                             let stack = stack.borrow();
@@ -449,21 +451,14 @@ where
                                 task_id,
                                 is_ready,
                             });
-                        } else {
-                            eprintln!(
-                                "poll op event should be emitted in the context of an async op and task spans: {:?}",
-                                event
-                            )
                         }
                     }
                 }
-                _ => eprintln!(
-                    "poll op event should have a resource span parent: {:?}",
-                    event
-                ),
+                _ => {}
             }
         } else if self.state_update_callsites.contains(event.metadata()) {
             match ctx.event_span(event) {
+                // state update event should have a resource span parent:
                 Some(resource_span) if self.is_resource(resource_span.metadata()) => {
                     let meta_id = event.metadata().into();
                     let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
@@ -478,10 +473,7 @@ where
                         });
                     }
                 }
-                _ => eprintln!(
-                    "state update event should have a resource span parent: {:?}",
-                    event
-                ),
+                _ => {}
             }
         }
     }
