@@ -13,6 +13,7 @@ use tracing_core::{
 const LOCATION_FILE: &str = "loc.file";
 const LOCATION_LINE: &str = "loc.line";
 const LOCATION_COLUMN: &str = "loc.col";
+const INHERIT_FIELD_NAME: &str = "inherits_child_attrs";
 
 /// Used to extract the fields needed to construct
 /// an Event::Resource from the metadata of a tracing span
@@ -22,15 +23,21 @@ const LOCATION_COLUMN: &str = "loc.col";
 ///     "runtime.resource",
 ///     concrete_type = "Sleep",
 ///     kind = "timer",
+///     is_internal = true,
+///     inherits_child_attrs = true,
 /// );
 ///
 /// Fields:
 /// concrete_type - indicates the concrete rust type for this resource
 /// kind - indicates the type of resource (i.e. timer, sync, io )
+/// is_internal - whether this is a resource type that is not exposed publicly (i.e. BatchSemaphore)
+/// inherits_child_attrs - whether this resource should inherit the state attributes of its children
 #[derive(Default)]
 pub(crate) struct ResourceVisitor {
     concrete_type: Option<String>,
     kind: Option<resource::Kind>,
+    is_internal: bool,
+    inherit_child_attrs: bool,
     line: Option<u32>,
     file: Option<String>,
     column: Option<u32>,
@@ -86,6 +93,7 @@ pub(crate) struct TaskVisitor {
 #[derive(Default)]
 pub(crate) struct AsyncOpVisitor {
     source: Option<String>,
+    inherit_child_attrs: bool,
 }
 
 /// Used to extract the fields needed to construct
@@ -152,10 +160,13 @@ pub(crate) struct StateUpdateVisitor {
 impl ResourceVisitor {
     pub(crate) const RES_SPAN_NAME: &'static str = "runtime.resource";
     const RES_CONCRETE_TYPE_FIELD_NAME: &'static str = "concrete_type";
+    const RES_VIZ_FIELD_NAME: &'static str = "is_internal";
     const RES_KIND_FIELD_NAME: &'static str = "kind";
     const RES_KIND_TIMER: &'static str = "timer";
 
-    pub(crate) fn result(self) -> Option<(String, resource::Kind, Option<proto::Location>)> {
+    pub(crate) fn result(
+        self,
+    ) -> Option<(String, resource::Kind, Option<proto::Location>, bool, bool)> {
         let concrete_type = self.concrete_type?;
         let kind = self.kind?;
 
@@ -170,7 +181,13 @@ impl ResourceVisitor {
             None
         };
 
-        Some((concrete_type, kind, location))
+        Some((
+            concrete_type,
+            kind,
+            location,
+            self.is_internal,
+            self.inherit_child_attrs,
+        ))
     }
 }
 
@@ -190,6 +207,14 @@ impl Visit for ResourceVisitor {
                 self.kind = Some(resource::Kind { kind });
             }
             LOCATION_FILE => self.file = Some(value.to_string()),
+            _ => {}
+        }
+    }
+
+    fn record_bool(&mut self, field: &tracing_core::Field, value: bool) {
+        match field.name() {
+            Self::RES_VIZ_FIELD_NAME => self.is_internal = value,
+            INHERIT_FIELD_NAME => self.inherit_child_attrs = value,
             _ => {}
         }
     }
@@ -318,8 +343,9 @@ impl AsyncOpVisitor {
     pub(crate) const ASYNC_OP_SPAN_NAME: &'static str = "runtime.resource.async_op";
     const ASYNC_OP_SRC_FIELD_NAME: &'static str = "source";
 
-    pub(crate) fn result(self) -> Option<String> {
-        self.source
+    pub(crate) fn result(self) -> Option<(String, bool)> {
+        let inherit = self.inherit_child_attrs;
+        self.source.map(|s| (s, inherit))
     }
 }
 
@@ -329,6 +355,12 @@ impl Visit for AsyncOpVisitor {
     fn record_str(&mut self, field: &tracing_core::Field, value: &str) {
         if field.name() == Self::ASYNC_OP_SRC_FIELD_NAME {
             self.source = Some(value.to_string());
+        }
+    }
+
+    fn record_bool(&mut self, field: &tracing_core::Field, value: bool) {
+        if field.name() == INHERIT_FIELD_NAME {
+            self.inherit_child_attrs = value;
         }
     }
 }
@@ -398,7 +430,9 @@ impl Visit for PollOpVisitor {
 }
 
 impl StateUpdateVisitor {
-    pub(crate) const STATE_UPDATE_EVENT_TARGET: &'static str = "runtime::resource::state_update";
+    pub(crate) const RE_STATE_UPDATE_EVENT_TARGET: &'static str = "runtime::resource::state_update";
+    pub(crate) const AO_STATE_UPDATE_EVENT_TARGET: &'static str =
+        "runtime::resource::async_op::state_update";
 
     const STATE_OP_SUFFIX: &'static str = ".op";
     const STATE_UNIT_SUFFIX: &'static str = ".unit";

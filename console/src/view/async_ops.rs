@@ -1,6 +1,6 @@
 use crate::{
     state::{
-        resources::{Resource, SortBy},
+        async_ops::{AsyncOp, SortBy},
         State,
     },
     view::{
@@ -18,22 +18,27 @@ use tui::{
 };
 
 #[derive(Debug, Default)]
-pub(crate) struct ResourcesTable {}
+pub(crate) struct AsyncOpsTable {}
 
-impl TableList for ResourcesTable {
-    type Row = Resource;
+pub(crate) struct AsyncOpsTableCtx {
+    pub(crate) initial_render: bool,
+    pub(crate) resource_id: u64,
+}
+
+impl TableList for AsyncOpsTable {
+    type Row = AsyncOp;
     type Sort = SortBy;
-    type Context = ();
+    type Context = AsyncOpsTableCtx;
 
     const HEADER: &'static [&'static str] = &[
         "ID",
         "Parent",
-        "Kind",
+        "Task",
+        "Source",
         "Total",
-        "Target",
-        "Type",
-        "Viz",
-        "Location",
+        "Busy",
+        "Idle",
+        "Polls",
         "Attributes",
     ];
 
@@ -43,7 +48,7 @@ impl TableList for ResourcesTable {
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
         state: &mut State,
-        _: Self::Context,
+        ctx: Self::Context,
     ) {
         let now = if let Some(now) = state.last_updated_at() {
             now
@@ -52,65 +57,98 @@ impl TableList for ResourcesTable {
             return;
         };
 
-        table_list_state
-            .sorted_items
-            .extend(state.resources_state_mut().take_new_resources());
+        let AsyncOpsTableCtx {
+            initial_render,
+            resource_id,
+        } = ctx;
+
+        if initial_render {
+            table_list_state
+                .sorted_items
+                .extend(state.async_ops_state().async_ops().filter(|op| {
+                    op.upgrade()
+                        .map(|op| resource_id == op.borrow().resource_id())
+                        .unwrap_or(false)
+                }))
+        } else {
+            table_list_state.sorted_items.extend(
+                state
+                    .async_ops_state_mut()
+                    .take_new_async_ops()
+                    .filter(|op| {
+                        op.upgrade()
+                            .map(|op| resource_id == op.borrow().resource_id())
+                            .unwrap_or(false)
+                    }),
+            )
+        };
         table_list_state
             .sort_by
             .sort(now, &mut table_list_state.sorted_items);
 
-        let viz_len: u16 = Self::HEADER[6].len() as u16;
-
         let mut id_width = view::Width::new(Self::HEADER[0].len() as u16);
         let mut parent_width = view::Width::new(Self::HEADER[1].len() as u16);
+        let mut task_width = view::Width::new(Self::HEADER[2].len() as u16);
+        let mut source_width = view::Width::new(Self::HEADER[3].len() as u16);
+        let mut polls_width = view::Width::new(Self::HEADER[7].len() as u16);
 
-        let mut kind_width = view::Width::new(Self::HEADER[2].len() as u16);
-        let mut target_width = view::Width::new(Self::HEADER[4].len() as u16);
-        let mut type_width = view::Width::new(Self::HEADER[5].len() as u16);
-        let mut location_width = view::Width::new(Self::HEADER[7].len() as u16);
+        let dur_cell = |dur: std::time::Duration| -> Cell<'static> {
+            Cell::from(styles.time_units(format!(
+                "{:>width$.prec$?}",
+                dur,
+                width = DUR_LEN,
+                prec = DUR_PRECISION,
+            )))
+        };
 
         let rows = {
             let id_width = &mut id_width;
             let parent_width = &mut parent_width;
-            let kind_width = &mut kind_width;
-            let target_width = &mut target_width;
-            let type_width = &mut type_width;
-            let location_width = &mut location_width;
+            let task_width = &mut task_width;
+            let source_width = &mut source_width;
+            let polls_width = &mut polls_width;
 
             table_list_state
                 .sorted_items
                 .iter()
-                .filter_map(move |resource| {
-                    let resource = resource.upgrade()?;
-                    let resource = resource.borrow();
+                .filter_map(move |async_op| {
+                    let async_op = async_op.upgrade()?;
+                    let async_op = async_op.borrow();
 
-                    let parent_id_str = match resource.parent_id() {
+                    let parent_id_str = match async_op.parent_id() {
                         Some(id) => {
                             format!("{}", id)
                         }
                         None => "n/a".to_string(),
                     };
 
+                    let task_id = async_op.task_id()?;
+                    let task_name = state
+                        .tasks_state()
+                        .task(task_id)
+                        .and_then(|t| t.upgrade())
+                        .and_then(|t| t.borrow().name().map(String::from));
+
+                    let task_str = match task_name {
+                        Some(name) => format!("{} ({})", task_id, name),
+                        None => format!("{}", task_id),
+                    };
+
                     let mut row = Row::new(vec![
                         Cell::from(id_width.update_str(format!(
                             "{:>width$}",
-                            resource.id(),
+                            async_op.id(),
                             width = id_width.chars() as usize
                         ))),
                         Cell::from(parent_width.update_str(parent_id_str)),
-                        Cell::from(kind_width.update_str(resource.kind()).to_owned()),
-                        Cell::from(styles.time_units(format!(
-                            "{:>width$.prec$?}",
-                            resource.total(now),
-                            width = DUR_LEN,
-                            prec = DUR_PRECISION,
-                        ))),
-                        Cell::from(target_width.update_str(resource.target()).to_owned()),
-                        Cell::from(type_width.update_str(resource.concrete_type()).to_owned()),
-                        Cell::from(resource.type_visibility().render(styles)),
-                        Cell::from(location_width.update_str(resource.location().to_owned())),
+                        Cell::from(task_width.update_str(task_str)),
+                        Cell::from(source_width.update_str(async_op.source().to_string())),
+                        dur_cell(async_op.total(now)),
+                        dur_cell(async_op.busy(now)),
+                        dur_cell(async_op.idle(now)),
+                        Cell::from(polls_width.update_str(async_op.total_polls().to_string())),
                         Cell::from(Spans::from(
-                            resource
+                            async_op
                                 .formatted_attributes()
                                 .iter()
                                 .flatten()
@@ -119,7 +157,7 @@ impl TableList for ResourcesTable {
                         )),
                     ]);
 
-                    if resource.dropped() {
+                    if async_op.dropped() {
                         row = row.style(styles.terminated());
                     }
 
@@ -155,7 +193,7 @@ impl TableList for ResourcesTable {
         };
 
         let block = styles.border_block().title(vec![bold(format!(
-            "Resources ({}) ",
+            "Async Ops ({}) ",
             table_list_state.len()
         ))]);
 
@@ -172,19 +210,20 @@ impl TableList for ResourcesTable {
                 .as_ref(),
             )
             .split(area);
+
         let controls_area = chunks[0];
-        let tasks_area = chunks[1];
+        let async_ops_area = chunks[1];
 
         let attributes_width = layout::Constraint::Percentage(100);
         let widths = &[
             id_width.constraint(),
             parent_width.constraint(),
-            kind_width.constraint(),
+            task_width.constraint(),
+            source_width.constraint(),
             layout::Constraint::Length(DUR_LEN as u16),
-            target_width.constraint(),
-            type_width.constraint(),
-            layout::Constraint::Length(viz_len),
-            location_width.constraint(),
+            layout::Constraint::Length(DUR_LEN as u16),
+            layout::Constraint::Length(DUR_LEN as u16),
+            polls_width.constraint(),
             attributes_width,
         ];
 
@@ -195,7 +234,7 @@ impl TableList for ResourcesTable {
             .highlight_symbol(view::TABLE_HIGHLIGHT_SYMBOL)
             .highlight_style(Style::default().add_modifier(style::Modifier::BOLD));
 
-        frame.render_stateful_widget(table, tasks_area, &mut table_list_state.table_state);
+        frame.render_stateful_widget(table, async_ops_area, &mut table_list_state.table_state);
         frame.render_widget(Paragraph::new(table::controls(styles)), controls_area);
 
         table_list_state

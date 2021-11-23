@@ -41,6 +41,9 @@ message Resource {
     Kind kind = 4;
     // The location in code where the resource was created.
     common.Location location = 5;
+    // The ID of the parent resource.
+    common.Id parent_resource_id = 6;
+    bool is_internal = 7;
 
     message Kind {
         oneof kind {
@@ -59,17 +62,8 @@ message Stats {
     google.protobuf.Timestamp created_at = 1;
     // Timestamp of when the resource was dropped.
     google.protobuf.Timestamp dropped_at = 2;
-    // State attributes of the resource. These are dependent on the type of the resource.
-    // For example, a timer resource will have a duration while a semaphore resource may
-    // have permits as an attribute. These values may change over time as the state of
-    // the resource changes. Therefore, they live in the runtime stats rather than the
-    // static data describing the resource.
-    repeated Attribute attributes = 3;
-
-    message Attribute {
-        common.Field field = 1;
-        optional string unit = 2;
-    }
+    // State attributes of the resource.
+    repeated common.Attribute attributes = 3;
 }
 
 message PollOp {

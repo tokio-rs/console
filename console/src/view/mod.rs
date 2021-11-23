@@ -7,7 +7,9 @@ use tui::{
     text::Span,
 };
 
+mod async_ops;
 mod mini_histogram;
+mod resource;
 mod resources;
 mod styles;
 mod table;
@@ -44,6 +46,8 @@ pub(crate) enum ViewState {
     ResourcesList,
     /// Inspecting a single task instance.
     TaskInstance(self::task::TaskView),
+    /// Inspecting a single resource instance.
+    ResourceInstance(self::resource::ResourceView),
 }
 
 /// The outcome of the update_input method
@@ -53,6 +57,8 @@ pub(crate) enum UpdateKind {
     SelectTask(u64),
     /// The TaskView is exited
     ExitTaskView,
+    /// A new resource is selected
+    SelectResource(u64),
     /// No significant change
     Other,
 }
@@ -115,12 +121,32 @@ impl View {
             }
             ResourcesList => {
                 match event {
+                    key!(Enter) => {
+                        if let Some(res) = self.resources_list.selected_item().upgrade() {
+                            update_kind = UpdateKind::SelectResource(res.borrow().id());
+                            self.state = ResourceInstance(self::resource::ResourceView::new(res));
+                        }
+                    }
                     key!(Char('t')) => {
                         self.state = TasksList;
                     }
                     _ => {
                         // otherwise pass on to view
                         self.resources_list.update_input(event);
+                    }
+                }
+            }
+            ResourceInstance(ref mut view) => {
+                // The escape key changes views, so handle here since we can
+                // mutate the currently selected view.
+                match event {
+                    key!(Esc) => {
+                        self.state = ResourcesList;
+                        update_kind = UpdateKind::Other;
+                    }
+                    _ => {
+                        // otherwise pass on to view
+                        view.update_input(event);
                     }
                 }
             }
@@ -150,16 +176,20 @@ impl View {
     ) {
         match self.state {
             ViewState::TasksList => {
-                self.tasks_list.render(&self.styles, frame, area, state);
+                self.tasks_list.render(&self.styles, frame, area, state, ());
             }
             ViewState::ResourcesList => {
-                self.resources_list.render(&self.styles, frame, area, state);
+                self.resources_list
+                    .render(&self.styles, frame, area, state, ());
             }
             ViewState::TaskInstance(ref mut view) => {
                 let now = state
                     .last_updated_at()
                     .expect("task view implies we've received an update");
                 view.render(&self.styles, frame, area, now);
+            }
+            ViewState::ResourceInstance(ref mut view) => {
+                view.render(&self.styles, frame, area, state);
             }
         }
 

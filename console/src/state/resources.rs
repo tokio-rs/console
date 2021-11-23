@@ -1,5 +1,5 @@
 use crate::intern::{self, InternedStr};
-use crate::state::{format_location, Field, Metadata, Visibility};
+use crate::state::{format_location, Attribute, Field, Metadata, Visibility};
 use crate::view;
 use console_api as proto;
 use std::{
@@ -9,15 +9,18 @@ use std::{
     rc::{Rc, Weak},
     time::{Duration, SystemTime},
 };
-use tui::{
-    style::{Color, Modifier},
-    text::Span,
-};
+use tui::{style::Color, text::Span};
 
 #[derive(Default, Debug)]
 pub(crate) struct ResourcesState {
     resources: HashMap<u64, Rc<RefCell<Resource>>>,
     new_resources: Vec<ResourceRef>,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub(crate) enum TypeVisibility {
+    Public,
+    Internal,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -39,28 +42,23 @@ pub(crate) enum Kind {
 #[derive(Debug)]
 pub(crate) struct Resource {
     id: u64,
+    parent_id: Option<u64>,
     meta_id: u64,
     kind: Kind,
     stats: ResourceStats,
     target: InternedStr,
     concrete_type: InternedStr,
     location: String,
+    visibility: TypeVisibility,
 }
 
 pub(crate) type ResourceRef = Weak<RefCell<Resource>>;
-
-#[derive(Debug)]
-pub(crate) struct Attribute {
-    field: Field,
-    unit: Option<String>,
-}
 
 #[derive(Debug)]
 struct ResourceStats {
     created_at: SystemTime,
     dropped_at: Option<SystemTime>,
     total: Option<Duration>,
-    attributes: Vec<Attribute>,
     formatted_attributes: Vec<Vec<Span<'static>>>,
 }
 
@@ -116,6 +114,10 @@ impl ResourcesState {
         self.new_resources.drain(..)
     }
 
+    pub(crate) fn resource(&self, id: u64) -> Option<ResourceRef> {
+        self.resources.get(&id).map(Rc::downgrade)
+    }
+
     pub(crate) fn update_resources(
         &mut self,
         styles: &view::Styles,
@@ -158,17 +160,25 @@ impl ResourcesState {
             };
 
             let id = resource.id?.id;
+            let parent_id = resource.parent_resource_id.map(|id| id.id);
             let stats = ResourceStats::from_proto(stats_update.remove(&id)?, meta, styles, strings);
             let location = format_location(resource.location);
+            let visibility = if resource.is_internal {
+                TypeVisibility::Internal
+            } else {
+                TypeVisibility::Public
+            };
 
             let resource = Resource {
                 id,
+                parent_id,
                 kind,
                 stats,
                 target: meta.target.clone(),
                 concrete_type: strings.string(resource.concrete_type),
                 meta_id,
                 location,
+                visibility,
             };
             let resource = Rc::new(RefCell::new(resource));
             new_list.push(Rc::downgrade(&resource));
@@ -205,6 +215,14 @@ impl ResourcesState {
 impl Resource {
     pub(crate) fn id(&self) -> u64 {
         self.id
+    }
+
+    pub(crate) fn parent_id(&self) -> Option<u64> {
+        self.parent_id
+    }
+
+    pub(crate) fn type_visibility(&self) -> TypeVisibility {
+        self.visibility
     }
 
     pub(crate) fn target(&self) -> &str {
@@ -275,7 +293,6 @@ impl ResourceStats {
             created_at,
             dropped_at,
             total,
-            attributes,
             formatted_attributes,
         }
     }
@@ -298,30 +315,13 @@ impl Kind {
     }
 }
 
-impl Attribute {
-    fn make_formatted(
-        styles: &view::Styles,
-        attributes: &mut Vec<Attribute>,
-    ) -> Vec<Vec<Span<'static>>> {
-        let key_style = styles.fg(Color::LightBlue).add_modifier(Modifier::BOLD);
-        let delim_style = styles.fg(Color::LightBlue).add_modifier(Modifier::DIM);
-        let val_style = styles.fg(Color::Yellow);
-        let unit_style = styles.fg(Color::LightBlue);
-
-        let mut formatted = Vec::with_capacity(attributes.len());
-        let attributes = attributes.iter();
-        for attr in attributes {
-            let mut elems = vec![
-                Span::styled(attr.field.name.to_string(), key_style),
-                Span::styled("=", delim_style),
-                Span::styled(format!("{}", attr.field.value), val_style),
-            ];
-
-            if let Some(unit) = &attr.unit {
-                elems.push(Span::styled(unit.clone(), unit_style))
-            }
-            formatted.push(elems)
+impl TypeVisibility {
+    pub(crate) fn render(self, styles: &crate::view::Styles) -> Span<'static> {
+        const INT_UTF8: &str = "\u{1F512}";
+        const PUB_UTF8: &str = "\u{2705}";
+        match self {
+            Self::Internal => Span::styled(styles.if_utf8(INT_UTF8, "INT"), styles.fg(Color::Red)),
+            Self::Public => Span::styled(styles.if_utf8(PUB_UTF8, "PUB"), styles.fg(Color::Green)),
         }
-        formatted
     }
 }
