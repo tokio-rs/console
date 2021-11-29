@@ -9,4 +9,4 @@ resolver = "2"
 # Patch the dependency on tokio to get Resource details instrumentation
 [patch.crates-io.tokio]
 git = "https://github.com/tokio-rs/tokio"
-rev = "4039d0e0e32ef2e57f6cfe22eb81f07a8d28e999"
+rev = "88ebd0361e760e68aca705e40ee987c77b9f7679"
