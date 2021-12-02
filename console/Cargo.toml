@@ -10,13 +10,13 @@ atty = "0.2"
 console-api = { path = "../console-api", features = ["transport"] }
 clap = "3.0.0-beta.5"
 tokio = { version = "1", features = ["full", "rt-multi-thread"] }
-tonic = { version = "0.5", features = ["transport"] }
+tonic = { version = "0.6", features = ["transport"] }
 futures = "0.3"
 tui = { version = "0.16.0", default-features = false, features = ["crossterm"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.0", features = ["env-filter"] }
 tracing-journald = "0.2"
-prost-types = "0.8"
+prost-types = "0.9"
 crossterm = { version = "0.20", features = ["event-stream"] }
 color-eyre = { version = "0.5", features = ["issue-url"] }
 hdrhistogram = { version = "7.3.0", default-features = false, features = ["serialization"] }
