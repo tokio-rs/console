@@ -338,6 +338,87 @@ impl TasksLayer {
             self.flush.trigger();
         }
     }
+
+    fn record_waker_event(&self, event: &tracing::Event<'_>) -> Option<Event> {
+        let at = SystemTime::now();
+        let mut visitor = WakerVisitor::default();
+        event.record(&mut visitor);
+        let (id, mut op) = visitor.result()?;
+        if op.is_wake() {
+            // Are we currently inside the task's span? If so, the task
+            // has woken itself.
+            let self_wake = self
+                .current_spans
+                .get()
+                .map(|spans| spans.borrow().iter().any(|span| span == &id))
+                .unwrap_or(false);
+            op = op.self_wake(self_wake);
+        }
+        Some(Event::Waker { id, op, at })
+    }
+
+    fn record_poll_op_event<S>(
+        &self,
+        event: &tracing::Event<'_>,
+        ctx: &Context<'_, S>,
+    ) -> Option<Event>
+    where
+        S: Subscriber + for<'a> LookupSpan<'a>,
+    {
+        // a poll op event should have a resource span parent
+        let resource_span = ctx.event_span(event)?;
+        if !self.is_resource(resource_span.metadata()) {
+            return None;
+        }
+
+        let mut poll_op_visitor = PollOpVisitor::default();
+        event.record(&mut poll_op_visitor);
+        // poll op event should be emitted in the context of an async op and task spans
+        let (op_name, is_ready) = poll_op_visitor.result()?;
+
+        let stack = self.current_spans.get()?.borrow();
+        let task_id = self.first_entered(&stack, |id| self.is_id_spawned(id, ctx))?;
+        let async_op_id = self.first_entered(&stack, |id| self.is_id_async_op(id, ctx))?;
+
+        let at = SystemTime::now();
+        Some(Event::PollOp {
+            metadata: event.metadata(),
+            at,
+            resource_id: resource_span.id(),
+            op_name,
+            async_op_id,
+            task_id,
+            is_ready,
+        })
+    }
+
+    fn record_state_update_event<S>(
+        &self,
+        event: &tracing::Event<'_>,
+        ctx: &Context<'_, S>,
+    ) -> Option<Event>
+    where
+        S: Subscriber + for<'a> LookupSpan<'a>,
+    {
+        // state update event should have a resource span parent:
+        let resource_span = ctx.event_span(event)?;
+        if !self.is_resource(resource_span.metadata()) {
+            return None;
+        }
+
+        let meta_id = event.metadata().into();
+        let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
+        event.record(&mut state_update_visitor);
+        let update = state_update_visitor.result()?;
+
+        // let at = SystemTime::now();
+        Some(Event::StateUpdate {
+            // metadata,
+            // at,
+            resource_id: resource_span.id(),
+            update,
+        })
+    }
 }
 
 impl<S> Layer<S> for TasksLayer
@@ -363,6 +444,8 @@ where
 
     fn on_new_span(&self, attrs: &span::Attributes<'_>, id: &span::Id, _: Context<'_, S>) {
         let metadata = attrs.metadata();
+
+        // Is the span a spawned task?
         if self.is_spawn(metadata) {
             let at = SystemTime::now();
             let mut task_visitor = TaskVisitor::new(metadata.into());
@@ -375,7 +458,11 @@ where
                 fields,
                 location,
             });
-        } else if self.is_resource(metadata) {
+            return;
+        }
+
+        // Is the span a resource?
+        if self.is_resource(metadata) {
             let mut resource_visitor = ResourceVisitor::default();
             attrs.record(&mut resource_visitor);
             if let Some((concrete_type, kind, location)) = resource_visitor.result() {
@@ -389,7 +476,11 @@ where
                     location,
                 });
             } // else unknown resource span format
-        } else if self.is_async_op(metadata) {
+            return;
+        }
+
+        // Is the span an async op?
+        if self.is_async_op(metadata) {
             let mut async_op_visitor = AsyncOpVisitor::default();
             attrs.record(&mut async_op_visitor);
             if let Some(source) = async_op_visitor.result() {
@@ -406,76 +497,24 @@ where
     }
 
     fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
-        let metadata = event.metadata();
         if self.waker_callsites.contains(event.metadata()) {
-            let at = SystemTime::now();
-            let mut visitor = WakerVisitor::default();
-            event.record(&mut visitor);
-            if let Some((id, mut op)) = visitor.result() {
-                if op.is_wake() {
-                    // Are we currently inside the task's span? If so, the task
-                    // has woken itself.
-                    let self_wake = self
-                        .current_spans
-                        .get()
-                        .map(|spans| spans.borrow().iter().any(|span| span == &id))
-                        .unwrap_or(false);
-                    op = op.self_wake(self_wake);
-                }
-                self.send(Event::Waker { id, op, at });
+            if let Some(event) = self.record_waker_event(event) {
+                self.send(event);
             }
             // else unknown waker event... what to do? can't trace it from here...
-        } else if self.poll_op_callsites.contains(event.metadata()) {
-            match ctx.event_span(event) {
-                // poll op event should have a resource span parent
-                Some(resource_span) if self.is_resource(resource_span.metadata()) => {
-                    let mut poll_op_visitor = PollOpVisitor::default();
-                    event.record(&mut poll_op_visitor);
-                    // poll op event should be emitted in the context of an async op and task spans
-                    if let Some((op_name, is_ready)) = poll_op_visitor.result() {
-                        let task_and_async_op_ids = self.current_spans.get().and_then(|stack| {
-                            let stack = stack.borrow();
-                            let task_id =
-                                self.first_entered(&stack, |id| self.is_id_spawned(id, &ctx))?;
-                            let async_op_id =
-                                self.first_entered(&stack, |id| self.is_id_async_op(id, &ctx))?;
-                            Some((task_id, async_op_id))
-                        });
+            return;
+        }
 
-                        if let Some((task_id, async_op_id)) = task_and_async_op_ids {
-                            let at = SystemTime::now();
-                            self.send(Event::PollOp {
-                                metadata,
-                                at,
-                                resource_id: resource_span.id(),
-                                op_name,
-                                async_op_id,
-                                task_id,
-                                is_ready,
-                            });
-                        }
-                    }
-                }
-                _ => {}
+        if self.poll_op_callsites.contains(event.metadata()) {
+            if let Some(event) = self.record_poll_op_event(event, &ctx) {
+                self.send(event);
             }
-        } else if self.state_update_callsites.contains(event.metadata()) {
-            match ctx.event_span(event) {
-                // state update event should have a resource span parent:
-                Some(resource_span) if self.is_resource(resource_span.metadata()) => {
-                    let meta_id = event.metadata().into();
-                    let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
-                    event.record(&mut state_update_visitor);
-                    if let Some(update) = state_update_visitor.result() {
-                        // let at = SystemTime::now();
-                        self.send(Event::StateUpdate {
-                            // metadata,
-                            // at,
-                            resource_id: resource_span.id(),
-                            update,
-                        });
-                    }
-                }
-                _ => {}
+            return;
+        }
+
+        if self.state_update_callsites.contains(event.metadata()) {
+            if let Some(event) = self.record_state_update_event(event, &ctx) {
+                self.send(event);
             }
         }
     }
