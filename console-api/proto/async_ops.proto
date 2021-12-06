@@ -37,10 +37,14 @@ message AsyncOp {
     // The source of this async operation. Most commonly this should be the name
     // of the method where the instantiation of this op has happened.
     string source = 3;
-    // The ID of the parent async op. This field is set when the this async op
-    // is created in the context of another one. An example of that is for example
-    // a `Mutex::lock` which internally calls `Semaphore::acquire`. This field can
-    // be empty.
+    // The ID of the parent async op.
+    //
+    // This field is only set if this async op was created while inside of another
+    // async op.  For example, `tokio::sync`'s `Mutex::lock` internally calls
+    // `Semaphore::acquire`.
+    //
+    // This field can be empty; if it is empty, this async op is not a child of another
+    // async op.
     common.Id parent_async_op_id = 4;
     // The resources's ID.
     common.Id resource_id = 5;

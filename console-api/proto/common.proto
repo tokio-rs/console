@@ -128,7 +128,7 @@ message PollStats {
 // State attributes of an entity. These are dependent on the type of the entity.
 //
 // For example, a timer resource will have a duration, while a semaphore resource may
-// have permits as an attribute. Likewise the async ops of a semaphore may have attributes
+// have a permit count. Likewise, the async ops of a semaphore may have attributes
 // indicating how many permits they are trying to acquire vs how many are acquired.
 // These values may change over time. Therefore, they live in the runtime stats rather
 // than the static data describing the entity.

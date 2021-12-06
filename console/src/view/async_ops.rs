@@ -120,11 +120,7 @@ impl TableList for AsyncOpsTable {
                         .task(task_id)
                         .and_then(|t| t.upgrade())
                         .map(|t| t.borrow().short_desc().to_owned());
-
-                    let task_str = match task {
-                        Some(task_str) => task_str,
-                        None => async_op.task_id_str().to_owned(),
-                    };
+                    let task_str = task.unwrap_or_else(|| async_op.task_id_str().to_owned());
 
                     let mut row = Row::new(vec![
                         Cell::from(id_width.update_str(format!(

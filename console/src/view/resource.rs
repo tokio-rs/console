@@ -88,6 +88,7 @@ impl ResourceView {
             Spans::from(vec![
                 bold("Type: "),
                 Span::raw(resource.concrete_type()),
+                Span::raw(" "),
                 resource.type_visibility().render(styles),
             ]),
             Spans::from(vec![bold("Location: "), Span::raw(resource.location())]),

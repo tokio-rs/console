@@ -176,16 +176,16 @@ impl ResourcesState {
                         let r = r.borrow();
                         format!("{} ({}::{})", r.id(), r.target(), r.concrete_type())
                     })
-                    .unwrap_or(format!("{}", id)),
+                    .unwrap_or_else(|| id.to_string()),
                 None => "n/a".to_string(),
             });
 
-            let parent_id = strings.string(match parent_id {
-                Some(id) => {
-                    format!("{}", id)
-                }
-                None => "n/a".to_string(),
-            });
+            let parent_id = strings.string(
+                parent_id
+                    .as_ref()
+                    .map(u64::to_string)
+                    .unwrap_or_else(|| "n/a".to_string()),
+            );
 
             let stats = ResourceStats::from_proto(stats_update.remove(&id)?, meta, styles, strings);
             let location = format_location(resource.location);

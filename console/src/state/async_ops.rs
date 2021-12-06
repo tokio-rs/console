@@ -301,7 +301,8 @@ impl AsyncOpStats {
         let task_id = pb.task_id.map(|id| id.id);
         let task_id_str = strings.string(
             task_id
-                .map(|tid| format!("{}", tid))
+                .as_ref()
+                .map(u64::to_string)
                 .unwrap_or_else(|| "n/a".to_string()),
         );
         Self {
