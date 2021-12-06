@@ -1,4 +1,8 @@
-use console_api as proto;
+use console_api::{
+    self as proto,
+    instrument::{self, instrument_server, InstrumentRequest},
+    tasks::TaskDetails,
+};
 use proto::resources::resource;
 use serde::Serialize;
 use std::{
@@ -10,6 +14,8 @@ use std::{
 };
 use thread_local::ThreadLocal;
 use tokio::sync::{mpsc, oneshot};
+use tokio_stream::wrappers::ReceiverStream;
+use tonic::{Request, Response, Status};
 use tracing_core::{
     dispatcher::{self, Dispatch},
     span,
@@ -578,6 +584,8 @@ impl fmt::Debug for TasksLayer {
     }
 }
 
+type GrpcResult<T> = Result<tonic::Response<T>, tonic::Status>;
+
 impl Server {
     // XXX(eliza): why is `SocketAddr::new` not `const`???
     pub const DEFAULT_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
@@ -598,9 +606,7 @@ impl Server {
         let aggregate = spawn_named(aggregate.run(), "console::aggregate");
         let addr = self.addr;
         let serve = builder
-            .add_service(proto::instrument::instrument_server::InstrumentServer::new(
-                self,
-            ))
+            .add_service(instrument_server::InstrumentServer::new(self))
             .serve(addr);
         let res = spawn_named(serve, "console::serve").await;
         aggregate.abort();
@@ -609,37 +615,38 @@ impl Server {
 }
 
 #[tonic::async_trait]
-impl proto::instrument::instrument_server::Instrument for Server {
-    type WatchUpdatesStream =
-        tokio_stream::wrappers::ReceiverStream<Result<proto::instrument::Update, tonic::Status>>;
-    type WatchTaskDetailsStream =
-        tokio_stream::wrappers::ReceiverStream<Result<proto::tasks::TaskDetails, tonic::Status>>;
+impl instrument_server::Instrument for Server {
+    type WatchUpdatesStream = ReceiverStream<Result<instrument::Update, Status>>;
+    type WatchTaskDetailsStream = ReceiverStream<Result<TaskDetails, Status>>;
+
     async fn watch_updates(
         &self,
-        req: tonic::Request<proto::instrument::InstrumentRequest>,
-    ) -> Result<tonic::Response<Self::WatchUpdatesStream>, tonic::Status> {
+        req: Request<InstrumentRequest>,
+    ) -> GrpcResult<Self::WatchUpdatesStream> {
         match req.remote_addr() {
             Some(addr) => tracing::debug!(client.addr = %addr, "starting a new watch"),
             None => tracing::debug!(client.addr = %"<unknown>", "starting a new watch"),
         }
         let permit = self.subscribe.reserve().await.map_err(|_| {
-            tonic::Status::internal("cannot start new watch, aggregation task is not running")
+            Status::internal("cannot start new watch, aggregation task is not running")
         })?;
+
         let (tx, rx) = mpsc::channel(self.client_buffer);
         permit.send(Command::Instrument(Watch(tx)));
         tracing::debug!("watch started");
-        let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
-        Ok(tonic::Response::new(stream))
+
+        let stream = ReceiverStream::new(rx);
+        Ok(Response::new(stream))
     }
 
     async fn watch_task_details(
         &self,
-        req: tonic::Request<proto::instrument::TaskDetailsRequest>,
-    ) -> Result<tonic::Response<Self::WatchTaskDetailsStream>, tonic::Status> {
+        req: Request<instrument::TaskDetailsRequest>,
+    ) -> GrpcResult<Self::WatchTaskDetailsStream> {
         let task_id = req
             .into_inner()
             .id
-            .ok_or_else(|| tonic::Status::invalid_argument("missing task_id"))?;
+            .ok_or_else(|| Status::invalid_argument("missing task_id"))?;
         let permit = self.subscribe.reserve().await.map_err(|_| {
             tonic::Status::internal("cannot start new watch, aggregation task is not running")
         })?;
@@ -651,35 +658,38 @@ impl proto::instrument::instrument_server::Instrument for Server {
             stream_sender,
             buffer: self.client_buffer,
         }));
+
         // If the aggregator drops the sender, the task doesn't exist.
         let rx = stream_recv.await.map_err(|_| {
             tracing::warn!(id = ?task_id, "requested task not found");
-            tonic::Status::not_found("task not found")
+            Status::not_found("task not found")
         })?;
 
         tracing::debug!(id = ?task_id, "task details watch started");
-        let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
-        Ok(tonic::Response::new(stream))
+        let stream = ReceiverStream::new(rx);
+        Ok(Response::new(stream))
     }
 
     async fn pause(
         &self,
-        _req: tonic::Request<proto::instrument::PauseRequest>,
-    ) -> Result<tonic::Response<proto::instrument::PauseResponse>, tonic::Status> {
-        self.subscribe.send(Command::Pause).await.map_err(|_| {
-            tonic::Status::internal("cannot pause, aggregation task is not running")
-        })?;
-        Ok(tonic::Response::new(proto::instrument::PauseResponse {}))
+        _req: Request<instrument::PauseRequest>,
+    ) -> GrpcResult<instrument::PauseResponse> {
+        self.subscribe
+            .send(Command::Pause)
+            .await
+            .map_err(|_| Status::internal("cannot pause, aggregation task is not running"))?;
+        Ok(Response::new(instrument::PauseResponse {}))
     }
 
     async fn resume(
         &self,
-        _req: tonic::Request<proto::instrument::ResumeRequest>,
-    ) -> Result<tonic::Response<proto::instrument::ResumeResponse>, tonic::Status> {
-        self.subscribe.send(Command::Resume).await.map_err(|_| {
-            tonic::Status::internal("cannot resume, aggregation task is not running")
-        })?;
-        Ok(tonic::Response::new(proto::instrument::ResumeResponse {}))
+        _req: Request<instrument::ResumeRequest>,
+    ) -> GrpcResult<instrument::ResumeResponse> {
+        self.subscribe
+            .send(Command::Resume)
+            .await
+            .map_err(|_| Status::internal("cannot resume, aggregation task is not running"))?;
+        Ok(Response::new(instrument::ResumeResponse {}))
     }
 }
 
