@@ -60,6 +60,8 @@ struct ResourceStats {
     created_at: SystemTime,
     dropped_at: Option<SystemTime>,
     total: Option<Duration>,
+    // this will be read in a subsequent PR
+    #[allow(dead_code)]
     attributes: Vec<Attribute>,
     formatted_attributes: Vec<Vec<Span<'static>>>,
 }

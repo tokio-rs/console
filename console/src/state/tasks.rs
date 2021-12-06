@@ -27,7 +27,7 @@ pub(crate) struct TasksState {
 pub(crate) struct Details {
     pub(crate) task_id: u64,
     pub(crate) poll_times_histogram: Option<Histogram<u64>>,
-    pub(crate) last_updated_at: Option<SystemTime>,
+    // pub(crate) last_updated_at: Option<SystemTime>,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -57,7 +57,7 @@ pub(crate) type TaskRef = Weak<RefCell<Task>>;
 #[derive(Debug)]
 pub(crate) struct Task {
     id: u64,
-    fields: Vec<Field>,
+    // fields: Vec<Field>,
     formatted_fields: Vec<Vec<Span<'static>>>,
     stats: TaskStats,
     target: InternedStr,
@@ -157,7 +157,7 @@ impl TasksState {
             let mut task = Task {
                 name,
                 id,
-                fields,
+                // fields,
                 formatted_fields,
                 stats,
                 target: meta.target.clone(),
