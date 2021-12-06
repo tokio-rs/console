@@ -31,7 +31,7 @@ use aggregator::Aggregator;
 pub use builder::Builder;
 use callsites::Callsites;
 use stack::SpanStack;
-use visitors::{AsyncOpVisitor, ResourceVisitor, TaskVisitor, WakerVisitor};
+use visitors::{AsyncOpVisitor, ResourceVisitor, ResourceVisitorResult, TaskVisitor, WakerVisitor};
 
 pub use init::{build, init};
 
@@ -165,7 +165,8 @@ enum Event {
         is_ready: bool,
     },
     StateUpdate {
-        target: Target,
+        update_id: span::Id,
+        update_type: UpdateType,
         update: AttributeUpdate,
     },
     AsyncResourceOp {
@@ -180,15 +181,9 @@ enum Event {
 }
 
 #[derive(Debug, Clone)]
-enum TargetType {
+enum UpdateType {
     Resource,
     AsyncOp,
-}
-
-#[derive(Debug, Clone)]
-struct Target {
-    target_id: span::Id,
-    target_type: TargetType,
 }
 
 #[derive(Debug, Clone)]
@@ -422,12 +417,20 @@ where
                 fields,
                 location,
             });
-        } else if self.is_resource(metadata) {
+            return;
+        }
+
+        if self.is_resource(metadata) {
             let mut resource_visitor = ResourceVisitor::default();
             attrs.record(&mut resource_visitor);
-            if let Some((concrete_type, kind, location, is_internal, inherit_child_attrs)) =
-                resource_visitor.result()
-            {
+            if let Some(result) = resource_visitor.result() {
+                let ResourceVisitorResult {
+                    concrete_type,
+                    kind,
+                    location,
+                    is_internal,
+                    inherit_child_attrs,
+                } = result;
                 let at = SystemTime::now();
                 let parent_id = self.current_spans.get().and_then(|stack| {
                     self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
@@ -444,7 +447,10 @@ where
                     inherit_child_attrs,
                 });
             } // else unknown resource span format
-        } else if self.is_async_op(metadata) {
+            return;
+        }
+
+        if self.is_async_op(metadata) {
             let mut async_op_visitor = AsyncOpVisitor::default();
             attrs.record(&mut async_op_visitor);
             if let Some((source, inherit_child_attrs)) = async_op_visitor.result() {
@@ -475,7 +481,7 @@ where
 
     fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
         let metadata = event.metadata();
-        if self.waker_callsites.contains(event.metadata()) {
+        if self.waker_callsites.contains(metadata) {
             let at = SystemTime::now();
             let mut visitor = WakerVisitor::default();
             event.record(&mut visitor);
@@ -493,7 +499,10 @@ where
                 self.send(Event::Waker { id, op, at });
             }
             // else unknown waker event... what to do? can't trace it from here...
-        } else if self.poll_op_callsites.contains(event.metadata()) {
+            return;
+        }
+
+        if self.poll_op_callsites.contains(metadata) {
             let resource_id = self.current_spans.get().and_then(|stack| {
                 self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
             });
@@ -524,46 +533,44 @@ where
                     }
                 }
             }
-        } else if self
-            .resource_state_update_callsites
-            .contains(event.metadata())
-        {
+            return;
+        }
+
+        if self.resource_state_update_callsites.contains(metadata) {
             // state update event should have a resource span parent
             let resource_id = self.current_spans.get().and_then(|stack| {
                 self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
             });
 
             if let Some(resource_id) = resource_id {
-                let target = Target {
-                    target_type: TargetType::Resource,
-                    target_id: resource_id,
-                };
-
                 let meta_id = event.metadata().into();
                 let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
                 event.record(&mut state_update_visitor);
                 if let Some(update) = state_update_visitor.result() {
-                    self.send(Event::StateUpdate { target, update });
+                    self.send(Event::StateUpdate {
+                        update_id: resource_id,
+                        update_type: UpdateType::Resource,
+                        update,
+                    })
                 }
             }
-        } else if self
-            .async_op_state_update_callsites
-            .contains(event.metadata())
-        {
+            return;
+        }
+
+        if self.async_op_state_update_callsites.contains(metadata) {
             let async_op_id = self.current_spans.get().and_then(|stack| {
                 self.first_entered(&stack.borrow(), |id| self.is_id_async_op(id, &ctx))
             });
             if let Some(async_op_id) = async_op_id {
-                let target = Target {
-                    target_type: TargetType::AsyncOp,
-                    target_id: async_op_id,
-                };
-
                 let meta_id = event.metadata().into();
                 let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
                 event.record(&mut state_update_visitor);
                 if let Some(update) = state_update_visitor.result() {
-                    self.send(Event::StateUpdate { target, update });
+                    self.send(Event::StateUpdate {
+                        update_id: async_op_id,
+                        update_type: UpdateType::AsyncOp,
+                        update,
+                    });
                 }
             }
         }

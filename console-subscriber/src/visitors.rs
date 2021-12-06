@@ -43,6 +43,14 @@ pub(crate) struct ResourceVisitor {
     column: Option<u32>,
 }
 
+pub(crate) struct ResourceVisitorResult {
+    pub(crate) concrete_type: String,
+    pub(crate) kind: resource::Kind,
+    pub(crate) location: Option<proto::Location>,
+    pub(crate) is_internal: bool,
+    pub(crate) inherit_child_attrs: bool,
+}
+
 /// Used to extract all fields from the metadata
 /// of a tracing span
 pub(crate) struct FieldVisitor {
@@ -164,9 +172,7 @@ impl ResourceVisitor {
     const RES_KIND_FIELD_NAME: &'static str = "kind";
     const RES_KIND_TIMER: &'static str = "timer";
 
-    pub(crate) fn result(
-        self,
-    ) -> Option<(String, resource::Kind, Option<proto::Location>, bool, bool)> {
+    pub(crate) fn result(self) -> Option<ResourceVisitorResult> {
         let concrete_type = self.concrete_type?;
         let kind = self.kind?;
 
@@ -181,13 +187,13 @@ impl ResourceVisitor {
             None
         };
 
-        Some((
+        Some(ResourceVisitorResult {
             concrete_type,
             kind,
             location,
-            self.is_internal,
-            self.inherit_child_attrs,
-        ))
+            is_internal: self.is_internal,
+            inherit_child_attrs: self.inherit_child_attrs,
+        })
     }
 }
 

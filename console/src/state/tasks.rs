@@ -56,6 +56,7 @@ pub(crate) type TaskRef = Weak<RefCell<Task>>;
 #[derive(Debug)]
 pub(crate) struct Task {
     id: u64,
+    short_desc: InternedStr,
     formatted_fields: Vec<Vec<Span<'static>>>,
     stats: TaskStats,
     target: InternedStr,
@@ -152,9 +153,15 @@ impl TasksState {
             let stats = stats_update.remove(&id)?.into();
             let location = format_location(task.location);
 
+            let short_desc = strings.string(match name.as_ref() {
+                Some(name) => format!("{} ({})", id, name),
+                None => format!("{}", id),
+            });
+
             let mut task = Task {
                 name,
                 id,
+                short_desc,
                 formatted_fields,
                 stats,
                 target: meta.target.clone(),
@@ -217,6 +224,10 @@ impl Task {
 
     pub(crate) fn target(&self) -> &str {
         &self.target
+    }
+
+    pub(crate) fn short_desc(&self) -> &str {
+        &self.short_desc
     }
 
     pub(crate) fn name(&self) -> Option<&str> {

@@ -33,18 +33,14 @@ pub(crate) enum SortBy {
     Total = 4,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub(crate) enum Kind {
-    Timer,
-    Other(InternedStr),
-}
-
 #[derive(Debug)]
 pub(crate) struct Resource {
     id: u64,
-    parent_id: Option<u64>,
+    id_str: InternedStr,
+    parent: InternedStr,
+    parent_id: InternedStr,
     meta_id: u64,
-    kind: Kind,
+    kind: InternedStr,
     stats: ResourceStats,
     target: InternedStr,
     concrete_type: InternedStr,
@@ -126,6 +122,16 @@ impl ResourcesState {
         update: proto::resources::ResourceUpdate,
         visibility: Visibility,
     ) {
+        let parents: HashMap<u64, ResourceRef> = update
+            .new_resources
+            .iter()
+            .filter_map(|resource| {
+                let parent_id = resource.parent_resource_id?.id;
+                let parent = self.resource(parent_id)?;
+                Some((parent_id, parent))
+            })
+            .collect();
+
         let mut stats_update = update.stats_update;
         let new_list = &mut self.new_resources;
         if matches!(visibility, Visibility::Show) {
@@ -151,7 +157,7 @@ impl ResourcesState {
                     return None;
                 }
             };
-            let kind = match Kind::from_proto(resource.kind?, strings) {
+            let kind = match kind_from_proto(resource.kind?, strings) {
                 Ok(kind) => kind,
                 Err(err) => {
                     tracing::warn!(%err, "resource kind cannot be parsed");
@@ -161,6 +167,26 @@ impl ResourcesState {
 
             let id = resource.id?.id;
             let parent_id = resource.parent_resource_id.map(|id| id.id);
+
+            let parent = strings.string(match parent_id {
+                Some(id) => parents
+                    .get(&id)
+                    .and_then(|r| r.upgrade())
+                    .map(|r| {
+                        let r = r.borrow();
+                        format!("{} ({}::{})", r.id(), r.target(), r.concrete_type())
+                    })
+                    .unwrap_or(format!("{}", id)),
+                None => "n/a".to_string(),
+            });
+
+            let parent_id = strings.string(match parent_id {
+                Some(id) => {
+                    format!("{}", id)
+                }
+                None => "n/a".to_string(),
+            });
+
             let stats = ResourceStats::from_proto(stats_update.remove(&id)?, meta, styles, strings);
             let location = format_location(resource.location);
             let visibility = if resource.is_internal {
@@ -171,6 +197,8 @@ impl ResourcesState {
 
             let resource = Resource {
                 id,
+                id_str: strings.string(id.to_string()),
+                parent,
                 parent_id,
                 kind,
                 stats,
@@ -184,6 +212,7 @@ impl ResourcesState {
             new_list.push(Rc::downgrade(&resource));
             Some((id, resource))
         });
+
         self.resources.extend(new_resources);
 
         for (id, stats) in stats_update {
@@ -217,8 +246,16 @@ impl Resource {
         self.id
     }
 
-    pub(crate) fn parent_id(&self) -> Option<u64> {
-        self.parent_id
+    pub(crate) fn id_str(&self) -> &str {
+        &self.id_str
+    }
+
+    pub(crate) fn parent(&self) -> &str {
+        &self.parent
+    }
+
+    pub(crate) fn parent_id(&self) -> &str {
+        &self.parent_id
     }
 
     pub(crate) fn type_visibility(&self) -> TypeVisibility {
@@ -234,10 +271,7 @@ impl Resource {
     }
 
     pub(crate) fn kind(&self) -> &str {
-        match &self.kind {
-            Kind::Timer => "Timer",
-            Kind::Other(other) => other,
-        }
+        &self.kind
     }
 
     pub(crate) fn formatted_attributes(&self) -> &[Vec<Span<'static>>] {
@@ -298,20 +332,18 @@ impl ResourceStats {
     }
 }
 
-impl Kind {
-    fn from_proto(
-        pb: proto::resources::resource::Kind,
-        strings: &mut intern::Strings,
-    ) -> Result<Self, String> {
-        use proto::resources::resource::kind::Kind::Known as PbKnown;
-        use proto::resources::resource::kind::Kind::Other as PBOther;
-        use proto::resources::resource::kind::Known::Timer as PbTimer;
+fn kind_from_proto(
+    pb: proto::resources::resource::Kind,
+    strings: &mut intern::Strings,
+) -> Result<InternedStr, String> {
+    use proto::resources::resource::kind::Kind::Known as PbKnown;
+    use proto::resources::resource::kind::Kind::Other as PBOther;
+    use proto::resources::resource::kind::Known::Timer as PbTimer;
 
-        match pb.kind.expect("a resource should have a kind field") {
-            PbKnown(known) if known == (PbTimer as i32) => Ok(Kind::Timer),
-            PbKnown(known) => Err(format!("failed to parse known kind from {}", known)),
-            PBOther(other) => Ok(Kind::Other(strings.string(other))),
-        }
+    match pb.kind.expect("a resource should have a kind field") {
+        PbKnown(known) if known == (PbTimer as i32) => Ok(strings.string("Timer".to_string())),
+        PbKnown(known) => Err(format!("failed to parse known kind from {}", known)),
+        PBOther(other) => Ok(strings.string(other)),
     }
 }
 

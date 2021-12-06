@@ -34,7 +34,7 @@ pub(crate) enum SortBy {
 #[derive(Debug)]
 pub(crate) struct AsyncOp {
     id: u64,
-    parent_id: Option<u64>,
+    parent_id: InternedStr,
     resource_id: u64,
     meta_id: u64,
     source: InternedStr,
@@ -55,6 +55,7 @@ struct AsyncOpStats {
     idle: Option<Duration>,
     total: Option<Duration>,
     task_id: Option<u64>,
+    task_id_str: InternedStr,
     formatted_attributes: Vec<Vec<Span<'static>>>,
 }
 
@@ -153,8 +154,11 @@ impl AsyncOpsState {
 
             let id = async_op.id?.id;
             let resource_id = async_op.resource_id?.id;
+            let parent_id = match async_op.parent_async_op_id {
+                Some(id) => strings.string(format!("{}", id.id)),
+                None => strings.string("n/a".to_string()),
+            };
 
-            let parent_id = async_op.parent_async_op_id.map(|id| id.id);
             let source = strings.string(async_op.source);
             let stats = AsyncOpStats::from_proto(stats_update.remove(&id)?, meta, styles, strings);
 
@@ -204,8 +208,8 @@ impl AsyncOp {
         self.id
     }
 
-    pub(crate) fn parent_id(&self) -> Option<u64> {
-        self.parent_id
+    pub(crate) fn parent_id(&self) -> &str {
+        &self.parent_id
     }
 
     pub(crate) fn resource_id(&self) -> u64 {
@@ -214,6 +218,10 @@ impl AsyncOp {
 
     pub(crate) fn task_id(&self) -> Option<u64> {
         self.stats.task_id
+    }
+
+    pub(crate) fn task_id_str(&self) -> &str {
+        &self.stats.task_id_str
     }
 
     pub(crate) fn source(&self) -> &str {
@@ -291,11 +299,16 @@ impl AsyncOpStats {
         let idle = total.map(|total| total - busy);
         let formatted_attributes = Attribute::make_formatted(styles, &mut attributes);
         let task_id = pb.task_id.map(|id| id.id);
-
+        let task_id_str = strings.string(
+            task_id
+                .map(|tid| format!("{}", tid))
+                .unwrap_or_else(|| "n/a".to_string()),
+        );
         Self {
             total,
             idle,
             task_id,
+            task_id_str,
             busy,
             last_poll_started: poll_stats.last_poll_started.map(|v| v.try_into().unwrap()),
             last_poll_ended: poll_stats.last_poll_ended.map(|v| v.try_into().unwrap()),

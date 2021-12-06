@@ -1,4 +1,4 @@
-use super::{AttributeUpdate, AttributeUpdateOp, Command, Event, TargetType, WakeOp, Watch};
+use super::{AttributeUpdate, AttributeUpdateOp, Command, Event, UpdateType, WakeOp, Watch};
 use crate::{record::Recorder, WatchRequest};
 use console_api as proto;
 use proto::resources::resource;
@@ -161,7 +161,7 @@ struct Resource {
 /// resource id in this key
 #[derive(Hash, PartialEq, Eq)]
 struct FieldKey {
-    target_id: u64,
+    update_id: u64,
     field_name: proto::field::Name,
 }
 
@@ -783,50 +783,44 @@ impl Aggregator {
                 self.new_poll_ops.push(poll_op);
             }
 
-            Event::StateUpdate { target, update, .. } => {
-                let target_id = self.ids.id_for(target.target_id);
-                let mut targets_to_update = vec![(target_id, target.target_type.clone())];
+            Event::StateUpdate {
+                update_id,
+                update_type,
+                update,
+                ..
+            } => {
+                let update_id = self.ids.id_for(update_id);
+                let mut to_update = vec![(update_id, update_type.clone())];
 
-                fn update_entry(
-                    mut e: std::collections::hash_map::Entry<'_, FieldKey, Attribute>,
-                    upd: &AttributeUpdate,
-                ) {
-                    match e {
-                        Entry::Occupied(ref mut attr) => {
-                            update_attribute(attr.get_mut(), upd);
-                        }
-                        Entry::Vacant(attr) => {
-                            attr.insert(upd.clone().into());
-                        }
-                    }
+                fn update_entry(e: Entry<'_, FieldKey, Attribute>, upd: &AttributeUpdate) {
+                    e.and_modify(|attr| update_attribute(attr, upd))
+                        .or_insert_with(|| upd.clone().into());
                 }
 
-                match target.target_type {
-                    TargetType::Resource => {
+                match update_type {
+                    UpdateType::Resource => {
                         if let Some(parent) = self
                             .resources
-                            .get(&target_id)
-                            .and_then(|r| r.parent_id)
-                            .and_then(|parent_id| self.resources.get(&parent_id))
+                            .get(&update_id)
+                            .and_then(|r| self.resources.get(r.parent_id.as_ref()?))
                             .filter(|parent| parent.inherit_child_attrs)
                         {
-                            targets_to_update.push((parent.id, TargetType::Resource));
+                            to_update.push((parent.id, UpdateType::Resource));
                         }
                     }
-                    TargetType::AsyncOp => {
+                    UpdateType::AsyncOp => {
                         if let Some(parent) = self
                             .async_ops
-                            .get(&target_id)
-                            .and_then(|ao| ao.parent_id)
-                            .and_then(|parent_id| self.async_ops.get(&parent_id))
+                            .get(&update_id)
+                            .and_then(|r| self.async_ops.get(r.parent_id.as_ref()?))
                             .filter(|parent| parent.inherit_child_attrs)
                         {
-                            targets_to_update.push((parent.id, TargetType::AsyncOp));
+                            to_update.push((parent.id, UpdateType::AsyncOp));
                         }
                     }
                 }
 
-                for (target_id, target_type) in targets_to_update {
+                for (update_id, update_type) in to_update {
                     let field_name = match update.field.name.as_ref() {
                         Some(name) => name.clone(),
                         None => {
@@ -836,20 +830,20 @@ impl Aggregator {
                     };
 
                     let upd_key = FieldKey {
-                        target_id,
+                        update_id,
                         field_name,
                     };
 
-                    match target_type {
-                        TargetType::Resource => {
-                            let mut stats = self.resource_stats.update(&target_id);
+                    match update_type {
+                        UpdateType::Resource => {
+                            let mut stats = self.resource_stats.update(&update_id);
                             let entry = stats.as_mut().map(|s| s.attributes.entry(upd_key));
                             if let Some(entry) = entry {
                                 update_entry(entry, &update);
                             }
                         }
-                        TargetType::AsyncOp => {
-                            let mut stats = self.async_op_stats.update(&target_id);
+                        UpdateType::AsyncOp => {
+                            let mut stats = self.async_op_stats.update(&update_id);
                             let entry = stats.as_mut().map(|s| s.attributes.entry(upd_key));
                             if let Some(entry) = entry {
                                 update_entry(entry, &update);

@@ -23,11 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                     });
             }
 
-            loop {
-                if *count.lock().await >= 50 {
-                    break;
-                }
-            }
+            while *count.lock().await < 50 {}
         })
         .await?;
 

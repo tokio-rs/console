@@ -114,24 +114,16 @@ impl TableList for AsyncOpsTable {
                 .filter_map(move |async_op| {
                     let async_op = async_op.upgrade()?;
                     let async_op = async_op.borrow();
-
-                    let parent_id_str = match async_op.parent_id() {
-                        Some(id) => {
-                            format!("{}", id)
-                        }
-                        None => "n/a".to_string(),
-                    };
-
                     let task_id = async_op.task_id()?;
-                    let task_name = state
+                    let task = state
                         .tasks_state()
                         .task(task_id)
                         .and_then(|t| t.upgrade())
-                        .and_then(|t| t.borrow().name().map(String::from));
+                        .map(|t| t.borrow().short_desc().to_owned());
 
-                    let task_str = match task_name {
-                        Some(name) => format!("{} ({})", task_id, name),
-                        None => format!("{}", task_id),
+                    let task_str = match task {
+                        Some(task_str) => task_str,
+                        None => async_op.task_id_str().to_owned(),
                     };
 
                     let mut row = Row::new(vec![
@@ -140,9 +132,9 @@ impl TableList for AsyncOpsTable {
                             async_op.id(),
                             width = id_width.chars() as usize
                         ))),
-                        Cell::from(parent_width.update_str(parent_id_str)),
+                        Cell::from(parent_width.update_str(async_op.parent_id()).to_owned()),
                         Cell::from(task_width.update_str(task_str)),
-                        Cell::from(source_width.update_str(async_op.source().to_string())),
+                        Cell::from(source_width.update_str(async_op.source()).to_owned()),
                         dur_cell(async_op.total(now)),
                         dur_cell(async_op.busy(now)),
                         dur_cell(async_op.idle(now)),

@@ -32,7 +32,7 @@ impl TableList for ResourcesTable {
         "Total",
         "Target",
         "Type",
-        "Viz",
+        "Vis",
         "Location",
         "Attributes",
     ];
@@ -84,20 +84,13 @@ impl TableList for ResourcesTable {
                     let resource = resource.upgrade()?;
                     let resource = resource.borrow();
 
-                    let parent_id_str = match resource.parent_id() {
-                        Some(id) => {
-                            format!("{}", id)
-                        }
-                        None => "n/a".to_string(),
-                    };
-
                     let mut row = Row::new(vec![
                         Cell::from(id_width.update_str(format!(
                             "{:>width$}",
                             resource.id(),
                             width = id_width.chars() as usize
                         ))),
-                        Cell::from(parent_width.update_str(parent_id_str)),
+                        Cell::from(parent_width.update_str(resource.parent_id()).to_owned()),
                         Cell::from(kind_width.update_str(resource.kind()).to_owned()),
                         Cell::from(styles.time_units(format!(
                             "{:>width$.prec$?}",

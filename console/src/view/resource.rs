@@ -80,48 +80,18 @@ impl ResourceView {
             Span::raw(" = quit"),
         ]);
 
-        let mut overview = Vec::with_capacity(6);
-        overview.push(Spans::from(vec![
-            bold("ID: "),
-            Span::raw(format!("{} ", resource.id())),
-        ]));
-
-        overview.push(Spans::from(vec![
-            bold("Parent ID: "),
-            Span::raw(match resource.parent_id() {
-                Some(id) => state
-                    .resources_state()
-                    .resource(id)
-                    .and_then(|r| r.upgrade())
-                    .map(|r| {
-                        let r = r.borrow();
-                        format!("{} ({}::{})", r.id(), r.target(), r.concrete_type())
-                    })
-                    .unwrap_or(format!("{}", id)),
-                None => "n/a".to_string(),
-            }),
-        ]));
-
-        overview.push(Spans::from(vec![
-            bold("Kind: "),
-            Span::raw(format!("{} ", resource.kind())),
-        ]));
-
-        overview.push(Spans::from(vec![
-            bold("Target: "),
-            Span::raw(resource.target()),
-        ]));
-
-        overview.push(Spans::from(vec![
-            bold("Type: "),
-            Span::raw(format!("{} ", resource.concrete_type())),
-            resource.type_visibility().render(styles),
-        ]));
-
-        overview.push(Spans::from(vec![
-            bold("Location: "),
-            Span::raw(resource.location()),
-        ]));
+        let overview = vec![
+            Spans::from(vec![bold("ID: "), Span::raw(resource.id_str())]),
+            Spans::from(vec![bold("Parent ID: "), Span::raw(resource.parent())]),
+            Spans::from(vec![bold("Kind: "), Span::raw(resource.kind())]),
+            Spans::from(vec![bold("Target: "), Span::raw(resource.target())]),
+            Spans::from(vec![
+                bold("Type: "),
+                Span::raw(resource.concrete_type()),
+                resource.type_visibility().render(styles),
+            ]),
+            Spans::from(vec![bold("Location: "), Span::raw(resource.location())]),
+        ];
 
         let mut fields = Text::default();
         fields.extend(
