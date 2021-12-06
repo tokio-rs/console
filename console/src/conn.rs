@@ -13,6 +13,12 @@ pub struct Connection {
     state: State,
 }
 
+// clippy doesn't like that the "connected" case is much larger than the
+// disconnected case, and suggests boxing the connected side's stream.
+// however, this is rarely disconnected; it's normally connected. boxing the
+// stream just adds a heap pointer dereference, slightly penalizing polling
+// the stream in most cases. so, don't listen to clippy on this.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 enum State {
     Connected {
