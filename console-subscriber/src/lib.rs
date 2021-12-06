@@ -151,8 +151,10 @@ enum Event {
         is_ready: bool,
     },
     StateUpdate {
-        metadata: &'static Metadata<'static>,
-        at: SystemTime,
+        // these fields aren't currently used, but we will probably use them
+        // later. put them back if we need them.
+        // metadata: &'static Metadata<'static>,
+        // at: SystemTime,
         resource_id: span::Id,
         update: AttributeUpdate,
     },
@@ -464,10 +466,10 @@ where
                     let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
                     event.record(&mut state_update_visitor);
                     if let Some(update) = state_update_visitor.result() {
-                        let at = SystemTime::now();
+                        // let at = SystemTime::now();
                         self.send(Event::StateUpdate {
-                            metadata,
-                            at,
+                            // metadata,
+                            // at,
                             resource_id: resource_span.id(),
                             update,
                         });

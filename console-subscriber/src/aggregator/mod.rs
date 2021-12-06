@@ -133,6 +133,7 @@ enum Temporality {
     Paused,
 }
 
+#[derive(Default)]
 struct PollStats {
     /// The number of polls in progress
     current_polls: u64,
@@ -252,19 +253,6 @@ impl PollStats {
     fn since_last_poll(&self, timestamp: SystemTime) -> Option<Duration> {
         self.last_poll_started
             .map(|lps| timestamp.duration_since(lps).unwrap())
-    }
-}
-
-impl Default for PollStats {
-    fn default() -> Self {
-        PollStats {
-            current_polls: 0,
-            polls: 0,
-            first_poll: None,
-            last_poll_started: None,
-            last_poll_ended: None,
-            busy_time: Default::default(),
-        }
     }
 }
 

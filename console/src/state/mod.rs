@@ -179,7 +179,7 @@ impl State {
                         .deserialize(&mut Cursor::new(&data))
                         .ok()
                 }),
-                last_updated_at: update.now.map(|now| now.try_into().unwrap()),
+                // last_updated_at: update.now.map(|now| now.try_into().unwrap()),
             };
 
             *self.current_task_details.borrow_mut() = Some(details);
