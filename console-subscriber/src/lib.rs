@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 use console_api as proto;
 use proto::resources::resource;
 use serde::Serialize;
