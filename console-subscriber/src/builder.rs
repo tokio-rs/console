@@ -1,4 +1,4 @@
-use super::{Server, TasksLayer};
+use super::{ConsoleLayer, Server};
 use std::{
     net::{SocketAddr, ToSocketAddrs},
     path::PathBuf,
@@ -14,7 +14,7 @@ use tracing_subscriber::{
     registry::LookupSpan,
 };
 
-/// Builder for configuring [`TasksLayer`]s.
+/// Builder for configuring [`ConsoleLayer`]s.
 #[derive(Clone, Debug)]
 pub struct Builder {
     /// The maximum capacity for the channel of events from the subscriber to
@@ -41,10 +41,10 @@ pub struct Builder {
 impl Default for Builder {
     fn default() -> Self {
         Self {
-            event_buffer_capacity: TasksLayer::DEFAULT_EVENT_BUFFER_CAPACITY,
-            client_buffer_capacity: TasksLayer::DEFAULT_CLIENT_BUFFER_CAPACITY,
-            publish_interval: TasksLayer::DEFAULT_PUBLISH_INTERVAL,
-            retention: TasksLayer::DEFAULT_RETENTION,
+            event_buffer_capacity: ConsoleLayer::DEFAULT_EVENT_BUFFER_CAPACITY,
+            client_buffer_capacity: ConsoleLayer::DEFAULT_CLIENT_BUFFER_CAPACITY,
+            publish_interval: ConsoleLayer::DEFAULT_PUBLISH_INTERVAL,
+            retention: ConsoleLayer::DEFAULT_RETENTION,
             server_addr: SocketAddr::new(Server::DEFAULT_IP, Server::DEFAULT_PORT),
             recording_path: None,
         }
@@ -57,7 +57,7 @@ impl Builder {
     ///
     /// When this channel is at capacity, additional events will be dropped.
     ///
-    /// By default, this is [`TasksLayer::DEFAULT_EVENT_BUFFER_CAPACITY`].
+    /// By default, this is [`ConsoleLayer::DEFAULT_EVENT_BUFFER_CAPACITY`].
     pub fn event_buffer_capacity(self, event_buffer_capacity: usize) -> Self {
         Self {
             event_buffer_capacity,
@@ -70,7 +70,7 @@ impl Builder {
     ///
     /// When this channel is at capacity, the client may be disconnected.
     ///
-    /// By default, this is [`TasksLayer::DEFAULT_CLIENT_BUFFER_CAPACITY`].
+    /// By default, this is [`ConsoleLayer::DEFAULT_CLIENT_BUFFER_CAPACITY`].
     pub fn client_buffer_capacity(self, client_buffer_capacity: usize) -> Self {
         Self {
             client_buffer_capacity,
@@ -83,7 +83,7 @@ impl Builder {
     /// A shorter duration will allow clients to update more frequently, but may
     /// result in the program spending more time preparing task data updates.
     ///
-    /// By default, this is [`TasksLayer::DEFAULT_PUBLISH_INTERVAL`].
+    /// By default, this is [`ConsoleLayer::DEFAULT_PUBLISH_INTERVAL`].
     pub fn publish_interval(self, publish_interval: Duration) -> Self {
         Self {
             publish_interval,
@@ -98,7 +98,7 @@ impl Builder {
     /// will reduce memory usage, but less historical data from completed tasks
     /// will be retained.
     ///
-    /// By default, this is [`TasksLayer::DEFAULT_RETENTION`].
+    /// By default, this is [`ConsoleLayer::DEFAULT_RETENTION`].
     pub fn retention(self, retention: Duration) -> Self {
         Self { retention, ..self }
     }
@@ -122,9 +122,9 @@ impl Builder {
         }
     }
 
-    /// Completes the builder, returning a [`TasksLayer`] and [`Server`] task.
-    pub fn build(self) -> (TasksLayer, Server) {
-        TasksLayer::build(self)
+    /// Completes the builder, returning a [`ConsoleLayer`] and [`Server`] task.
+    pub fn build(self) -> (ConsoleLayer, Server) {
+        ConsoleLayer::build(self)
     }
 
     /// Configures this builder from a standard set of environment variables:
@@ -165,7 +165,7 @@ impl Builder {
     /// This function represents the easiest way to get started using
     /// tokio-console.
     ///
-    /// In addition to the [`TasksLayer`], which collects instrumentation data
+    /// In addition to the [`ConsoleLayer`], which collects instrumentation data
     /// consumed by the console, the default [`Subscriber`][sub] initialized by this
     /// function also includes a [`tracing_subscriber::fmt`] layer, which logs
     /// tracing spans and events to stdout. Which spans and events are logged will
@@ -207,7 +207,7 @@ impl Builder {
     /// ```rust
     /// use tracing_subscriber::prelude::*;
     ///
-    /// let console_layer = console_subscriber::TasksLayer::builder().spawn();
+    /// let console_layer = console_subscriber::ConsoleLayer::builder().spawn();
     ///
     /// tracing_subscriber::registry()
     ///     .with(console_layer)
@@ -237,7 +237,7 @@ impl Builder {
             .init();
     }
 
-    /// Returns a new `tracing` [`Layer`] consisting of a [`TasksLayer`]
+    /// Returns a new `tracing` [`Layer`] consisting of a [`ConsoleLayer`]
     /// and a [filter] that enables the spans and events required by the console.
     ///
     /// This function spawns the console subscriber's [`Server`] in its own Tokio
@@ -276,7 +276,7 @@ impl Builder {
     /// ```rust
     /// use tracing_subscriber::prelude::*;
     ///
-    /// let console_layer = console_subscriber::TasksLayer::builder()
+    /// let console_layer = console_subscriber::ConsoleLayer::builder()
     ///     .with_default_env()
     ///     .spawn();
     ///
@@ -342,7 +342,7 @@ impl Builder {
 /// This function represents the easiest way to get started using
 /// tokio-console.
 ///
-/// In addition to the [`TasksLayer`], which collects instrumentation data
+/// In addition to the [`ConsoleLayer`], which collects instrumentation data
 /// consumed by the console, the default [`Subscriber`][sub] initialized by this
 /// function also includes a [`tracing_subscriber::fmt`] layer, which logs
 /// tracing spans and events to stdout. Which spans and events are logged will
@@ -395,16 +395,16 @@ impl Builder {
 ///
 /// Calling `console_subscriber::init` is equivalent to the following:
 /// ```rust
-/// use console_subscriber::TasksLayer;
+/// use console_subscriber::ConsoleLayer;
 ///
-/// TasksLayer::builder().with_default_env().init();
+/// ConsoleLayer::builder().with_default_env().init();
 /// ```
 /// [`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/filter/struct.Targets.html
 pub fn init() {
-    TasksLayer::builder().with_default_env().init();
+    ConsoleLayer::builder().with_default_env().init();
 }
 
-/// Returns a new `tracing_subscriber` [`Layer`] configured with a [`TasksLayer`]
+/// Returns a new `tracing_subscriber` [`Layer`] configured with a [`ConsoleLayer`]
 /// and a [filter] that enables the spans and events required by the console.
 ///
 /// This function spawns the console subscriber's [`Server`] in its own Tokio
@@ -415,9 +415,9 @@ pub fn init() {
 ///
 /// This function is equivalent to the following:
 /// ```
-/// use console_subscriber::TasksLayer;
+/// use console_subscriber::ConsoleLayer;
 ///
-/// let layer = TasksLayer::builder().with_default_env().spawn();
+/// let layer = ConsoleLayer::builder().with_default_env().spawn();
 /// # use tracing_subscriber::prelude::*;
 /// # tracing_subscriber::registry().with(layer).init(); // to suppress must_use warnings
 /// ```
@@ -466,7 +466,7 @@ pub fn spawn<S>() -> impl Layer<S>
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
-    TasksLayer::builder().with_default_env().spawn::<S>()
+    ConsoleLayer::builder().with_default_env().spawn::<S>()
 }
 
 fn duration_from_env(var_name: &str) -> Option<Duration> {
