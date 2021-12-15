@@ -38,7 +38,7 @@ pub use builder::{init, spawn};
 use crate::aggregator::Id;
 use crate::visitors::{PollOpVisitor, StateUpdateVisitor};
 
-pub struct TasksLayer {
+pub struct ConsoleLayer {
     current_spans: ThreadLocal<RefCell<SpanStack>>,
     tx: mpsc::Sender<Event>,
     flush: Arc<aggregator::Flush>,
@@ -208,12 +208,12 @@ enum WakeOp {
     Drop,
 }
 
-impl TasksLayer {
+impl ConsoleLayer {
     pub fn new() -> (Self, Server) {
         Self::builder().build()
     }
 
-    /// Returns a [`Builder`] for configuring a `TasksLayer`.
+    /// Returns a [`Builder`] for configuring a `ConsoleLayer`.
     pub fn builder() -> Builder {
         Builder::default()
     }
@@ -271,7 +271,7 @@ impl TasksLayer {
     }
 }
 
-impl TasksLayer {
+impl ConsoleLayer {
     pub const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 1024 * 10;
     pub const DEFAULT_CLIENT_BUFFER_CAPACITY: usize = 1024 * 4;
     pub const DEFAULT_PUBLISH_INTERVAL: Duration = Duration::from_secs(1);
@@ -378,7 +378,7 @@ impl TasksLayer {
     }
 }
 
-impl<S> Layer<S> for TasksLayer
+impl<S> Layer<S> for ConsoleLayer
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
@@ -626,9 +626,9 @@ where
     }
 }
 
-impl fmt::Debug for TasksLayer {
+impl fmt::Debug for ConsoleLayer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TasksLayer")
+        f.debug_struct("ConsoleLayer")
             // mpsc::Sender debug impl is not very useful
             .field("tx", &format_args!("<...>"))
             .field("tx.capacity", &self.tx.capacity())

@@ -95,7 +95,7 @@ For programmatic configuration, a [builder interface][builder] is also provided:
 ```rust
 use std::time::Duration;
 
-console_subscriber::TasksLayer::builder()
+console_subscriber::ConsoleLayer::builder()
     // set how long the console will retain data from completed tasks
     .retention(Duration::from_secs(60))
     // set the address the server is bound to
