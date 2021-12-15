@@ -132,9 +132,9 @@ impl Builder {
 
     /// Sets the path to record the events to the file system.
     ///
-    /// By default, this is initially `None`, though
-    /// constructors like [`build`][`crate::build`] will take the value
-    /// from the `TOKIO_CONSOLE_RECORD_PATH` [environment variable] before
+    /// By default, this is initially `None`, though methods like
+    /// [`init`][`crate::init`] and [`spawn`][`crate::spawn`] will take the
+    /// value from the `TOKIO_CONSOLE_RECORD_PATH` [environment variable] before
     /// falling back on that default.
     ///
     /// [environment variable]: `Builder::with_default_env`
