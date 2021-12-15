@@ -175,7 +175,7 @@ impl Builder {
     /// for your application. If you need to add additional layers to a subscriber,
     /// see [`spawn`].
     ///
-    /// ## Panics
+    /// # Panics
     ///
     /// * If the subscriber's background thread could not be spawned.
     /// * If the [default `tracing` subscriber][default] has already been set.
@@ -185,7 +185,7 @@ impl Builder {
     /// [`tracing_subscriber::fmt`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/fmt/index.html
     /// [`Server`]: crate::Server
     ///
-    /// ## Configuration
+    /// # Configuration
     ///
     /// Tokio console subscriber is configured with sensible defaults for most
     /// use cases. If you need to tune these parameters, several environmental
@@ -199,7 +199,7 @@ impl Builder {
     /// | `TOKIO_CONSOLE_RECORD_PATH`         | The file path to save a recording                                         | None              |
     /// | `RUST_LOG`                          | Configures what events are logged events. See [`Targets`] for details.    | "error"           |
     ///
-    /// ## Further customization
+    /// # Further customization
     ///
     /// To add additional layers or replace the format layer, replace
     /// `console_subscriber::Builder::init` with:
@@ -251,16 +251,16 @@ impl Builder {
     /// [`Layer`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html
     /// [`Server`]: crate::Server
     ///
-    /// ## Panics
+    /// # Panics
     ///
     /// * If the subscriber's background thread could not be spawned.
     ///
-    /// ## Configuration
+    /// # Configuration
     ///
     /// `console_subscriber::build` supports all of the environmental
     /// configuration described at [`console_subscriber::init`].
     ///
-    /// ## Differences from `init`
+    /// # Differences from `init`
     ///
     /// Unlike [`console_subscriber::init`], this function does *not* add a
     /// [`tracing_subscriber::fmt`] layer to the configured `Subscriber`. This means
@@ -271,7 +271,7 @@ impl Builder {
     /// You must call [`.init()`] on the final subscriber in order to [set the
     /// subscriber as the default][default].
     ///
-    /// ## Examples
+    /// # Examples
     ///
     /// ```rust
     /// use tracing_subscriber::prelude::*;
@@ -352,7 +352,7 @@ impl Builder {
 /// for your application. If you need to add additional layers to a subscriber,
 /// see [`spawn`].
 ///
-/// ## Panics
+/// # Panics
 ///
 /// * If the subscriber's background thread could not be spawned.
 /// * If the [default `tracing` subscriber][default] has already been set.
@@ -362,7 +362,7 @@ impl Builder {
 /// [`tracing_subscriber::fmt`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/fmt/index.html
 /// [`Server`]: crate::Server
 ///
-/// ## Configuration
+/// # Configuration
 ///
 /// Tokio console subscriber is configured with sensible defaults for most
 /// use cases. If you need to tune these parameters, several environmental
@@ -376,7 +376,7 @@ impl Builder {
 /// | `TOKIO_CONSOLE_RECORD_PATH`         | The file path to save a recording                                         | None              |
 /// | `RUST_LOG`                          | Configures what events are logged events. See [`Targets`] for details.    | "error"           |
 ///
-/// ## Further customization
+/// # Further customization
 ///
 /// To add additional layers or replace the format layer, replace
 /// `console_subscriber::init` with:
@@ -425,16 +425,16 @@ pub fn init() {
 /// [`Layer`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html
 /// [`Server`]: crate::Server
 ///
-/// ## Panics
+/// # Panics
 ///
 /// * If the subscriber's background thread could not be spawned.
 ///
-/// ## Configuration
+/// # Configuration
 ///
 /// `console_subscriber::build` supports all of the environmental
 /// configuration described at [`console_subscriber::init`].
 ///
-/// ## Differences from `init`
+/// # Differences from `init`
 ///
 /// Unlike [`console_subscriber::init`], this function does *not* add a
 /// [`tracing_subscriber::fmt`] layer to the configured `Layer`. This means
@@ -445,7 +445,7 @@ pub fn init() {
 /// You must call [`.init()`] on the final subscriber in order to [set the
 /// subscriber as the default][default].
 ///
-/// ## Examples
+/// # Examples
 ///
 /// ```rust
 /// use tracing_subscriber::prelude::*;
