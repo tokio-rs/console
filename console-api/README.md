@@ -16,7 +16,7 @@
 [docs-badge]: https://docs.rs/console-api/badge.svg
 [docs-url]: https://docs.rs/console-api
 [docs-main-badge]: https://img.shields.io/netlify/0e5ffd50-e1fa-416e-b147-a04dab28cfb1?label=docs%20%28main%20branch%29
-[docs-main-url]: https://tokio-console.netlify.app/tokio_console_api/
+[docs-main-url]: https://tokio-console.netlify.app/console_api/
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [mit-url]: ../LICENSE
 [actions-badge]: https://github.com/tokio-rs/console/workflows/CI/badge.svg
