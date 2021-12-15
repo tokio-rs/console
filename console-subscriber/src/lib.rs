@@ -691,22 +691,26 @@ impl fmt::Debug for ConsoleLayer {
 
 impl Server {
     // XXX(eliza): why is `SocketAddr::new` not `const`???
-    /// A [`Server`] by default binds socket address 127.0.0.1 to service remote procedure calls.
+    /// A [`Server`] by default binds socket address 127.0.0.1 to service remote
+    /// procedure calls.
     ///
-    /// Note that constructors like [`build`][`crate::build`] will parse the
-    /// socket address from the `TOKIO_CONSOLE_BIND` [environment variable] before
-    /// falling back on constructing a socket address from this default.
+    /// Note that methods like [`init`][`crate::init`] and
+    /// [`spawn`][`crate::spawn`] will parse the socket address from the
+    /// `TOKIO_CONSOLE_BIND` [environment variable] before falling back on
+    /// constructing a socket address from this default.
     ///
     /// See also [`Builder::server_addr`].
     ///
     /// [environment variable]: `Builder::with_default_env`
     pub const DEFAULT_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 
-    /// A [`Server`] by default binds port 6669 to service remote procedure calls.
+    /// A [`Server`] by default binds port 6669 to service remote procedure
+    /// calls.
     ///
-    /// Note that constructors like [`build`][`crate::build`] will parse the
-    /// socket address from the `TOKIO_CONSOLE_BIND` [environment variable] before
-    /// falling back on constructing a socket address from this default.
+    /// Note that methods like [`init`][`crate::init`] and
+    /// [`spawn`][`crate::spawn`] will parse the socket address from the
+    /// `TOKIO_CONSOLE_BIND` [environment variable] before falling back on
+    /// constructing a socket address from this default.
     ///
     /// See also [`Builder::server_addr`].
     ///
