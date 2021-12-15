@@ -38,6 +38,11 @@ pub use builder::{init, spawn};
 use crate::aggregator::Id;
 use crate::visitors::{PollOpVisitor, StateUpdateVisitor};
 
+/// A [`ConsoleLayer`] is a [`tracing_subscriber::Layer`] that catches the tracing
+/// events of the runtime (e.g. call-sites), and translating them into more
+/// abstract events (e.g. task spawns or waker operations) that are meaningful
+/// to modeling the async runtime, and then transmitting those abstact events
+/// to an associated [`Server`] for aggregation.
 pub struct ConsoleLayer {
     current_spans: ThreadLocal<RefCell<SpanStack>>,
     tx: mpsc::Sender<Event>,
