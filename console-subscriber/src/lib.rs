@@ -220,6 +220,7 @@ enum WakeOp {
 }
 
 impl ConsoleLayer {
+    /// Returns a `ConsoleLayer` built with the default settings.
     pub fn new() -> (Self, Server) {
         Self::builder().build()
     }
