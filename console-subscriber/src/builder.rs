@@ -83,7 +83,10 @@ impl Builder {
     /// A shorter duration will allow clients to update more frequently, but may
     /// result in the program spending more time preparing task data updates.
     ///
-    /// By default, this is [`ConsoleLayer::DEFAULT_PUBLISH_INTERVAL`].
+    /// By default, this is [`ConsoleLayer::DEFAULT_PUBLISH_INTERVAL`], though
+    /// constructors like [`build`][`crate::build`] will take the value
+    /// from the `TOKIO_CONSOLE_PUBLISH_INTERVAL` environment variable before
+    /// falling back on that default.
     pub fn publish_interval(self, publish_interval: Duration) -> Self {
         Self {
             publish_interval,
@@ -98,7 +101,10 @@ impl Builder {
     /// will reduce memory usage, but less historical data from completed tasks
     /// will be retained.
     ///
-    /// By default, this is [`ConsoleLayer::DEFAULT_RETENTION`].
+    /// By default, this is [`ConsoleLayer::DEFAULT_RETENTION`], though
+    /// constructors like [`build`][`crate::build`] will take the value
+    /// from the `TOKIO_CONSOLE_RETENTION` environment variable before
+    /// falling back on that default.
     pub fn retention(self, retention: Duration) -> Self {
         Self { retention, ..self }
     }
@@ -106,7 +112,10 @@ impl Builder {
     /// Sets the socket address on which to serve the RPC server.
     ///
     /// By default, the server is bound on the IP address [`Server::DEFAULT_IP`]
-    /// on port [`Server::DEFAULT_PORT`].
+    /// on port [`Server::DEFAULT_PORT`], though
+    /// constructors like [`build`][`crate::build`] will parse the socket address
+    /// from the `TOKIO_CONSOLE_BIND` environment variable before
+    /// falling back on constructing a socket address from those defaults.
     pub fn server_addr(self, server_addr: impl Into<SocketAddr>) -> Self {
         Self {
             server_addr: server_addr.into(),
@@ -115,6 +124,11 @@ impl Builder {
     }
 
     /// Sets the path to record the events to the file system.
+    ///
+    /// By default, this is initially `None`, though
+    /// constructors like [`build`][`crate::build`] will take the value
+    /// from the `TOKIO_CONSOLE_RECORD_PATH` environment variable before
+    /// falling back on that default.
     pub fn recording_path(self, path: impl Into<PathBuf>) -> Self {
         Self {
             recording_path: Some(path.into()),
