@@ -83,8 +83,8 @@ impl Builder {
     /// A shorter duration will allow clients to update more frequently, but may
     /// result in the program spending more time preparing task data updates.
     ///
-    /// By default, this is [`ConsoleLayer::DEFAULT_PUBLISH_INTERVAL`], though
-    /// methods like [`init`][`crate::init`] and [`spawn`][`crate::spawn`] will
+    /// By default, this is [`ConsoleLayer::DEFAULT_PUBLISH_INTERVAL`].
+    /// Methods like [`init`][`crate::init`] and [`spawn`][`crate::spawn`] will
     /// take the value from the `TOKIO_CONSOLE_PUBLISH_INTERVAL` [environment
     /// variable] before falling back on that default.
     ///
@@ -103,7 +103,7 @@ impl Builder {
     /// will reduce memory usage, but less historical data from completed tasks
     /// will be retained.
     ///
-    /// By default, this is [`ConsoleLayer::DEFAULT_RETENTION`], though methods
+    /// By default, this is [`ConsoleLayer::DEFAULT_RETENTION`]. Methods
     /// like [`init`][`crate::init`] and [`spawn`][`crate::spawn`] will take the
     /// value from the `TOKIO_CONSOLE_RETENTION` [environment variable] before
     /// falling back on that default.
@@ -116,7 +116,7 @@ impl Builder {
     /// Sets the socket address on which to serve the RPC server.
     ///
     /// By default, the server is bound on the IP address [`Server::DEFAULT_IP`]
-    /// on port [`Server::DEFAULT_PORT`], though methods like
+    /// on port [`Server::DEFAULT_PORT`]. Methods like
     /// [`init`][`crate::init`] and [`spawn`][`crate::spawn`] will parse the
     /// socket address from the `TOKIO_CONSOLE_BIND` [environment variable]
     /// before falling back on constructing a socket address from those
@@ -132,7 +132,7 @@ impl Builder {
 
     /// Sets the path to record the events to the file system.
     ///
-    /// By default, this is initially `None`, though methods like
+    /// By default, this is initially `None`. Methods like
     /// [`init`][`crate::init`] and [`spawn`][`crate::spawn`] will take the
     /// value from the `TOKIO_CONSOLE_RECORD_PATH` [environment variable] before
     /// falling back on that default.

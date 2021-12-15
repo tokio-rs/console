@@ -38,11 +38,16 @@ pub use builder::{init, spawn};
 use crate::aggregator::Id;
 use crate::visitors::{PollOpVisitor, StateUpdateVisitor};
 
-/// A [`ConsoleLayer`] is a [`tracing_subscriber::Layer`] that catches the tracing
-/// events of the runtime (e.g. call-sites), and translating them into more
-/// abstract events (e.g. task spawns or waker operations) that are meaningful
-/// to modeling the async runtime, and then transmitting those abstact events
-/// to an associated [`Server`] for aggregation.
+/// A [`ConsoleLayer`] is a [`tracing_subscriber::Layer`] that records [`tracing`]
+/// spans and events emitted by the async runtime. 
+///
+/// Runtimes emit [`tracing`] spans and events that represent specific operations
+/// that occur in asynchronous Rust programs, such as spawning tasks and waker
+/// operations. The `ConsoleLayer` collects and aggregates these events, and the
+/// resulting diagnostic data is exported to clients by the corresponding gRPC 
+/// [`Server`] instance.
+///
+/// [`tracing`]: https://docs.rs/tracing
 pub struct ConsoleLayer {
     current_spans: ThreadLocal<RefCell<SpanStack>>,
     tx: mpsc::Sender<Event>,
@@ -99,12 +104,17 @@ pub struct ConsoleLayer {
     no_dispatch: Dispatch,
 }
 
-/// A [`Server`] is in charge of aggregating the abstract runtime events into a
-/// model of the runtime's history (such as a list of the currently active
-/// tasks, or statistics summarizing polling times). A [`Server`] also
+/// A gRPC [`Server`] that implements the [`tokio-console` wire format][wire].
+///
+/// Client applications, such as the [`tokio-console CLI][cli] connect to the gRPC
+/// server, and stream data about the runtime's history (such as a list of the 
+/// currently active tasks, or statistics summarizing polling times). A [`Server`] also
 /// interprets commands from a client application, such a request to focus in on
 /// a specific task, and translates that into a stream of details specific to
 /// that task.
+///
+/// [wire]: https://docs.rs/console-api
+/// [cli]: https://crates.io/crates/tokio-console
 pub struct Server {
     subscribe: mpsc::Sender<Command>,
     addr: SocketAddr,
@@ -293,20 +303,25 @@ impl ConsoleLayer {
 }
 
 impl ConsoleLayer {
-    /// Default maximum capacity for channel of events from [`ConsoleLayer`] to [`Server`].
+    /// Default maximum capacity for the channel of events sent from a
+    /// [`ConsoleLayer`] to a [`Server`].
     ///
     /// When this capacity is exhausted, additional events will be dropped.
+    /// Decreasing this value will reduce memory usage, but may result in
+    /// events being dropped more frequently.
     ///
     /// See also [`Builder::event_buffer_capacity`].
     pub const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 1024 * 10;
-    /// Default maximum capacity for channel of events from [`Server`] to each subscribed client.
+    /// Default maximum capacity for th echannel of events sent from a
+    /// [`Server`] to each subscribed client.
     ///
-    /// When this capacity is exhausted, the client may be disconnected.
+    /// When this capacity is exhausted, the client is assumed to be inactive,
+    /// and may be disconnected.
     ///
     /// See also [`Builder::client_buffer_capacity`].
     pub const DEFAULT_CLIENT_BUFFER_CAPACITY: usize = 1024 * 4;
 
-    /// Default frequency for publication of events to clients.
+    /// Default frequency for publishing events to clients.
     ///
     /// Note that methods like [`init`][`crate::init`] and [`spawn`][`crate::spawn`] will take the value
     /// from the `TOKIO_CONSOLE_PUBLISH_INTERVAL` [environment variable] before falling
@@ -717,14 +732,32 @@ impl Server {
     /// [environment variable]: `Builder::with_default_env`
     pub const DEFAULT_PORT: u16 = 6669;
 
-    /// Initiates service via the default gRPC transport service.
+    /// Starts the gRPC service with the default gRPC settings.
+    ///
+    /// To configure gRPC server settings before starting the server, use 
+    /// [`serve_with`] instead. This method is equivalent to calling [`serve_with`]
+    /// and providing the default gRPC server settings:
+    ///
+    /// ```rust
+    /// # async fn docs() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    /// # let (_, server) = console_subscriber::ConsoleLayer::new();
+    /// server.serve_with(tonic::transport::Server::default()).await
+    /// # }
+    /// ```
     pub async fn serve(self) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         self.serve_with(tonic::transport::Server::default()).await
     }
 
-    /// Initiates service via the given gRPC transport service `builder`.
+    /// Starts the gRPC service with the given [`tonic`] gRPC transport server
+    /// `builder`.
     ///
-    /// Both event aggregation and client command interpretation services are initiated here.
+    /// The `builder` parameter may be used to configure gRPC-specific settings
+    /// prior to starting the server.
+    ///
+    /// This spawns both the server task and the event aggregation worker
+    /// task on the current async runtime.
+    ///
+    /// [`tonic`]: https://docs.rs/tonic/
     pub async fn serve_with(
         mut self,
         mut builder: tonic::transport::Server,
