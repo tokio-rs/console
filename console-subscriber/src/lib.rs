@@ -65,7 +65,7 @@ pub struct ConsoleLayer {
     /// they might all have their own sets of waker ops.
     waker_callsites: Callsites<16>,
 
-    /// Set of callsites for spans reprenting resources
+    /// Set of callsites for spans representing resources
     ///
     /// TODO: Take some time to determine more reasonable numbers
     resource_callsites: Callsites<32>,
