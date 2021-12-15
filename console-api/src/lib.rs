@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 /// Represents the operations performed by an async runtime.
 pub mod async_ops;
 /// Represents unique id's and Rust source locations.
