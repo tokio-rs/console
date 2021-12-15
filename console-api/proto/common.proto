@@ -191,10 +191,10 @@ message PollStats {
 // indicating how many permits they are trying to acquire vs how many are acquired.
 // These values may change over time. Therefore, they live in the runtime stats rather
 // than the static data describing the entity.
-    message Attribute {
-        // The key-value pair for the attribute
-        common.Field field = 1;
-        // Some values carry a unit of measurement. For example, a duration
-        // carries an associated unit of time, such as "ms" for milliseconds.
-        optional string unit = 2;
-    }
+message Attribute {
+    // The key-value pair for the attribute
+    common.Field field = 1;
+    // Some values carry a unit of measurement. For example, a duration
+    // carries an associated unit of time, such as "ms" for milliseconds.
+    optional string unit = 2;
+}
