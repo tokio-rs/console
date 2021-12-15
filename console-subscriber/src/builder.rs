@@ -84,9 +84,9 @@ impl Builder {
     /// result in the program spending more time preparing task data updates.
     ///
     /// By default, this is [`ConsoleLayer::DEFAULT_PUBLISH_INTERVAL`], though
-    /// constructors like [`build`][`crate::build`] will take the value
-    /// from the `TOKIO_CONSOLE_PUBLISH_INTERVAL` [environment variable] before
-    /// falling back on that default.
+    /// methods like [`init`][`crate::init`] and [`spawn`][`crate::spawn`] will
+    /// take the value from the `TOKIO_CONSOLE_PUBLISH_INTERVAL` [environment
+    /// variable] before falling back on that default.
     ///
     /// [environment variable]: `Builder::with_default_env`
     pub fn publish_interval(self, publish_interval: Duration) -> Self {
