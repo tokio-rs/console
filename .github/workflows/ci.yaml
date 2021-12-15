@@ -23,6 +23,11 @@ env:
   RUSTUP_MAX_RETRIES: 10
   # Don't emit giant backtraces in the CI logs.
   RUST_BACKTRACE: short
+  # Make Rust 1.56.0 the minimum supported Rust version.
+  #
+  # Some of our dependencies require `edition = "2021"` which is only supported
+  # on 1.56.0+.
+  MIN_RUST: 1.56.0
 
 jobs:
   check:
@@ -44,7 +49,7 @@ jobs:
         with:
           command: check
 
-  test:
+  test_os:
     name: Tests on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -60,6 +65,32 @@ jobs:
         with:
           profile: minimal
           toolchain: stable
+          override: true
+      - uses: Swatinem/rust-cache@v1
+
+      - name: Run cargo test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+
+  test_versions:
+    name: Tests on ${{ matrix.rust }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust:
+          - nightly
+          - ${{ env.minrust }}
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
           override: true
       - uses: Swatinem/rust-cache@v1
 
