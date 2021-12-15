@@ -15,6 +15,8 @@ use std::rc::Weak;
 pub(crate) trait TableList {
     type Row;
     type Sort: SortBy + TryFrom<usize>;
+    type Context;
+
     const HEADER: &'static [&'static str];
 
     fn render<B: tui::backend::Backend>(
@@ -23,6 +25,7 @@ pub(crate) trait TableList {
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
         state: &mut state::State,
+        cx: Self::Context,
     ) where
         Self: Sized;
 }
@@ -150,8 +153,9 @@ impl<T: TableList> TableListState<T> {
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
         state: &mut state::State,
+        ctx: T::Context,
     ) {
-        T::render(self, styles, frame, area, state)
+        T::render(self, styles, frame, area, state, ctx)
     }
 }
 

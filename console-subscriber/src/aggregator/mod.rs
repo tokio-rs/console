@@ -1,8 +1,8 @@
-use super::{AttributeUpdate, AttributeUpdateOp, Command, Event, WakeOp, Watch};
+use super::{AttributeUpdate, AttributeUpdateOp, Command, Event, UpdateType, WakeOp, Watch};
 use crate::{record::Recorder, WatchRequest};
 use console_api as proto;
 use proto::resources::resource;
-use proto::resources::stats::Attribute;
+use proto::Attribute;
 use tokio::sync::{mpsc, Notify};
 
 use futures::FutureExt;
@@ -148,10 +148,13 @@ struct PollStats {
 // Represent static data for resources
 struct Resource {
     id: Id,
+    parent_id: Option<Id>,
     metadata: &'static Metadata<'static>,
     concrete_type: String,
     kind: resource::Kind,
     location: Option<proto::Location>,
+    is_internal: bool,
+    inherit_child_attrs: bool,
 }
 
 /// Represents a key for a `proto::field::Name`. Because the
@@ -159,7 +162,7 @@ struct Resource {
 /// resource id in this key
 #[derive(Hash, PartialEq, Eq)]
 struct FieldKey {
-    resource_id: u64,
+    update_id: u64,
     field_name: proto::field::Name,
 }
 
@@ -196,17 +199,20 @@ struct TaskStats {
 
 struct AsyncOp {
     id: Id,
+    parent_id: Option<Id>,
+    resource_id: Id,
     metadata: &'static Metadata<'static>,
     source: String,
+    inherit_child_attrs: bool,
 }
 
 #[derive(Default)]
 struct AsyncOpStats {
     created_at: Option<SystemTime>,
     dropped_at: Option<SystemTime>,
-    resource_id: Option<Id>,
     task_id: Option<Id>,
     poll_stats: PollStats,
+    attributes: HashMap<FieldKey, Attribute>,
 }
 
 impl DroppedAt for ResourceStats {
@@ -607,19 +613,24 @@ impl Aggregator {
                 );
             }
 
-            Event::Enter { id, at } => {
+            Event::Enter { id, parent_id, at } => {
                 let id = self.ids.id_for(id);
+                let parent_id = parent_id.map(|id| self.ids.id_for(id));
                 if let Some(mut task_stats) = self.task_stats.update(&id) {
                     task_stats.poll_stats.update_on_span_enter(at);
+                    return;
                 }
 
-                if let Some(mut async_op_stats) = self.async_op_stats.update(&id) {
+                if let Some(mut async_op_stats) =
+                    parent_id.and_then(|parent_id| self.async_op_stats.update(&parent_id))
+                {
                     async_op_stats.poll_stats.update_on_span_enter(at);
                 }
             }
 
-            Event::Exit { id, at } => {
+            Event::Exit { id, parent_id, at } => {
                 let id = self.ids.id_for(id);
+                let parent_id = parent_id.map(|id| self.ids.id_for(id));
                 if let Some(mut task_stats) = self.task_stats.update(&id) {
                     task_stats.poll_stats.update_on_span_exit(at);
                     if let Some(since_last_poll) = task_stats.poll_stats.since_last_poll(at) {
@@ -628,9 +639,12 @@ impl Aggregator {
                             .record(since_last_poll.as_nanos().try_into().unwrap_or(u64::MAX))
                             .unwrap();
                     }
+                    return;
                 }
 
-                if let Some(mut async_op_stats) = self.async_op_stats.update(&id) {
+                if let Some(mut async_op_stats) =
+                    parent_id.and_then(|parent_id| self.async_op_stats.update(&parent_id))
+                {
                     async_op_stats.poll_stats.update_on_span_exit(at);
                 }
             }
@@ -695,21 +709,28 @@ impl Aggregator {
             Event::Resource {
                 at,
                 id,
+                parent_id,
                 metadata,
                 kind,
                 concrete_type,
                 location,
+                is_internal,
+                inherit_child_attrs,
                 ..
             } => {
                 let id = self.ids.id_for(id);
+                let parent_id = parent_id.map(|id| self.ids.id_for(id));
                 self.resources.insert(
                     id,
                     Resource {
                         id,
+                        parent_id,
                         kind,
                         metadata,
                         concrete_type,
                         location,
+                        is_internal,
+                        inherit_child_attrs,
                     },
                 );
 
@@ -724,7 +745,6 @@ impl Aggregator {
 
             Event::PollOp {
                 metadata,
-                at,
                 resource_id,
                 op_name,
                 async_op_id,
@@ -736,13 +756,7 @@ impl Aggregator {
                 let task_id = self.ids.id_for(task_id);
 
                 let mut async_op_stats = self.async_op_stats.update_or_default(async_op_id);
-                async_op_stats.poll_stats.polls += 1;
                 async_op_stats.task_id.get_or_insert(task_id);
-                async_op_stats.resource_id.get_or_insert(resource_id);
-
-                if !is_ready && async_op_stats.poll_stats.first_poll.is_none() {
-                    async_op_stats.poll_stats.first_poll = Some(at);
-                }
 
                 let poll_op = proto::resources::PollOp {
                     metadata: Some(metadata.into()),
@@ -758,14 +772,45 @@ impl Aggregator {
             }
 
             Event::StateUpdate {
-                resource_id,
+                update_id,
+                update_type,
                 update,
                 ..
             } => {
-                let resource_id = self.ids.id_for(resource_id);
-                if let Some(mut stats) = self.resource_stats.update(&resource_id) {
-                    let field_name = match update.field.name.clone() {
-                        Some(name) => name,
+                let update_id = self.ids.id_for(update_id);
+                let mut to_update = vec![(update_id, update_type.clone())];
+
+                fn update_entry(e: Entry<'_, FieldKey, Attribute>, upd: &AttributeUpdate) {
+                    e.and_modify(|attr| update_attribute(attr, upd))
+                        .or_insert_with(|| upd.clone().into());
+                }
+
+                match update_type {
+                    UpdateType::Resource => {
+                        if let Some(parent) = self
+                            .resources
+                            .get(&update_id)
+                            .and_then(|r| self.resources.get(r.parent_id.as_ref()?))
+                            .filter(|parent| parent.inherit_child_attrs)
+                        {
+                            to_update.push((parent.id, UpdateType::Resource));
+                        }
+                    }
+                    UpdateType::AsyncOp => {
+                        if let Some(parent) = self
+                            .async_ops
+                            .get(&update_id)
+                            .and_then(|r| self.async_ops.get(r.parent_id.as_ref()?))
+                            .filter(|parent| parent.inherit_child_attrs)
+                        {
+                            to_update.push((parent.id, UpdateType::AsyncOp));
+                        }
+                    }
+                }
+
+                for (update_id, update_type) in to_update {
+                    let field_name = match update.field.name.as_ref() {
+                        Some(name) => name.clone(),
                         None => {
                             tracing::warn!(?update.field, "field missing name, skipping...");
                             return;
@@ -773,17 +818,26 @@ impl Aggregator {
                     };
 
                     let upd_key = FieldKey {
-                        resource_id,
+                        update_id,
                         field_name,
                     };
-                    match stats.attributes.entry(upd_key) {
-                        Entry::Occupied(ref mut attr) => {
-                            update_attribute(attr.get_mut(), update);
+
+                    match update_type {
+                        UpdateType::Resource => {
+                            let mut stats = self.resource_stats.update(&update_id);
+                            let entry = stats.as_mut().map(|s| s.attributes.entry(upd_key));
+                            if let Some(entry) = entry {
+                                update_entry(entry, &update);
+                            }
                         }
-                        Entry::Vacant(attr) => {
-                            attr.insert(update.into());
+                        UpdateType::AsyncOp => {
+                            let mut stats = self.async_op_stats.update(&update_id);
+                            let entry = stats.as_mut().map(|s| s.attributes.entry(upd_key));
+                            if let Some(entry) = entry {
+                                update_entry(entry, &update);
+                            }
                         }
-                    }
+                    };
                 }
             }
 
@@ -791,16 +845,25 @@ impl Aggregator {
                 at,
                 id,
                 source,
+                resource_id,
                 metadata,
+                parent_id,
+                inherit_child_attrs,
                 ..
             } => {
                 let id = self.ids.id_for(id);
+                let parent_id = parent_id.map(|id| self.ids.id_for(id));
+                let resource_id = self.ids.id_for(resource_id);
+
                 self.async_ops.insert(
                     id,
                     AsyncOp {
                         id,
+                        resource_id,
                         metadata,
                         source,
+                        parent_id,
+                        inherit_child_attrs,
                     },
                 );
 
@@ -903,10 +966,12 @@ impl ToProto for Resource {
     fn to_proto(&self) -> Self::Output {
         proto::resources::Resource {
             id: Some(self.id.into()),
+            parent_resource_id: self.parent_id.map(Into::into),
             kind: Some(self.kind.clone()),
             metadata: Some(self.metadata.into()),
             concrete_type: self.concrete_type.clone(),
             location: self.location.clone(),
+            is_internal: self.is_internal,
         }
     }
 }
@@ -931,7 +996,9 @@ impl ToProto for AsyncOp {
         proto::async_ops::AsyncOp {
             id: Some(self.id.into()),
             metadata: Some(self.metadata.into()),
+            resource_id: Some(self.resource_id.into()),
             source: self.source.clone(),
+            parent_async_op_id: self.parent_id.map(Into::into),
         }
     }
 }
@@ -940,12 +1007,13 @@ impl ToProto for AsyncOpStats {
     type Output = proto::async_ops::Stats;
 
     fn to_proto(&self) -> Self::Output {
+        let attributes = self.attributes.values().cloned().collect();
         proto::async_ops::Stats {
             poll_stats: Some(self.poll_stats.to_proto()),
             created_at: self.created_at.map(Into::into),
             dropped_at: self.dropped_at.map(Into::into),
-            resource_id: self.resource_id.map(Into::into),
             task_id: self.task_id.map(Into::into),
+            attributes,
         }
     }
 }
@@ -987,12 +1055,11 @@ fn serialize_histogram(histogram: &Histogram<u64>) -> Result<Vec<u8>, V2Serializ
     Ok(buf)
 }
 
-fn update_attribute(attribute: &mut Attribute, update: AttributeUpdate) {
+fn update_attribute(attribute: &mut Attribute, update: &AttributeUpdate) {
     use proto::field::Value::*;
     let attribute_val = attribute.field.as_mut().and_then(|a| a.value.as_mut());
-    let update_val = update.field.value;
-    let update_name = update.field.name;
-
+    let update_val = update.field.value.clone();
+    let update_name = update.field.name.clone();
     match (attribute_val, update_val) {
         (Some(BoolVal(v)), Some(BoolVal(upd))) => *v = upd,
 

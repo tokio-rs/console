@@ -41,6 +41,13 @@ message Resource {
     Kind kind = 4;
     // The location in code where the resource was created.
     common.Location location = 5;
+    // The ID of the parent resource.
+    common.Id parent_resource_id = 6;
+    // Is the resource an internal component of another resource?
+    //
+    // For example, a `tokio::time::Interval` resource might contain a 
+    // `tokio::time::Sleep` resource internally.
+    bool is_internal = 7;
 
     // The kind of resource (e.g. timer, mutex).
     message Kind {
@@ -70,16 +77,7 @@ message Stats {
     // have permits as an attribute. These values may change over time as the state of
     // the resource changes. Therefore, they live in the runtime stats rather than the
     // static data describing the resource.
-    repeated Attribute attributes = 3;
-
-    // A single key-value pair associated with a resource.
-    message Attribute {
-        // The key-value pair for the attribute
-        common.Field field = 1;
-        // Some values carry a unit of measurement. For example, a duration
-        // carries an associated unit of time, such as "ms" for milliseconds.
-        optional string unit = 2;
-    }
+    repeated common.Attribute attributes = 3;
 }
 
 // A `PollOp` describes each poll operation that completes within the async

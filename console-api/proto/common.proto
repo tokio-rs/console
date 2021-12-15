@@ -183,3 +183,18 @@ message PollStats {
     // has spent *waiting* to be polled.
     google.protobuf.Duration busy_time = 6;
 }
+
+// State attributes of an entity. These are dependent on the type of the entity.
+//
+// For example, a timer resource will have a duration, while a semaphore resource may
+// have a permit count. Likewise, the async ops of a semaphore may have attributes
+// indicating how many permits they are trying to acquire vs how many are acquired.
+// These values may change over time. Therefore, they live in the runtime stats rather
+// than the static data describing the entity.
+message Attribute {
+    // The key-value pair for the attribute
+    common.Field field = 1;
+    // Some values carry a unit of measurement. For example, a duration
+    // carries an associated unit of time, such as "ms" for milliseconds.
+    optional string unit = 2;
+}

@@ -103,11 +103,11 @@ impl Recorder {
                 at: *at,
                 fields: SerializeFields(fields),
             },
-            crate::Event::Enter { id, at } => Event::Enter {
+            crate::Event::Enter { id, at, .. } => Event::Enter {
                 id: id.into_u64(),
                 at: *at,
             },
-            crate::Event::Exit { id, at } => Event::Exit {
+            crate::Event::Exit { id, at, .. } => Event::Exit {
                 id: id.into_u64(),
                 at: *at,
             },

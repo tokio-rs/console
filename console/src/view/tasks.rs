@@ -22,6 +22,7 @@ pub(crate) struct TasksTable {}
 impl TableList for TasksTable {
     type Row = Task;
     type Sort = SortBy;
+    type Context = ();
 
     const HEADER: &'static [&'static str] = &[
         "Warn", "ID", "State", "Name", "Total", "Busy", "Idle", "Polls", "Target", "Location",
@@ -34,6 +35,7 @@ impl TableList for TasksTable {
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
         state: &mut State,
+        _: Self::Context,
     ) {
         let state_len: u16 = Self::HEADER[2].len() as u16;
         let now = if let Some(now) = state.last_updated_at() {
