@@ -12,7 +12,7 @@ import "common.proto";
 // update. This includes:
 // - any new resources that were created since the last update
 // - the current stats for any resource whose stats changed since the last update
-// - any new poll ops that have been incoked on a resource
+// - any new poll ops that have been invoked on a resource
 message ResourceUpdate {
     // A list of new resources that were created since the last `ResourceUpdate` was
     // sent.
@@ -45,12 +45,18 @@ message Resource {
     common.Id parent_resource_id = 6;
     bool is_internal = 7;
 
+    // The kind of resource (e.g. timer, mutex).
     message Kind {
+        // Every resource is either a known kind or an other (unknown) kind.
         oneof kind {
+            // `known` signals that this kind of resource is known to the console API.
             Known known = 1;
+            // `other` signals that this kind of resource is unknown to the console API.
             string other = 2;
         }
+        // `Known` collects the kinds of resources that are known in this version of the API.
         enum Known {
+            // `TIMER` signals that this is a timer resource, e.g. waiting for a sleep to finish.
             TIMER = 0;
         }
     }
@@ -62,10 +68,16 @@ message Stats {
     google.protobuf.Timestamp created_at = 1;
     // Timestamp of when the resource was dropped.
     google.protobuf.Timestamp dropped_at = 2;
-    // State attributes of the resource.
+    // State attributes of the resource. These are dependent on the type of the resource.
+    // For example, a timer resource will have a duration while a semaphore resource may
+    // have permits as an attribute. These values may change over time as the state of
+    // the resource changes. Therefore, they live in the runtime stats rather than the
+    // static data describing the resource.
     repeated common.Attribute attributes = 3;
 }
 
+// A `PollOp` describes each poll operation that completes within the async
+// application.
 message PollOp {
     // The numeric ID of the op's `Metadata`.
     //

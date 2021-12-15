@@ -1,8 +1,9 @@
 [package]
 name = "console-api"
 version = "0.1.0"
-edition = "2018"
 license = "MIT"
+edition = "2021"
+rust-version = "1.56.0"
 
 [features]
 # Generate code that is compatible with Tonic's `transport` module.

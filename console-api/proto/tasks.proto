@@ -33,6 +33,7 @@ message TaskDetails {
     // The task's ID which the details belong to.
     common.Id task_id = 1;
 
+    // The timestamp for when the update to the task took place.
     google.protobuf.Timestamp now = 2;
 
     // HdrHistogram.rs `Histogram` serialized to binary in the V2 format
@@ -76,8 +77,13 @@ message Task {
     // The location in code where the task was spawned.
     common.Location location = 6;
 
+    // The category of task this task belongs to.
     enum Kind {
+        // A task spawned using a runtime's standard asynchronous task spawning
+        // operation (such as `tokio::task::spawn`).
         SPAWN = 0;
+        // A task spawned via a runtime's blocking task spawning operation
+        // (such as `tokio::task::spawn_blocking`).
         BLOCKING = 1;
     }
 
@@ -89,7 +95,7 @@ message Stats {
     google.protobuf.Timestamp created_at = 1;
     // Timestamp of when the task was dropped.
     google.protobuf.Timestamp dropped_at = 2;
-    // The total number of times this task's waker has been woken.
+    // The total number of times this task has been woken over its lifetime.
     uint64 wakes = 3;
     // The total number of times this task's waker has been cloned.
     uint64 waker_clones = 4;
