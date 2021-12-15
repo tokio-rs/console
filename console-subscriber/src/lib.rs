@@ -21,7 +21,6 @@ use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 mod aggregator;
 mod builder;
 mod callsites;
-mod init;
 mod record;
 mod stack;
 pub(crate) mod sync;
@@ -33,7 +32,7 @@ use callsites::Callsites;
 use stack::SpanStack;
 use visitors::{AsyncOpVisitor, ResourceVisitor, TaskVisitor, WakerVisitor};
 
-pub use init::{build, init};
+pub use builder::{build, init};
 
 use crate::aggregator::Id;
 use crate::visitors::{PollOpVisitor, StateUpdateVisitor};
