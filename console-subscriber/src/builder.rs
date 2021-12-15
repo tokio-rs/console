@@ -85,8 +85,10 @@ impl Builder {
     ///
     /// By default, this is [`ConsoleLayer::DEFAULT_PUBLISH_INTERVAL`], though
     /// constructors like [`build`][`crate::build`] will take the value
-    /// from the `TOKIO_CONSOLE_PUBLISH_INTERVAL` environment variable before
+    /// from the `TOKIO_CONSOLE_PUBLISH_INTERVAL` [environment variable] before
     /// falling back on that default.
+    ///
+    /// [environment variable]: `Builder::with_default_env`
     pub fn publish_interval(self, publish_interval: Duration) -> Self {
         Self {
             publish_interval,
@@ -103,8 +105,10 @@ impl Builder {
     ///
     /// By default, this is [`ConsoleLayer::DEFAULT_RETENTION`], though
     /// constructors like [`build`][`crate::build`] will take the value
-    /// from the `TOKIO_CONSOLE_RETENTION` environment variable before
+    /// from the `TOKIO_CONSOLE_RETENTION` [environment variable] before
     /// falling back on that default.
+    ///
+    /// [environment variable]: `Builder::with_default_env`
     pub fn retention(self, retention: Duration) -> Self {
         Self { retention, ..self }
     }
@@ -114,8 +118,10 @@ impl Builder {
     /// By default, the server is bound on the IP address [`Server::DEFAULT_IP`]
     /// on port [`Server::DEFAULT_PORT`], though
     /// constructors like [`build`][`crate::build`] will parse the socket address
-    /// from the `TOKIO_CONSOLE_BIND` environment variable before
+    /// from the `TOKIO_CONSOLE_BIND` [environment variable] before
     /// falling back on constructing a socket address from those defaults.
+    ///
+    /// [environment variable]: `Builder::with_default_env`
     pub fn server_addr(self, server_addr: impl Into<SocketAddr>) -> Self {
         Self {
             server_addr: server_addr.into(),
@@ -127,8 +133,10 @@ impl Builder {
     ///
     /// By default, this is initially `None`, though
     /// constructors like [`build`][`crate::build`] will take the value
-    /// from the `TOKIO_CONSOLE_RECORD_PATH` environment variable before
+    /// from the `TOKIO_CONSOLE_RECORD_PATH` [environment variable] before
     /// falling back on that default.
+    ///
+    /// [environment variable]: `Builder::with_default_env`
     pub fn recording_path(self, path: impl Into<PathBuf>) -> Self {
         Self {
             recording_path: Some(path.into()),

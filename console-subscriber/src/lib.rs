@@ -309,19 +309,23 @@ impl ConsoleLayer {
     /// Default frequency for publication of events to clients.
     ///
     /// Note that constructors like [`build`][`crate::build`] will take the
-    /// value from the `TOKIO_CONSOLE_PUBLISH_INTERVAL` environment variable
+    /// value from the `TOKIO_CONSOLE_PUBLISH_INTERVAL` [environment variable]
     /// before falling back on this default.
     ///
     /// See also [`Builder::publish_interval`].
+    ///
+    /// [environment variable]: `Builder::with_default_env`
     pub const DEFAULT_PUBLISH_INTERVAL: Duration = Duration::from_secs(1);
 
     /// By default, completed spans are retained for one hour.
     ///
     /// Note that constructors like [`build`][`crate::build`] will take the
-    /// value from the `TOKIO_CONSOLE_RETENTION` environment variable before
+    /// value from the `TOKIO_CONSOLE_RETENTION` [environment variable] before
     /// falling back on this default.
     ///
     /// See also [`Builder::retention`].
+    ///
+    /// [environment variable]: `Builder::with_default_env`
     pub const DEFAULT_RETENTION: Duration = Duration::from_secs(60 * 60);
 
     fn is_spawn(&self, meta: &'static Metadata<'static>) -> bool {
@@ -689,19 +693,23 @@ impl Server {
     /// A [`Server`] by default binds socket address 127.0.0.1 to service remote procedure calls.
     ///
     /// Note that constructors like [`build`][`crate::build`] will parse the
-    /// socket address from the `TOKIO_CONSOLE_BIND` environment variable before
+    /// socket address from the `TOKIO_CONSOLE_BIND` [environment variable] before
     /// falling back on constructing a socket address from this default.
     ///
     /// See also [`Builder::server_addr`].
+    ///
+    /// [environment variable]: `Builder::with_default_env`
     pub const DEFAULT_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 
     /// A [`Server`] by default binds port 6669 to service remote procedure calls.
     ///
     /// Note that constructors like [`build`][`crate::build`] will parse the
-    /// socket address from the `TOKIO_CONSOLE_BIND` environment variable before
+    /// socket address from the `TOKIO_CONSOLE_BIND` [environment variable] before
     /// falling back on constructing a socket address from this default.
     ///
     /// See also [`Builder::server_addr`].
+    ///
+    /// [environment variable]: `Builder::with_default_env`
     pub const DEFAULT_PORT: u16 = 6669;
 
     /// Initiates service via the default gRPC transport service.
