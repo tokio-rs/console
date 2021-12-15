@@ -173,8 +173,8 @@ impl Builder {
     /// be determined by the `RUST_LOG` environment variable.
     ///
     /// **Note**: this function sets the [default `tracing` subscriber][default]
-    /// for your application. If you need to add additional layers to this
-    /// subscriber, see [`build`].
+    /// for your application. If you need to add additional layers to a subscriber,
+    /// see [`spawn`].
     ///
     /// [default]: https://docs.rs/tracing/latest/tracing/dispatcher/index.html#setting-the-default-subscriber
     /// [sub]: https://docs.rs/tracing/latest/tracing/trait.Subscriber.html
@@ -338,8 +338,8 @@ impl Builder {
 /// be determined by the `RUST_LOG` environment variable.
 ///
 /// **Note**: this function sets the [default `tracing` subscriber][default]
-/// for your application. If you need to add additional layers to this
-/// subscriber, see [`build`].
+/// for your application. If you need to add additional layers to a subscriber,
+/// see [`spawn`].
 ///
 /// [default]: https://docs.rs/tracing/latest/tracing/dispatcher/index.html#setting-the-default-subscriber
 /// [sub]: https://docs.rs/tracing/latest/tracing/trait.Subscriber.html
