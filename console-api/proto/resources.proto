@@ -43,6 +43,10 @@ message Resource {
     common.Location location = 5;
     // The ID of the parent resource.
     common.Id parent_resource_id = 6;
+    // Is the resource an internal component of another resource?
+    //
+    // For example, a `tokio::time::Interval` resource might contain a 
+    // `tokio::time::Sleep` resource internally.
     bool is_internal = 7;
 
     // The kind of resource (e.g. timer, mutex).
