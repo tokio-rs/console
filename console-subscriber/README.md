@@ -1,6 +1,7 @@
 # tokio-console subscriber
 
-&#xe14b; A [`tracing-subscriber`] [`Layer`] for collecting [`tokio-console`] instrumentation.
+&#x1F4E1;&#xFE0F;  A [`tracing-subscriber`] [`Layer`] for collecting
+[`tokio-console`] instrumentation.
 
 [![crates.io][crates-badge]][crates-url]
 [![Documentation][docs-badge]][docs-url]
@@ -42,12 +43,96 @@ implementing the [`Layer`] trait from [`tracing-subscriber`], for collecting and
 aggregating the runtime's [`tracing`] data, and a gRPC server that exports
 telemetry to clients.
 
-### Getting Started
+[wire format]: https://crates.io/crates/console-api
+
+## Getting Started
 
 To instrument your asynchronous application, you must be using an async runtime
 that supports the [`tracing`] instrumentation required by the console.
 Currently, the only runtime that implements this instrumentation is [Tokio]
 version 1.7.0 and newer.
+
+### Enabling Tokio Instrumentation
+
+&#x26A0;&#xFE0F; Currently, the [`tracing`] support in the [`tokio`
+runtime][Tokio] is considered *experimental*. In order to use
+`console-subscriber` with Tokio, the following is required:
+
+* Tokio's optional `tracing` dependency must be enabled. For example:
+  ```toml
+  [dependencies]
+  # ...
+  tokio = { version = "1.15", features = ["full", "tracing"] }
+  ```
+
+* The `tokio_unstable` cfg flag, which enables experimental APIs in Tokio, must
+  be enabled. It can be enabled by setting the `RUSTFLAGS` environment variable
+  at build-time:
+  ```shell
+  $ RUSTFLAGS="--cfg tokio_unstable" cargo build
+  ```
+  or, by adding the following to the `.cargo/config` file in a Cargo workspace:
+  ```toml
+  [build]
+  rustflags = ["--cfg", "tokio_unstable"]
+  ```
+### Adding the Console Subscriber
+
+If the runtime emits compatible `tracing` events, enabling the console is as
+simple as adding the following line to your `main` function:
+
+```rust
+console_subscriber::init();
+```
+
+This sets the [default `tracing` subscriber][default] to serve console telemetry
+(as well as logging to stdout based on the `RUST_LOG` environment variable). The
+console subscriber's behavior can be configured via a set of
+[environment variables][env].
+
+For programmatic configuration, a [builder interface][builder] is also provided:
+
+```rust
+use std::time::Duration;
+
+console_subscriber::TasksLayer::builder()
+    // set how long the console will retain data from completed tasks
+    .retention(Duration::from_secs(60))
+    // set the address the server is bound to
+    .server_addr(([127, 0, 0, 1], 5555))
+    // ... other configurations ...
+    .init();
+```
+
+The layer provided by this crate can also be combined with other [`Layer`]s from
+other crates:
+
+```rust
+use tracing_subscriber::prelude::*;
+
+// spawn the console server in the background,
+// returning a `Layer`:
+let console_layer = console_subscriber::spawn();
+
+// build a `Subscriber` by combining layers with a
+// `tracing_subscriber::Registry`:
+tracing_subscriber::registry()
+    // add the console layer to the subscriber
+    .with(tasks_layer)
+    // add other layers...
+    .with(tracing_subscriber::fmt::layer())
+ // .with(...)
+    .init();
+```
+
+[`tracing`]: https://crates.io/crates/tracing
+[`tracing-subscriber`]: https://crates.io/crates/tracing-subscriber
+[`Layer`]:https://docs.rs/tracing-subscriber/0.3/tracing_subscriber/layer/index.html
+[default]: https://docs.rs/tracing/latest/0.1/dispatcher/index.html#setting-the-default-subscriber
+[env]: https://docs.rs/console-subscriber/0.1/console-subscriber/struct.builder#method.with_default_env
+[builder]: https://docs.rs/console-subscriber/0.1/console-subscriber/struct.builder
+[`tokio-console`]: https://github.com/tokio-rs/console
+[Tokio]: https://tokio.rs
 
 ### Crate Feature Flags
 
@@ -66,7 +151,7 @@ First, see if the answer to your question can be found in the
 the [Tokio Discord server][discord-url]. We would be happy to try to answer your
 question. You can also ask your question on [the discussions page][discussions].
 
-[API documentation]: https://docs.rs/console-api
+[API documentation]: https://docs.rs/console-subscriber
 [discussions]: https://github.com/tokio-rs/console/discussions
 [discord-url]: https://discord.gg/tokio
 
