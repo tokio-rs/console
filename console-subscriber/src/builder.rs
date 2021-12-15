@@ -116,10 +116,11 @@ impl Builder {
     /// Sets the socket address on which to serve the RPC server.
     ///
     /// By default, the server is bound on the IP address [`Server::DEFAULT_IP`]
-    /// on port [`Server::DEFAULT_PORT`], though
-    /// constructors like [`build`][`crate::build`] will parse the socket address
-    /// from the `TOKIO_CONSOLE_BIND` [environment variable] before
-    /// falling back on constructing a socket address from those defaults.
+    /// on port [`Server::DEFAULT_PORT`], though methods like
+    /// [`init`][`crate::init`] and [`spawn`][`crate::spawn`] will parse the
+    /// socket address from the `TOKIO_CONSOLE_BIND` [environment variable]
+    /// before falling back on constructing a socket address from those
+    /// defaults.
     ///
     /// [environment variable]: `Builder::with_default_env`
     pub fn server_addr(self, server_addr: impl Into<SocketAddr>) -> Self {
