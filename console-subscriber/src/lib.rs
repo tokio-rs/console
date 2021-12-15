@@ -677,13 +677,32 @@ impl fmt::Debug for ConsoleLayer {
 
 impl Server {
     // XXX(eliza): why is `SocketAddr::new` not `const`???
+    /// A [`Server`] by default binds socket address 127.0.0.1 to service remote procedure calls.
+    ///
+    /// Note that constructors like [`build`][`crate::build`] will parse the
+    /// socket address from the `TOKIO_CONSOLE_BIND` environment variable before
+    /// falling back on constructing a socket address from this default.
+    ///
+    /// See also [`Builder::server_addr`].
     pub const DEFAULT_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+
+    /// A [`Server`] by default binds port 6669 to service remote procedure calls.
+    ///
+    /// Note that constructors like [`build`][`crate::build`] will parse the
+    /// socket address from the `TOKIO_CONSOLE_BIND` environment variable before
+    /// falling back on constructing a socket address from this default.
+    ///
+    /// See also [`Builder::server_addr`].
     pub const DEFAULT_PORT: u16 = 6669;
 
+    /// Initiates service via the default gRPC transport service.
     pub async fn serve(self) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         self.serve_with(tonic::transport::Server::default()).await
     }
 
+    /// Initiates service via the given gRPC transport service `builder`.
+    ///
+    /// Both event aggregation and client command interpretation services are initiated here.
     pub async fn serve_with(
         mut self,
         mut builder: tonic::transport::Server,
