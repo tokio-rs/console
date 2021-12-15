@@ -118,7 +118,7 @@ let console_layer = console_subscriber::spawn();
 // `tracing_subscriber::Registry`:
 tracing_subscriber::registry()
     // add the console layer to the subscriber
-    .with(tasks_layer)
+    .with(console_layer)
     // add other layers...
     .with(tracing_subscriber::fmt::layer())
  // .with(...)
