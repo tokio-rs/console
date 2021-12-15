@@ -39,12 +39,12 @@ use crate::aggregator::Id;
 use crate::visitors::{PollOpVisitor, StateUpdateVisitor};
 
 /// A [`ConsoleLayer`] is a [`tracing_subscriber::Layer`] that records [`tracing`]
-/// spans and events emitted by the async runtime. 
+/// spans and events emitted by the async runtime.
 ///
 /// Runtimes emit [`tracing`] spans and events that represent specific operations
 /// that occur in asynchronous Rust programs, such as spawning tasks and waker
 /// operations. The `ConsoleLayer` collects and aggregates these events, and the
-/// resulting diagnostic data is exported to clients by the corresponding gRPC 
+/// resulting diagnostic data is exported to clients by the corresponding gRPC
 /// [`Server`] instance.
 ///
 /// [`tracing`]: https://docs.rs/tracing
@@ -107,7 +107,7 @@ pub struct ConsoleLayer {
 /// A gRPC [`Server`] that implements the [`tokio-console` wire format][wire].
 ///
 /// Client applications, such as the [`tokio-console CLI][cli] connect to the gRPC
-/// server, and stream data about the runtime's history (such as a list of the 
+/// server, and stream data about the runtime's history (such as a list of the
 /// currently active tasks, or statistics summarizing polling times). A [`Server`] also
 /// interprets commands from a client application, such a request to focus in on
 /// a specific task, and translates that into a stream of details specific to
@@ -734,7 +734,7 @@ impl Server {
 
     /// Starts the gRPC service with the default gRPC settings.
     ///
-    /// To configure gRPC server settings before starting the server, use 
+    /// To configure gRPC server settings before starting the server, use
     /// [`serve_with`] instead. This method is equivalent to calling [`serve_with`]
     /// and providing the default gRPC server settings:
     ///
