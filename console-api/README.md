@@ -1,6 +1,6 @@
 # tokio-console API
 
-&#x1f6f0; [Tonic] bindings for the [`tokio-console`] protobuf wire format.
+&#x1f6f0; [Tonic] bindings for the [`tokio-console`] [protobuf] wire format.
 
 [![crates.io][crates-badge]][crates-url]
 [![Documentation][docs-badge]][docs-url]
@@ -28,6 +28,21 @@
 This crate contains generated [protobuf] bindings for the [`tokio-console`] wire
 format. The wire format is used to export diagnostic data from instrumented
 applications to consumers that aggregate and display that data.
+
+[`tokio-console`] is a debugging and profiling tool for asynchronous Rust
+applications, which collects and displays in-depth diagnostic data on the
+asynchronous tasks, resources, and operations in an application. The console
+system consists of two primary components:
+
+* _instrumentation_, embedded in the application, which collects data from the
+  async runtime and exposes it over the console's wire format
+* _consumers_, such as the [`tokio-console`] command-line application, which
+  connect to the instrumented application, recieve telemetry data, and display
+  it to the user
+
+The wire format [protobuf] bindings in this crate are used by both the
+instrumentation in the [`console-subscriber`] crate, which emits telemetry in
+this format, and by the clients that consume that telemetry.
 
 In general, most [`tokio-console`] users will *not* depend on this crate
 directly. Applications are typically instrumented using the
