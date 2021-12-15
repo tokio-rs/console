@@ -319,9 +319,10 @@ impl ConsoleLayer {
 
     /// By default, completed spans are retained for one hour.
     ///
-    /// Note that constructors like [`build`][`crate::build`] will take the
-    /// value from the `TOKIO_CONSOLE_RETENTION` [environment variable] before
-    /// falling back on this default.
+    /// Note that methods like [`init`][`crate::init`] and
+    /// [`spawn`][`crate::spawn`] will take the value from the
+    /// `TOKIO_CONSOLE_RETENTION` [environment variable] before falling back on
+    /// this default.
     ///
     /// See also [`Builder::retention`].
     ///
