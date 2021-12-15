@@ -744,6 +744,7 @@ impl Server {
     /// server.serve_with(tonic::transport::Server::default()).await
     /// # }
     /// ```
+    /// [`serve_with`]: Builder::serve_with
     pub async fn serve(self) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         self.serve_with(tonic::transport::Server::default()).await
     }
