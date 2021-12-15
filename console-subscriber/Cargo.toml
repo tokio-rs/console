@@ -11,7 +11,7 @@ parking_lot = ["parking_lot_crate", "tracing-subscriber/parking_lot"]
 
 [dependencies]
 
-tokio = { version = "^1.14", features = ["sync", "time", "macros", "tracing"] }
+tokio = { version = "^1.15", features = ["sync", "time", "macros", "tracing"] }
 tokio-stream = "0.1"
 thread_local = "1.1.3"
 console-api = { path = "../console-api", features = ["transport"] }

@@ -5,8 +5,3 @@ members = [
     "console-api"
 ]
 resolver = "2"
-
-# Patch the dependency on tokio to get Resource details instrumentation
-[patch.crates-io.tokio]
-git = "https://github.com/tokio-rs/tokio"
-rev = "838119ac30ebf8b4deca872a97d669dc543e8089"
