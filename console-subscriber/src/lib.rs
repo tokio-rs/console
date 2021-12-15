@@ -99,6 +99,12 @@ pub struct ConsoleLayer {
     no_dispatch: Dispatch,
 }
 
+/// A [`Server`] is in charge of aggregating the abstract runtime events into a
+/// model of the runtime's history (such as a list of the currently active
+/// tasks, or statistics summarizing polling times). A [`Server`] also
+/// interprets commands from a client application, such a request to focus in on
+/// a specific task, and translates that into a stream of details specific to
+/// that task.
 pub struct Server {
     subscribe: mpsc::Sender<Command>,
     addr: SocketAddr,
