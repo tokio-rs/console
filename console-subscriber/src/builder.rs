@@ -418,7 +418,8 @@ pub fn init() {
 /// use console_subscriber::TasksLayer;
 ///
 /// let layer = TasksLayer::builder().with_default_env().spawn();
-/// # drop(layer); // to suppress must_use warnings
+/// # use tracing_subscriber::prelude::*;
+/// # tracing_subscriber::registry().with(layer).init(); // to suppress must_use warnings
 /// ```
 /// [filter]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.Targets.html
 /// [`Layer`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html
