@@ -308,9 +308,9 @@ impl ConsoleLayer {
 
     /// Default frequency for publication of events to clients.
     ///
-    /// Note that constructors like [`build`][`crate::build`] will take the
-    /// value from the `TOKIO_CONSOLE_PUBLISH_INTERVAL` [environment variable]
-    /// before falling back on this default.
+    /// Note that methods like [`init`][`crate::init`] and [`spawn`][`crate::spawn`] will take the value
+    /// from the `TOKIO_CONSOLE_PUBLISH_INTERVAL` [environment variable] before falling
+    /// back on this default.
     ///
     /// See also [`Builder::publish_interval`].
     ///
