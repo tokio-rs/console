@@ -175,6 +175,11 @@ impl Builder {
     /// for your application. If you need to add additional layers to a subscriber,
     /// see [`spawn`].
     ///
+    /// ## Panics
+    ///
+    /// * If the subscriber's background thread could not be spawned.
+    /// * If the [default `tracing` subscriber][default] has already been set.
+    ///
     /// [default]: https://docs.rs/tracing/latest/tracing/dispatcher/index.html#setting-the-default-subscriber
     /// [sub]: https://docs.rs/tracing/latest/tracing/trait.Subscriber.html
     /// [`tracing_subscriber::fmt`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/fmt/index.html
@@ -245,6 +250,10 @@ impl Builder {
     /// [filter]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.Targets.html
     /// [`Layer`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html
     /// [`Server`]: crate::Server
+    ///
+    /// ## Panics
+    ///
+    /// * If the subscriber's background thread could not be spawned.
     ///
     /// ## Configuration
     ///
@@ -343,6 +352,11 @@ impl Builder {
 /// for your application. If you need to add additional layers to a subscriber,
 /// see [`spawn`].
 ///
+/// ## Panics
+///
+/// * If the subscriber's background thread could not be spawned.
+/// * If the [default `tracing` subscriber][default] has already been set.
+///
 /// [default]: https://docs.rs/tracing/latest/tracing/dispatcher/index.html#setting-the-default-subscriber
 /// [sub]: https://docs.rs/tracing/latest/tracing/trait.Subscriber.html
 /// [`tracing_subscriber::fmt`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/fmt/index.html
@@ -379,6 +393,12 @@ impl Builder {
 ///     .init();
 /// ```
 ///
+/// Calling `console_subscriber::init` is equivalent to the following:
+/// ```rust
+/// use console_subscriber::TasksLayer;
+///
+/// TasksLayer::builder().with_default_env().init();
+/// ```
 /// [`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/filter/struct.Targets.html
 pub fn init() {
     TasksLayer::builder().with_default_env().init();
@@ -393,9 +413,20 @@ pub fn init() {
 /// Unlike [`init`], this function does not set the default subscriber, allowing
 /// additional [`Layer`]s to be added.
 ///
+/// This function is equivalent to the following:
+/// ```
+/// use console_subscriber::TasksLayer;
+///
+/// let layer = TasksLayer::builder().with_default_env().spawn();
+/// # drop(layer); // to suppress must_use warnings
+/// ```
 /// [filter]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.Targets.html
 /// [`Layer`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html
 /// [`Server`]: crate::Server
+///
+/// ## Panics
+///
+/// * If the subscriber's background thread could not be spawned.
 ///
 /// ## Configuration
 ///
@@ -429,7 +460,7 @@ pub fn init() {
 /// [`tracing_subscriber::fmt`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/fmt/index.html
 /// [`fmt::Layer`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/fmt/struct.Layer.html
 /// [`console_subscriber::init`]: crate::init()
-#[must_use = "spawn() without init() will not set the default tracing subscriber"]
+#[must_use = "a `Layer` must be added to a `tracing::Subscriber`in order to be used"]
 pub fn spawn<S>() -> impl Layer<S>
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
