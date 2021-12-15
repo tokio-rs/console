@@ -103,9 +103,9 @@ impl Builder {
     /// will reduce memory usage, but less historical data from completed tasks
     /// will be retained.
     ///
-    /// By default, this is [`ConsoleLayer::DEFAULT_RETENTION`], though
-    /// constructors like [`build`][`crate::build`] will take the value
-    /// from the `TOKIO_CONSOLE_RETENTION` [environment variable] before
+    /// By default, this is [`ConsoleLayer::DEFAULT_RETENTION`], though methods
+    /// like [`init`][`crate::init`] and [`spawn`][`crate::spawn`] will take the
+    /// value from the `TOKIO_CONSOLE_RETENTION` [environment variable] before
     /// falling back on that default.
     ///
     /// [environment variable]: `Builder::with_default_env`
