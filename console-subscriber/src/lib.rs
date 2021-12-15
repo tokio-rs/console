@@ -284,11 +284,35 @@ impl ConsoleLayer {
 }
 
 impl ConsoleLayer {
+    /// Default maximum capacity for channel of events from [`ConsoleLayer`] to [`Server`].
+    ///
+    /// When this capacity is exhausted, additional events will be dropped.
+    ///
+    /// See also [`Builder::event_buffer_capacity`].
     pub const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 1024 * 10;
+    /// Default maximum capacity for channel of events from [`Server`] to each subscribed client.
+    ///
+    /// When this capacity is exhausted, the client may be disconnected.
+    ///
+    /// See also [`Builder::client_buffer_capacity`].
     pub const DEFAULT_CLIENT_BUFFER_CAPACITY: usize = 1024 * 4;
+
+    /// Default frequency for publication of events to clients.
+    ///
+    /// Note that constructors like [`build`][`crate::build`] will take the
+    /// value from the `TOKIO_CONSOLE_PUBLISH_INTERVAL` environment variable
+    /// before falling back on this default.
+    ///
+    /// See also [`Builder::publish_interval`].
     pub const DEFAULT_PUBLISH_INTERVAL: Duration = Duration::from_secs(1);
 
     /// By default, completed spans are retained for one hour.
+    ///
+    /// Note that constructors like [`build`][`crate::build`] will take the
+    /// value from the `TOKIO_CONSOLE_RETENTION` environment variable before
+    /// falling back on this default.
+    ///
+    /// See also [`Builder::retention`].
     pub const DEFAULT_RETENTION: Duration = Duration::from_secs(60 * 60);
 
     fn is_spawn(&self, meta: &'static Metadata<'static>) -> bool {
