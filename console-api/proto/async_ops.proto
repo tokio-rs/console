@@ -7,21 +7,25 @@ import "google/protobuf/duration.proto";
 import "common.proto";
 
 
-// An AsyncOp state update.
+// An `AsyncOp` state update. 
 //
-// An async operation is a an operation that is associated with a resource
-// This could, for example, be a a read or write on a TCP stream or a receive operation on
-// a channel.
+// This includes a list of any new async ops, and updates to the associated statistics
+// for any async ops that have changed since the last update.
 message AsyncOpUpdate {
     // A list of new async operations that were created since the last `AsyncOpUpdate`
     // was sent. Note that the fact that an async operation has been created
     // does not mean that is has been polled or is being polled. This information
-    // is reflected in the Stats of the operation.
+    // is reflected in the `Stats` of the operation.
     repeated AsyncOp new_async_ops = 1;
     // Any async op stats that have changed since the last update.
     map<uint64, Stats> stats_update = 2;
 }
 
+// An async operation.
+//
+// An async operation is an operation that is associated with a resource
+// This could, for example, be a a read or write on a TCP stream, or a receive operation on
+// a channel.
 message AsyncOp {
     // The async op's ID.
     //
@@ -39,7 +43,7 @@ message AsyncOp {
     string source = 3;
 }
 
-
+// Statistics associated with a given async operation.
 message Stats {
     // Timestamp of when the async op has been created.
     google.protobuf.Timestamp created_at = 1;

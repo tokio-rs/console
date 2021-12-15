@@ -4,11 +4,13 @@ package rs.tokio.console.common;
 import "google/protobuf/timestamp/timestamp.proto";
 import "google/protobuf/duration.proto";
 
+// Unique identifier for each task.
 message Id {
+    // The unique identifier's concrete value.
     uint64 id = 1;
 }
 
-/// A Rust source code location.
+// A Rust source code location.
 message Location {
     // The file path
     optional string file = 1;
@@ -20,71 +22,128 @@ message Location {
     optional uint32 column = 4;
 }
 
+// Unique identifier for metadata.
 message MetaId {
+    // The unique identifier's concrete value.
     uint64 id = 1;
 }
 
-
+// Unique identifier for spans.
 message SpanId {
+    // The unique identifier's concrete value.
     uint64 id = 1;
 }
 
 // A message representing a key-value pair of data associated with a `Span`
 message Field {
+    // The key of the key-value pair.
+    //
+    // This is either represented as a string, or as an index into a `Metadata`'s 
+    // array of field name strings.
     oneof name {
         // The string representation of the name.
         string str_name = 1;
-        // An index position into the `Metadata.field_names`.
+        // An index position into the `Metadata.field_names` of the metadata
+        // for the task span that the field came from.
         uint64 name_idx = 2;
     }
+    // The value of the key-value pair.
     oneof value {
+        // A value serialized to a string using `fmt::Debug`.
         string debug_val = 3;
+        // A string value.
         string str_val = 4;
+        // An unsigned integer value.
         uint64 u64_val = 5;
+        // A signed integer value.
         sint64 i64_val = 6;
+        // A boolean value.
         bool bool_val = 7;
     }
+    // Metadata for the task span that the field came from.
     MetaId metadata_id = 8;
 }
 
+// Represents a period of time in which a program was executing in a particular context.
+//
+// Corresponds to `Span` in the `tracing` crate.
 message Span {
+    // An Id that uniquely identifies it in relation to other spans.
     SpanId id = 1;
+    // Identifier for metadata describing static characteristics of all spans originating
+    // from that callsite, such as its name, source code location, verbosity level, and
+    // the names of its fields.
     MetaId metadata_id = 2;
+    // User-defined key-value pairs of arbitrary data that describe the context the span represents,
     repeated Field fields = 3;
+    // Timestamp for the span.
     google.protobuf.Timestamp at = 4;
 }
 
+// Any new metadata that was registered since the last update.
 message RegisterMetadata {
+    // The new metadata that was registered since the last update.
     repeated NewMetadata metadata = 1;
 
+    // One metadata element registered since the last update.
     message NewMetadata {
+        // Unique identifier for `metadata`.
         common.MetaId id = 1;
+        // The metadata payload.
         common.Metadata metadata = 2;
     }
 }
 
+// Metadata associated with a span or event.
 message Metadata {
+    // The name of the span or event.
     string name = 1;
+    // Describes the part of the system where the span or event that this
+    // metadata describes occurred.
     string target = 2;
+    // The path to the Rust module where the span occurred.
     string module_path = 3;
+    // The Rust source location associated with the span or event.
     Location location = 4;
+    // Indicates whether metadata is associated with a span or with an event.
     Kind kind = 5;
+    // Describes the level of verbosity of a span or event.
     Level level = 6;
 
     // The names of the key-value fields attached to the
     // span or event this metadata is associated with.
     repeated string field_names = 7;
 
+    // Indicates whether metadata is associated with a span or with an event.
     enum Kind {
+        // Indicates metadata is associated with a span.
         SPAN = 0;
+        // Indicates metadata is associated with an event.
         EVENT = 1;
     }
 
+    // Describes the level of verbosity of a span or event.
+    //
+    // Corresponds to `Level` in the `tracing` crate.
     enum Level {
+        // The "error" level.
+        //
+        // Designates very serious errors.
         ERROR = 0;
+        // The "warn" level.
+        //
+        // Designates hazardous situations.
         WARN = 1;
+        // The "info" level.
+        // Designates useful information.
         INFO = 2;
+        // The "debug" level.
+        //
+        // Designates lower priority information.
         DEBUG = 3;
+        // The "trace" level.
+        //
+        // Designates very low priority, often extremely verbose, information.
         TRACE = 4;
     }
 }

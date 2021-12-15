@@ -5,46 +5,67 @@ package rs.tokio.console.trace;
 import "google/protobuf/timestamp/timestamp.proto";
 import "common.proto";
 
+// Allows observers to stream trace events for a given `WatchRequest` filter.
 service Trace {
+    // Produces a stream of trace events for the given filter.
     rpc Watch(WatchRequest) returns (stream TraceEvent) {}
 }
 
 // Start watching trace events with the provided filter.
 message WatchRequest {
+    // Specifies which trace events should be streamed.
     string filter = 1;
 }
 
 // A trace event
 message TraceEvent {
+    // A trace event
     oneof event {
         // A new thread was registered.
         RegisterThreads register_thread = 1;
         // A new span metadata was registered.
         common.RegisterMetadata register_metadata = 2;
+        // A span was created.
         common.Span new_span = 3;
+        // A span was entered.
         Enter enter_span = 4;
+        // A span was exited.
         Exit exit_span = 5;
+        // A span was closed.
         Close close_span = 6;
     };
 
+    // `RegisterThreads` signals that a new thread was registered.
     message RegisterThreads {
+        // `names` maps the registered thread id's to their associated name.
         map<uint64, string> names = 1;
     }
 
+    // `Enter` signals that a span was entered.
     message Enter {
+        // `span_id` identifies the span that was entered.
         common.SpanId span_id = 1;
+        // `thread_id` identifies who entered the span.
         uint64 thread_id = 2;
+        // `at` identifies when the span was entered.
         google.protobuf.Timestamp at = 3;
     }
 
+    // `Exit` signals that a span was exited.
     message Exit {
+        // `span_id` identifies the span that was exited.
         common.SpanId span_id = 1;
+        // `thread_id` identifies who exited the span.
         uint64 thread_id = 2;
+        // `at` identifies when the span was exited.
         google.protobuf.Timestamp at = 3;
     }
 
+    // `Close` signals that a span was closed.
     message Close {
+        // `span_id` identifies the span that was closed.
         common.SpanId span_id = 1;
+        // `at` identifies when the span was closed.
         google.protobuf.Timestamp at = 2;
     }
 }
