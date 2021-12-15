@@ -31,7 +31,7 @@ use aggregator::Aggregator;
 pub use builder::Builder;
 use callsites::Callsites;
 use stack::SpanStack;
-use visitors::{AsyncOpVisitor, ResourceVisitor, TaskVisitor, WakerVisitor};
+use visitors::{AsyncOpVisitor, ResourceVisitor, ResourceVisitorResult, TaskVisitor, WakerVisitor};
 
 pub use builder::{init, spawn};
 
@@ -65,20 +65,30 @@ pub struct TasksLayer {
     /// TODO: Take some time to determine more reasonable numbers
     resource_callsites: Callsites<32>,
 
-    /// Set of callsites for spans reprensing async operations on resources
+    /// Set of callsites for spans representing async operations on resources
     ///
     /// TODO: Take some time to determine more reasonable numbers
     async_op_callsites: Callsites<32>,
 
-    /// Set of callsites for events reprensing poll operation invocations on resources
+    /// Set of callsites for spans representing async op poll operations
+    ///
+    /// TODO: Take some time to determine more reasonable numbers
+    async_op_poll_callsites: Callsites<32>,
+
+    /// Set of callsites for events representing poll operation invocations on resources
     ///
     /// TODO: Take some time to determine more reasonable numbers
     poll_op_callsites: Callsites<32>,
 
-    /// Set of callsites for events reprensing state attribute state updates on resources
+    /// Set of callsites for events representing state attribute state updates on resources
     ///
     /// TODO: Take some time to determine more reasonable numbers
-    state_update_callsites: Callsites<32>,
+    resource_state_update_callsites: Callsites<32>,
+
+    /// Set of callsites for events representing state attribute state updates on async resource ops
+    ///
+    /// TODO: Take some time to determine more reasonable numbers
+    async_op_state_update_callsites: Callsites<32>,
 
     /// Used for unsetting the default dispatcher inside of span callbacks.
     no_dispatch: Dispatch,
@@ -118,10 +128,12 @@ enum Event {
     },
     Enter {
         id: span::Id,
+        parent_id: Option<span::Id>,
         at: SystemTime,
     },
     Exit {
         id: span::Id,
+        parent_id: Option<span::Id>,
         at: SystemTime,
     },
     Close {
@@ -135,15 +147,17 @@ enum Event {
     },
     Resource {
         id: span::Id,
+        parent_id: Option<span::Id>,
         metadata: &'static Metadata<'static>,
         at: SystemTime,
         concrete_type: String,
         kind: resource::Kind,
         location: Option<proto::Location>,
+        is_internal: bool,
+        inherit_child_attrs: bool,
     },
     PollOp {
         metadata: &'static Metadata<'static>,
-        at: SystemTime,
         resource_id: span::Id,
         op_name: String,
         async_op_id: span::Id,
@@ -151,19 +165,25 @@ enum Event {
         is_ready: bool,
     },
     StateUpdate {
-        // these fields aren't currently used, but we will probably use them
-        // later. put them back if we need them.
-        // metadata: &'static Metadata<'static>,
-        // at: SystemTime,
-        resource_id: span::Id,
+        update_id: span::Id,
+        update_type: UpdateType,
         update: AttributeUpdate,
     },
     AsyncResourceOp {
         id: span::Id,
+        parent_id: Option<span::Id>,
+        resource_id: span::Id,
         metadata: &'static Metadata<'static>,
         at: SystemTime,
         source: String,
+        inherit_child_attrs: bool,
     },
+}
+
+#[derive(Debug, Clone)]
+enum UpdateType {
+    Resource,
+    AsyncOp,
 }
 
 #[derive(Debug, Clone)]
@@ -233,6 +253,7 @@ impl TasksLayer {
             client_buffer: config.client_buffer_capacity,
         };
         let layer = Self {
+            current_spans: ThreadLocal::new(),
             tx,
             flush,
             flush_under_capacity,
@@ -240,9 +261,10 @@ impl TasksLayer {
             waker_callsites: Callsites::default(),
             resource_callsites: Callsites::default(),
             async_op_callsites: Callsites::default(),
+            async_op_poll_callsites: Callsites::default(),
             poll_op_callsites: Callsites::default(),
-            state_update_callsites: Callsites::default(),
-            current_spans: ThreadLocal::new(),
+            resource_state_update_callsites: Callsites::default(),
+            async_op_state_update_callsites: Callsites::default(),
             no_dispatch: Dispatch::new(NoSubscriber::default()),
         };
         (layer, server)
@@ -267,6 +289,10 @@ impl TasksLayer {
 
     fn is_async_op(&self, meta: &'static Metadata<'static>) -> bool {
         self.async_op_callsites.contains(meta)
+    }
+
+    fn is_async_op_poll(&self, meta: &'static Metadata<'static>) -> bool {
+        self.async_op_poll_callsites.contains(meta)
     }
 
     fn is_id_spawned<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
@@ -296,11 +322,23 @@ impl TasksLayer {
             .unwrap_or(false)
     }
 
+    fn is_id_async_op_poll<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
+    where
+        S: Subscriber + for<'a> LookupSpan<'a>,
+    {
+        cx.span(id)
+            .map(|span| self.is_async_op_poll(span.metadata()))
+            .unwrap_or(false)
+    }
+
     fn is_id_tracked<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
     where
         S: Subscriber + for<'a> LookupSpan<'a>,
     {
-        self.is_id_async_op(id, cx) || self.is_id_resource(id, cx) || self.is_id_spawned(id, cx)
+        self.is_id_async_op(id, cx)
+            || self.is_id_resource(id, cx)
+            || self.is_id_spawned(id, cx)
+            || self.is_id_async_op_poll(id, cx)
     }
 
     fn first_entered<P>(&self, stack: &SpanStack, p: P) -> Option<span::Id>
@@ -350,9 +388,13 @@ where
             (_, "runtime::waker") | (_, "tokio::task::waker") => self.waker_callsites.insert(meta),
             (ResourceVisitor::RES_SPAN_NAME, _) => self.resource_callsites.insert(meta),
             (AsyncOpVisitor::ASYNC_OP_SPAN_NAME, _) => self.async_op_callsites.insert(meta),
+            ("runtime.resource.async_op.poll", _) => self.async_op_poll_callsites.insert(meta),
             (_, PollOpVisitor::POLL_OP_EVENT_TARGET) => self.poll_op_callsites.insert(meta),
-            (_, StateUpdateVisitor::STATE_UPDATE_EVENT_TARGET) => {
-                self.state_update_callsites.insert(meta)
+            (_, StateUpdateVisitor::RE_STATE_UPDATE_EVENT_TARGET) => {
+                self.resource_state_update_callsites.insert(meta)
+            }
+            (_, StateUpdateVisitor::AO_STATE_UPDATE_EVENT_TARGET) => {
+                self.async_op_state_update_callsites.insert(meta)
             }
             (_, _) => {}
         }
@@ -361,7 +403,7 @@ where
         subscriber::Interest::always()
     }
 
-    fn on_new_span(&self, attrs: &span::Attributes<'_>, id: &span::Id, _: Context<'_, S>) {
+    fn on_new_span(&self, attrs: &span::Attributes<'_>, id: &span::Id, ctx: Context<'_, S>) {
         let metadata = attrs.metadata();
         if self.is_spawn(metadata) {
             let at = SystemTime::now();
@@ -375,31 +417,63 @@ where
                 fields,
                 location,
             });
-        } else if self.is_resource(metadata) {
+            return;
+        }
+
+        if self.is_resource(metadata) {
             let mut resource_visitor = ResourceVisitor::default();
             attrs.record(&mut resource_visitor);
-            if let Some((concrete_type, kind, location)) = resource_visitor.result() {
+            if let Some(result) = resource_visitor.result() {
+                let ResourceVisitorResult {
+                    concrete_type,
+                    kind,
+                    location,
+                    is_internal,
+                    inherit_child_attrs,
+                } = result;
                 let at = SystemTime::now();
+                let parent_id = self.current_spans.get().and_then(|stack| {
+                    self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
+                });
                 self.send(Event::Resource {
                     id: id.clone(),
+                    parent_id,
                     metadata,
                     at,
                     concrete_type,
                     kind,
                     location,
+                    is_internal,
+                    inherit_child_attrs,
                 });
             } // else unknown resource span format
-        } else if self.is_async_op(metadata) {
+            return;
+        }
+
+        if self.is_async_op(metadata) {
             let mut async_op_visitor = AsyncOpVisitor::default();
             attrs.record(&mut async_op_visitor);
-            if let Some(source) = async_op_visitor.result() {
+            if let Some((source, inherit_child_attrs)) = async_op_visitor.result() {
                 let at = SystemTime::now();
-                self.send(Event::AsyncResourceOp {
-                    id: id.clone(),
-                    at,
-                    metadata,
-                    source,
+                let resource_id = self.current_spans.get().and_then(|stack| {
+                    self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
                 });
+
+                let parent_id = self.current_spans.get().and_then(|stack| {
+                    self.first_entered(&stack.borrow(), |id| self.is_id_async_op(id, &ctx))
+                });
+
+                if let Some(resource_id) = resource_id {
+                    self.send(Event::AsyncResourceOp {
+                        id: id.clone(),
+                        parent_id,
+                        resource_id,
+                        at,
+                        metadata,
+                        source,
+                        inherit_child_attrs,
+                    });
+                }
             }
             // else async op span needs to have a source field
         }
@@ -407,7 +481,7 @@ where
 
     fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
         let metadata = event.metadata();
-        if self.waker_callsites.contains(event.metadata()) {
+        if self.waker_callsites.contains(metadata) {
             let at = SystemTime::now();
             let mut visitor = WakerVisitor::default();
             event.record(&mut visitor);
@@ -425,57 +499,79 @@ where
                 self.send(Event::Waker { id, op, at });
             }
             // else unknown waker event... what to do? can't trace it from here...
-        } else if self.poll_op_callsites.contains(event.metadata()) {
-            match ctx.event_span(event) {
-                // poll op event should have a resource span parent
-                Some(resource_span) if self.is_resource(resource_span.metadata()) => {
-                    let mut poll_op_visitor = PollOpVisitor::default();
-                    event.record(&mut poll_op_visitor);
-                    // poll op event should be emitted in the context of an async op and task spans
-                    if let Some((op_name, is_ready)) = poll_op_visitor.result() {
-                        let task_and_async_op_ids = self.current_spans.get().and_then(|stack| {
-                            let stack = stack.borrow();
-                            let task_id =
-                                self.first_entered(&stack, |id| self.is_id_spawned(id, &ctx))?;
-                            let async_op_id =
-                                self.first_entered(&stack, |id| self.is_id_async_op(id, &ctx))?;
-                            Some((task_id, async_op_id))
-                        });
+            return;
+        }
 
-                        if let Some((task_id, async_op_id)) = task_and_async_op_ids {
-                            let at = SystemTime::now();
-                            self.send(Event::PollOp {
-                                metadata,
-                                at,
-                                resource_id: resource_span.id(),
-                                op_name,
-                                async_op_id,
-                                task_id,
-                                is_ready,
-                            });
-                        }
-                    }
-                }
-                _ => {}
-            }
-        } else if self.state_update_callsites.contains(event.metadata()) {
-            match ctx.event_span(event) {
-                // state update event should have a resource span parent:
-                Some(resource_span) if self.is_resource(resource_span.metadata()) => {
-                    let meta_id = event.metadata().into();
-                    let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
-                    event.record(&mut state_update_visitor);
-                    if let Some(update) = state_update_visitor.result() {
-                        // let at = SystemTime::now();
-                        self.send(Event::StateUpdate {
-                            // metadata,
-                            // at,
-                            resource_id: resource_span.id(),
-                            update,
+        if self.poll_op_callsites.contains(metadata) {
+            let resource_id = self.current_spans.get().and_then(|stack| {
+                self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
+            });
+            // poll op event should have a resource span parent
+            if let Some(resource_id) = resource_id {
+                let mut poll_op_visitor = PollOpVisitor::default();
+                event.record(&mut poll_op_visitor);
+                if let Some((op_name, is_ready)) = poll_op_visitor.result() {
+                    let task_and_async_op_ids = self.current_spans.get().and_then(|stack| {
+                        let stack = stack.borrow();
+                        let task_id =
+                            self.first_entered(&stack, |id| self.is_id_spawned(id, &ctx))?;
+                        let async_op_id =
+                            self.first_entered(&stack, |id| self.is_id_async_op(id, &ctx))?;
+                        Some((task_id, async_op_id))
+                    });
+
+                    // poll op event should be emitted in the context of an async op and task spans
+                    if let Some((task_id, async_op_id)) = task_and_async_op_ids {
+                        self.send(Event::PollOp {
+                            metadata,
+                            op_name,
+                            resource_id,
+                            async_op_id,
+                            task_id,
+                            is_ready,
                         });
                     }
                 }
-                _ => {}
+            }
+            return;
+        }
+
+        if self.resource_state_update_callsites.contains(metadata) {
+            // state update event should have a resource span parent
+            let resource_id = self.current_spans.get().and_then(|stack| {
+                self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
+            });
+
+            if let Some(resource_id) = resource_id {
+                let meta_id = event.metadata().into();
+                let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
+                event.record(&mut state_update_visitor);
+                if let Some(update) = state_update_visitor.result() {
+                    self.send(Event::StateUpdate {
+                        update_id: resource_id,
+                        update_type: UpdateType::Resource,
+                        update,
+                    })
+                }
+            }
+            return;
+        }
+
+        if self.async_op_state_update_callsites.contains(metadata) {
+            let async_op_id = self.current_spans.get().and_then(|stack| {
+                self.first_entered(&stack.borrow(), |id| self.is_id_async_op(id, &ctx))
+            });
+            if let Some(async_op_id) = async_op_id {
+                let meta_id = event.metadata().into();
+                let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
+                event.record(&mut state_update_visitor);
+                if let Some(update) = state_update_visitor.result() {
+                    self.send(Event::StateUpdate {
+                        update_id: async_op_id,
+                        update_type: UpdateType::AsyncOp,
+                        update,
+                    });
+                }
             }
         }
     }
@@ -484,16 +580,17 @@ where
         if !self.is_id_tracked(id, &cx) {
             return;
         }
-
         let _default = dispatcher::set_default(&self.no_dispatch);
         self.current_spans
             .get_or_default()
             .borrow_mut()
             .push(id.clone());
 
+        let parent_id = cx.span(id).and_then(|s| s.parent().map(|p| p.id()));
         self.send(Event::Enter {
             at: SystemTime::now(),
             id: id.clone(),
+            parent_id,
         });
     }
 
@@ -507,9 +604,12 @@ where
             spans.borrow_mut().pop(id);
         }
 
+        let parent_id = cx.span(id).and_then(|s| s.parent().map(|p| p.id()));
+
         self.send(Event::Exit {
-            at: SystemTime::now(),
             id: id.clone(),
+            parent_id,
+            at: SystemTime::now(),
         });
     }
 

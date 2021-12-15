@@ -1,6 +1,6 @@
 use crate::{
     intern::{self, InternedStr},
-    state::{format_location, Field, Metadata, Visibility},
+    state::{format_location, pb_duration, Field, Metadata, Visibility},
     util::Percentage,
     view,
     warnings::Linter,
@@ -27,7 +27,6 @@ pub(crate) struct TasksState {
 pub(crate) struct Details {
     pub(crate) task_id: u64,
     pub(crate) poll_times_histogram: Option<Histogram<u64>>,
-    // pub(crate) last_updated_at: Option<SystemTime>,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -57,7 +56,7 @@ pub(crate) type TaskRef = Weak<RefCell<Task>>;
 #[derive(Debug)]
 pub(crate) struct Task {
     id: u64,
-    // fields: Vec<Field>,
+    short_desc: InternedStr,
     formatted_fields: Vec<Vec<Span<'static>>>,
     stats: TaskStats,
     target: InternedStr,
@@ -154,10 +153,15 @@ impl TasksState {
             let stats = stats_update.remove(&id)?.into();
             let location = format_location(task.location);
 
+            let short_desc = strings.string(match name.as_ref() {
+                Some(name) => format!("{} ({})", id, name),
+                None => format!("{}", id),
+            });
+
             let mut task = Task {
                 name,
                 id,
-                // fields,
+                short_desc,
                 formatted_fields,
                 stats,
                 target: meta.target.clone(),
@@ -197,6 +201,10 @@ impl TasksState {
     pub(crate) fn warnings(&self) -> impl Iterator<Item = &Linter<Task>> {
         self.linters.iter().filter(|linter| linter.count() > 0)
     }
+
+    pub(crate) fn task(&self, id: u64) -> Option<TaskRef> {
+        self.tasks.get(&id).map(Rc::downgrade)
+    }
 }
 
 impl Details {
@@ -216,6 +224,10 @@ impl Task {
 
     pub(crate) fn target(&self) -> &str {
         &self.target
+    }
+
+    pub(crate) fn short_desc(&self) -> &str {
+        &self.short_desc
     }
 
     pub(crate) fn name(&self) -> Option<&str> {
@@ -350,14 +362,6 @@ impl Task {
 
 impl From<proto::tasks::Stats> for TaskStats {
     fn from(pb: proto::tasks::Stats) -> Self {
-        fn pb_duration(dur: prost_types::Duration) -> Duration {
-            let secs =
-                u64::try_from(dur.seconds).expect("a task should not have a negative duration!");
-            let nanos =
-                u64::try_from(dur.nanos).expect("a task should not have a negative duration!");
-            Duration::from_secs(secs) + Duration::from_nanos(nanos)
-        }
-
         let created_at = pb
             .created_at
             .expect("task span was never created")

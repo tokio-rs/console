@@ -41,6 +41,17 @@ message AsyncOp {
     // The source of this async operation. Most commonly this should be the name
     // of the method where the instantiation of this op has happened.
     string source = 3;
+    // The ID of the parent async op.
+    //
+    // This field is only set if this async op was created while inside of another
+    // async op.  For example, `tokio::sync`'s `Mutex::lock` internally calls
+    // `Semaphore::acquire`.
+    //
+    // This field can be empty; if it is empty, this async op is not a child of another
+    // async op.
+    common.Id parent_async_op_id = 4;
+    // The resources's ID.
+    common.Id resource_id = 5;
 }
 
 // Statistics associated with a given async operation.
@@ -49,12 +60,11 @@ message Stats {
     google.protobuf.Timestamp created_at = 1;
     // Timestamp of when the async op was dropped.
     google.protobuf.Timestamp dropped_at = 2;
-    // The resource Id this `AsyncOp` is associated with. Note that both
-    // `resource_id` and `task_id` can be None if this async op has not been polled yet
-    common.Id resource_id = 3;
     // The Id of the task that is awaiting on this op.
     common.Id task_id = 4;
     // Contains the operation poll stats.
     common.PollStats poll_stats = 5;
+    // State attributes of the async op.
+    repeated common.Attribute attributes = 6;
 }
 

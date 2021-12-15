@@ -23,7 +23,7 @@ pub struct Connection {
 enum State {
     Connected {
         client: InstrumentClient<Channel>,
-        stream: Streaming<Update>,
+        stream: Box<Streaming<Update>>,
     },
     Disconnected(Duration),
 }
@@ -80,7 +80,7 @@ impl Connection {
             let try_connect = async {
                 let mut client = InstrumentClient::connect(self.target.clone()).await?;
                 let request = tonic::Request::new(InstrumentRequest {});
-                let stream = client.watch_updates(request).await?.into_inner();
+                let stream = Box::new(client.watch_updates(request).await?.into_inner());
                 Ok::<State, Box<dyn Error + Send + Sync>>(State::Connected { client, stream })
             };
             self.state = match try_connect.await {

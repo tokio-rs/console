@@ -1,5 +1,5 @@
 use crate::intern::{self, InternedStr};
-use crate::state::{format_location, Field, Metadata, Visibility};
+use crate::state::{format_location, Attribute, Field, Metadata, Visibility};
 use crate::view;
 use console_api as proto;
 use std::{
@@ -9,15 +9,18 @@ use std::{
     rc::{Rc, Weak},
     time::{Duration, SystemTime},
 };
-use tui::{
-    style::{Color, Modifier},
-    text::Span,
-};
+use tui::{style::Color, text::Span};
 
 #[derive(Default, Debug)]
 pub(crate) struct ResourcesState {
     resources: HashMap<u64, Rc<RefCell<Resource>>>,
     new_resources: Vec<ResourceRef>,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub(crate) enum TypeVisibility {
+    Public,
+    Internal,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -30,39 +33,28 @@ pub(crate) enum SortBy {
     Total = 4,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub(crate) enum Kind {
-    Timer,
-    Other(InternedStr),
-}
-
 #[derive(Debug)]
 pub(crate) struct Resource {
     id: u64,
+    id_str: InternedStr,
+    parent: InternedStr,
+    parent_id: InternedStr,
     meta_id: u64,
-    kind: Kind,
+    kind: InternedStr,
     stats: ResourceStats,
     target: InternedStr,
     concrete_type: InternedStr,
     location: String,
+    visibility: TypeVisibility,
 }
 
 pub(crate) type ResourceRef = Weak<RefCell<Resource>>;
-
-#[derive(Debug)]
-pub(crate) struct Attribute {
-    field: Field,
-    unit: Option<String>,
-}
 
 #[derive(Debug)]
 struct ResourceStats {
     created_at: SystemTime,
     dropped_at: Option<SystemTime>,
     total: Option<Duration>,
-    // this will be read in a subsequent PR
-    #[allow(dead_code)]
-    attributes: Vec<Attribute>,
     formatted_attributes: Vec<Vec<Span<'static>>>,
 }
 
@@ -118,6 +110,10 @@ impl ResourcesState {
         self.new_resources.drain(..)
     }
 
+    pub(crate) fn resource(&self, id: u64) -> Option<ResourceRef> {
+        self.resources.get(&id).map(Rc::downgrade)
+    }
+
     pub(crate) fn update_resources(
         &mut self,
         styles: &view::Styles,
@@ -126,6 +122,16 @@ impl ResourcesState {
         update: proto::resources::ResourceUpdate,
         visibility: Visibility,
     ) {
+        let parents: HashMap<u64, ResourceRef> = update
+            .new_resources
+            .iter()
+            .filter_map(|resource| {
+                let parent_id = resource.parent_resource_id?.id;
+                let parent = self.resource(parent_id)?;
+                Some((parent_id, parent))
+            })
+            .collect();
+
         let mut stats_update = update.stats_update;
         let new_list = &mut self.new_resources;
         if matches!(visibility, Visibility::Show) {
@@ -151,7 +157,7 @@ impl ResourcesState {
                     return None;
                 }
             };
-            let kind = match Kind::from_proto(resource.kind?, strings) {
+            let kind = match kind_from_proto(resource.kind?, strings) {
                 Ok(kind) => kind,
                 Err(err) => {
                     tracing::warn!(%err, "resource kind cannot be parsed");
@@ -160,22 +166,53 @@ impl ResourcesState {
             };
 
             let id = resource.id?.id;
+            let parent_id = resource.parent_resource_id.map(|id| id.id);
+
+            let parent = strings.string(match parent_id {
+                Some(id) => parents
+                    .get(&id)
+                    .and_then(|r| r.upgrade())
+                    .map(|r| {
+                        let r = r.borrow();
+                        format!("{} ({}::{})", r.id(), r.target(), r.concrete_type())
+                    })
+                    .unwrap_or_else(|| id.to_string()),
+                None => "n/a".to_string(),
+            });
+
+            let parent_id = strings.string(
+                parent_id
+                    .as_ref()
+                    .map(u64::to_string)
+                    .unwrap_or_else(|| "n/a".to_string()),
+            );
+
             let stats = ResourceStats::from_proto(stats_update.remove(&id)?, meta, styles, strings);
             let location = format_location(resource.location);
+            let visibility = if resource.is_internal {
+                TypeVisibility::Internal
+            } else {
+                TypeVisibility::Public
+            };
 
             let resource = Resource {
                 id,
+                id_str: strings.string(id.to_string()),
+                parent,
+                parent_id,
                 kind,
                 stats,
                 target: meta.target.clone(),
                 concrete_type: strings.string(resource.concrete_type),
                 meta_id,
                 location,
+                visibility,
             };
             let resource = Rc::new(RefCell::new(resource));
             new_list.push(Rc::downgrade(&resource));
             Some((id, resource))
         });
+
         self.resources.extend(new_resources);
 
         for (id, stats) in stats_update {
@@ -209,6 +246,22 @@ impl Resource {
         self.id
     }
 
+    pub(crate) fn id_str(&self) -> &str {
+        &self.id_str
+    }
+
+    pub(crate) fn parent(&self) -> &str {
+        &self.parent
+    }
+
+    pub(crate) fn parent_id(&self) -> &str {
+        &self.parent_id
+    }
+
+    pub(crate) fn type_visibility(&self) -> TypeVisibility {
+        self.visibility
+    }
+
     pub(crate) fn target(&self) -> &str {
         &self.target
     }
@@ -218,10 +271,7 @@ impl Resource {
     }
 
     pub(crate) fn kind(&self) -> &str {
-        match &self.kind {
-            Kind::Timer => "Timer",
-            Kind::Other(other) => other,
-        }
+        &self.kind
     }
 
     pub(crate) fn formatted_attributes(&self) -> &[Vec<Span<'static>>] {
@@ -277,53 +327,33 @@ impl ResourceStats {
             created_at,
             dropped_at,
             total,
-            attributes,
             formatted_attributes,
         }
     }
 }
 
-impl Kind {
-    fn from_proto(
-        pb: proto::resources::resource::Kind,
-        strings: &mut intern::Strings,
-    ) -> Result<Self, String> {
-        use proto::resources::resource::kind::Kind::Known as PbKnown;
-        use proto::resources::resource::kind::Kind::Other as PBOther;
-        use proto::resources::resource::kind::Known::Timer as PbTimer;
+fn kind_from_proto(
+    pb: proto::resources::resource::Kind,
+    strings: &mut intern::Strings,
+) -> Result<InternedStr, String> {
+    use proto::resources::resource::kind::Kind::Known as PbKnown;
+    use proto::resources::resource::kind::Kind::Other as PBOther;
+    use proto::resources::resource::kind::Known::Timer as PbTimer;
 
-        match pb.kind.expect("a resource should have a kind field") {
-            PbKnown(known) if known == (PbTimer as i32) => Ok(Kind::Timer),
-            PbKnown(known) => Err(format!("failed to parse known kind from {}", known)),
-            PBOther(other) => Ok(Kind::Other(strings.string(other))),
-        }
+    match pb.kind.expect("a resource should have a kind field") {
+        PbKnown(known) if known == (PbTimer as i32) => Ok(strings.string("Timer".to_string())),
+        PbKnown(known) => Err(format!("failed to parse known kind from {}", known)),
+        PBOther(other) => Ok(strings.string(other)),
     }
 }
 
-impl Attribute {
-    fn make_formatted(
-        styles: &view::Styles,
-        attributes: &mut Vec<Attribute>,
-    ) -> Vec<Vec<Span<'static>>> {
-        let key_style = styles.fg(Color::LightBlue).add_modifier(Modifier::BOLD);
-        let delim_style = styles.fg(Color::LightBlue).add_modifier(Modifier::DIM);
-        let val_style = styles.fg(Color::Yellow);
-        let unit_style = styles.fg(Color::LightBlue);
-
-        let mut formatted = Vec::with_capacity(attributes.len());
-        let attributes = attributes.iter();
-        for attr in attributes {
-            let mut elems = vec![
-                Span::styled(attr.field.name.to_string(), key_style),
-                Span::styled("=", delim_style),
-                Span::styled(format!("{}", attr.field.value), val_style),
-            ];
-
-            if let Some(unit) = &attr.unit {
-                elems.push(Span::styled(unit.clone(), unit_style))
-            }
-            formatted.push(elems)
+impl TypeVisibility {
+    pub(crate) fn render(self, styles: &crate::view::Styles) -> Span<'static> {
+        const INT_UTF8: &str = "\u{1F512}";
+        const PUB_UTF8: &str = "\u{2705}";
+        match self {
+            Self::Internal => Span::styled(styles.if_utf8(INT_UTF8, "INT"), styles.fg(Color::Red)),
+            Self::Public => Span::styled(styles.if_utf8(PUB_UTF8, "PUB"), styles.fg(Color::Green)),
         }
-        formatted
     }
 }

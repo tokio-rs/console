@@ -1,4 +1,4 @@
-use self::resources::ResourcesState;
+use self::{async_ops::AsyncOpsState, resources::ResourcesState};
 use crate::{
     intern::{self, InternedStr},
     view,
@@ -8,7 +8,7 @@ use console_api as proto;
 use std::{
     cell::RefCell,
     collections::HashMap,
-    convert::TryInto,
+    convert::{TryFrom, TryInto},
     fmt,
     io::Cursor,
     rc::Rc,
@@ -20,6 +20,7 @@ use tui::{
     text::Span,
 };
 
+pub mod async_ops;
 pub mod resources;
 pub mod tasks;
 
@@ -32,6 +33,7 @@ pub(crate) struct State {
     temporality: Temporality,
     tasks_state: TasksState,
     resources_state: ResourcesState,
+    async_ops_state: AsyncOpsState,
     current_task_details: DetailsRef,
     retain_for: Option<Duration>,
     strings: intern::Strings,
@@ -68,6 +70,12 @@ pub(crate) enum FieldValue {
 enum Temporality {
     Live,
     Paused,
+}
+
+#[derive(Debug)]
+pub(crate) struct Attribute {
+    field: Field,
+    unit: Option<String>,
 }
 
 impl State {
@@ -137,6 +145,21 @@ impl State {
                 visibility,
             )
         }
+
+        if let Some(async_ops_update) = update.async_op_update {
+            let visibility = if matches!(current_view, view::ViewState::ResourceInstance(_)) {
+                Visibility::Show
+            } else {
+                Visibility::Hide
+            };
+            self.async_ops_state.update_async_ops(
+                styles,
+                &mut self.strings,
+                &self.metas,
+                async_ops_update,
+                visibility,
+            )
+        }
     }
 
     pub(crate) fn retain_active(&mut self) {
@@ -147,6 +170,7 @@ impl State {
         if let (Some(now), Some(retain_for)) = (self.last_updated_at(), self.retain_for) {
             self.tasks_state.retain_active(now, retain_for);
             self.resources_state.retain_active(now, retain_for);
+            self.async_ops_state.retain_active(now, retain_for);
         }
 
         // After dropping idle tasks & resources, prune any interned strings
@@ -170,6 +194,14 @@ impl State {
         &mut self.resources_state
     }
 
+    pub(crate) fn async_ops_state(&self) -> &AsyncOpsState {
+        &self.async_ops_state
+    }
+
+    pub(crate) fn async_ops_state_mut(&mut self) -> &mut AsyncOpsState {
+        &mut self.async_ops_state
+    }
+
     pub(crate) fn update_task_details(&mut self, update: proto::tasks::TaskDetails) {
         if let Some(id) = update.task_id {
             let details = Details {
@@ -179,7 +211,6 @@ impl State {
                         .deserialize(&mut Cursor::new(&data))
                         .ok()
                 }),
-                // last_updated_at: update.now.map(|now| now.try_into().unwrap()),
             };
 
             *self.current_task_details.borrow_mut() = Some(details);
@@ -386,6 +417,35 @@ impl FieldValue {
     }
 }
 
+impl Attribute {
+    fn make_formatted(
+        styles: &view::Styles,
+        attributes: &mut Vec<Attribute>,
+    ) -> Vec<Vec<Span<'static>>> {
+        let key_style = styles.fg(Color::LightBlue).add_modifier(Modifier::BOLD);
+        let delim_style = styles.fg(Color::LightBlue).add_modifier(Modifier::DIM);
+        let val_style = styles.fg(Color::Yellow);
+        let unit_style = styles.fg(Color::LightBlue);
+
+        let mut formatted = Vec::with_capacity(attributes.len());
+        let attributes = attributes.iter();
+        for attr in attributes {
+            let mut elems = vec![
+                Span::styled(attr.field.name.to_string(), key_style),
+                Span::styled("=", delim_style),
+                Span::styled(format!("{}", attr.field.value), val_style),
+            ];
+
+            if let Some(unit) = &attr.unit {
+                elems.push(Span::styled(unit.clone(), unit_style))
+            }
+            elems.push(Span::raw(" "));
+            formatted.push(elems)
+        }
+        formatted
+    }
+}
+
 impl From<proto::field::Value> for FieldValue {
     fn from(pb: proto::field::Value) -> Self {
         match pb {
@@ -425,4 +485,10 @@ fn format_location(loc: Option<proto::Location>) -> String {
         format!("{} ", l)
     })
     .unwrap_or_else(|| "<unknown location>".to_string())
+}
+
+fn pb_duration(dur: prost_types::Duration) -> Duration {
+    let secs = u64::try_from(dur.seconds).expect("duration should not be negative!");
+    let nanos = u64::try_from(dur.nanos).expect("duration should not be negative!");
+    Duration::from_secs(secs) + Duration::from_nanos(nanos)
 }
