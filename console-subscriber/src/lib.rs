@@ -221,11 +221,20 @@ enum WakeOp {
 
 impl ConsoleLayer {
     /// Returns a `ConsoleLayer` built with the default settings.
+    ///
+    /// Note: these defaults do *not* include values provided via the
+    /// environment variables specified in [`Builder::with_default_env`].
+    ///
+    /// See also [`Builder::build`].
     pub fn new() -> (Self, Server) {
         Self::builder().build()
     }
 
     /// Returns a [`Builder`] for configuring a `ConsoleLayer`.
+    ///
+    /// Note that the returned builder does *not* include values provided via
+    /// the environment variables specified in [`Builder::with_default_env`].
+    /// To extract those, you can call that method on the returned builder.
     pub fn builder() -> Builder {
         Builder::default()
     }
