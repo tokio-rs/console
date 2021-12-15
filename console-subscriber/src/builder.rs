@@ -6,14 +6,13 @@ use std::{
     time::Duration,
 };
 use tokio::runtime;
+use tracing::Subscriber;
 use tracing_subscriber::{
-    filter::{FilterFn, Filtered, LevelFilter, Targets},
-    layer::SubscriberExt,
+    filter::{FilterFn, LevelFilter, Targets},
+    layer::{Layer, SubscriberExt},
     prelude::*,
-    Layer, Registry,
+    registry::LookupSpan,
 };
-
-type ConsoleLayer = Filtered<TasksLayer, FilterFn, Registry>;
 
 /// Builder for configuring [`TasksLayer`]s.
 #[derive(Clone, Debug)]
@@ -285,7 +284,10 @@ impl Builder {
     /// [`fmt::Layer`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/fmt/struct.Layer.html
     /// [`console_subscriber::init`]: crate::init()
     #[must_use = "a `Layer` must be added to a `tracing::Subscriber` in order to be used"]
-    pub fn spawn(self) -> ConsoleLayer {
+    pub fn spawn<S>(self) -> impl Layer<S>
+    where
+        S: Subscriber + for<'a> LookupSpan<'a>,
+    {
         fn console_filter(meta: &tracing::Metadata<'_>) -> bool {
             // events will have *targets* beginning with "runtime"
             if meta.is_event() {
@@ -368,7 +370,7 @@ impl Builder {
 /// ```rust
 /// use tracing_subscriber::prelude::*;
 ///
-/// let console_layer = console_subscriber::build();
+/// let console_layer = console_subscriber::spawn();
 ///
 /// tracing_subscriber::registry()
 ///     .with(console_layer)
@@ -416,7 +418,7 @@ pub fn init() {
 /// ```rust
 /// use tracing_subscriber::prelude::*;
 /// tracing_subscriber::registry()
-///     .with(console_subscriber::build())
+///     .with(console_subscriber::spawn())
 ///     .with(tracing_subscriber::fmt::layer())
 /// //  .with(...)
 ///     .init();
@@ -428,8 +430,11 @@ pub fn init() {
 /// [`fmt::Layer`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/fmt/struct.Layer.html
 /// [`console_subscriber::init`]: crate::init()
 #[must_use = "spawn() without init() will not set the default tracing subscriber"]
-pub fn spawn() -> ConsoleLayer {
-    TasksLayer::builder().with_default_env().spawn()
+pub fn spawn<S>() -> impl Layer<S>
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+{
+    TasksLayer::builder().with_default_env().spawn::<S>()
 }
 
 fn duration_from_env(var_name: &str) -> Option<Duration> {

@@ -32,7 +32,7 @@ use callsites::Callsites;
 use stack::SpanStack;
 use visitors::{AsyncOpVisitor, ResourceVisitor, TaskVisitor, WakerVisitor};
 
-pub use builder::{build, init};
+pub use builder::{init, spawn};
 
 use crate::aggregator::Id;
 use crate::visitors::{PollOpVisitor, StateUpdateVisitor};
