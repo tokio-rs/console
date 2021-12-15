@@ -233,7 +233,7 @@ impl Builder {
             .init();
     }
 
-    /// Returns a new `tracing` [subscriber] configured with a [`TasksLayer`]
+    /// Returns a new `tracing` [`Layer`] consisting of a [`TasksLayer`]
     /// and a [filter] that enables the spans and events required by the console.
     ///
     /// This function spawns the console subscriber's [`Server`] in its own Tokio
