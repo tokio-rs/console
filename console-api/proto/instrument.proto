@@ -8,26 +8,39 @@ import "tasks.proto";
 import "resources.proto";
 import "async_ops.proto";
 
+// `InstrumentServer<T>` implements `Instrument` as a service.
 service Instrument {
+    // produces a stream of updates representing the behavior of the instrumented async runtime.
     rpc WatchUpdates(InstrumentRequest) returns (stream Update) {}
+    // produces a stream of updates describing the activity of a specific task.
     rpc WatchTaskDetails(TaskDetailsRequest) returns (stream tasks.TaskDetails) {}
+    // registers that the console observer wants to pause the stream.
     rpc Pause(PauseRequest) returns (PauseResponse) {}
+    // registers that the console observer wants to resume the stream.
     rpc Resume(ResumeRequest) returns (ResumeResponse) {}
 }
 
+// InstrumentRequest requests the stream of updates
+// to observe the async runtime state over time.
+//
 // TODO: In the future allow for the request to specify
 // only the data that the caller cares about (i.e. only
 // tasks but no resources)
 message InstrumentRequest {
 }
 
+// TaskDetailsRequest requests the stream of updates about
+// the specific task identified in the request.
 message TaskDetailsRequest {
+    // Identifies the task for which details were requested.
     common.Id id = 1;
 }
 
+// PauseRequest requests the stream of updates to pause.
 message PauseRequest {
 }
 
+// ResumeRequest requests the stream of updates to resume after a pause.
 message ResumeRequest {
 }
 
@@ -59,8 +72,10 @@ message Update {
     common.RegisterMetadata new_metadata = 5;
 }
 
+// `PauseResponse` is the value returned after a pause request.
 message PauseResponse {
 }
 
+// `ResumeResponse` is the value returned after a resume request.
 message ResumeResponse {
 }
