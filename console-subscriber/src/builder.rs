@@ -284,7 +284,7 @@ impl Builder {
     /// [`tracing_subscriber::fmt`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/fmt/index.html
     /// [`fmt::Layer`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/fmt/struct.Layer.html
     /// [`console_subscriber::init`]: crate::init()
-    #[must_use = "build_console_layer() without init() will not set the default tracing subscriber"]
+    #[must_use = "a `Layer` must be added to a `tracing::Subscriber` in order to be used"]
     pub fn build_console_layer(self) -> ConsoleLayer {
         fn console_filter(meta: &tracing::Metadata<'_>) -> bool {
             // events will have *targets* beginning with "runtime"
