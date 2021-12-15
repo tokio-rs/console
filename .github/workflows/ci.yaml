@@ -73,24 +73,18 @@ jobs:
         with:
           command: test
 
-  test_versions:
-    name: Tests on ${{ matrix.rust }}
+  test_msrv:
+    name: Tests on MSRV
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        rust:
-          - nightly
-          - ${{ env.minrust }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Install stable toolchain
+      - name: Install MSRV toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ matrix.rust }}
+          toolchain: ${{ env.minrust }}
           override: true
       - uses: Swatinem/rust-cache@v1
 
