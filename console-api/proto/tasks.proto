@@ -79,9 +79,11 @@ message Task {
 
     // The category of task this task belongs to.
     enum Kind {
-        // A task spawned via `tokio::task::spawn`.
+        // A task spawned using a runtime's standard asynchronous task spawning
+        // operation (such as `tokio::task::spawn`).
         SPAWN = 0;
-        // A task spawned via `tokio::task::spawn_blocking`.
+        // A task spawned via a runtime's blocking task spawning operation
+        // (such as `tokio::task::spawn_blocking`).
         BLOCKING = 1;
     }
 

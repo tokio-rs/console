@@ -10,13 +10,13 @@ import "async_ops.proto";
 
 // `InstrumentServer<T>` implements `Instrument` as a service.
 service Instrument {
-    // produces a stream of updates representing the behavior of the instrumented async runtime.
+    // Produces a stream of updates representing the behavior of the instrumented async runtime.
     rpc WatchUpdates(InstrumentRequest) returns (stream Update) {}
-    // produces a stream of updates describing the activity of a specific task.
+    // Produces a stream of updates describing the activity of a specific task.
     rpc WatchTaskDetails(TaskDetailsRequest) returns (stream tasks.TaskDetails) {}
-    // registers that the console observer wants to pause the stream.
+    // Registers that the console observer wants to pause the stream.
     rpc Pause(PauseRequest) returns (PauseResponse) {}
-    // registers that the console observer wants to resume the stream.
+    // Registers that the console observer wants to resume the stream.
     rpc Resume(ResumeRequest) returns (ResumeResponse) {}
 }
 

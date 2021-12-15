@@ -37,6 +37,9 @@ message SpanId {
 // A message representing a key-value pair of data associated with a `Span`
 message Field {
     // The key of the key-value pair.
+    //
+    // This is either represented as a string, or as an index into a `Metadata`'s 
+    // array of field name strings.
     oneof name {
         // The string representation of the name.
         string str_name = 1;
@@ -71,9 +74,9 @@ message Span {
     // from that callsite, such as its name, source code location, verbosity level, and
     // the names of its fields.
     MetaId metadata_id = 2;
-    // user-defined key-value pairs of arbitrary data that describe the context the span represents,
+    // User-defined key-value pairs of arbitrary data that describe the context the span represents,
     repeated Field fields = 3;
-    // timestamp for the span.
+    // Timestamp for the span.
     google.protobuf.Timestamp at = 4;
 }
 
