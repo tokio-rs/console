@@ -189,9 +189,9 @@ impl Builder {
     ///
     /// | **Environment Variable**            | **Purpose**                                                               | **Default Value** |
     /// |-------------------------------------|---------------------------------------------------------------------------|-------------------|
-    /// | `TOKIO_CONSOLE_RETENTION_SECS`      | The number of seconds to accumulate completed tracing data                | 3600s (1h)        |
+    /// | `TOKIO_CONSOLE_RETENTION`           | The number of seconds to accumulate completed tracing data                | 3600s (1h)        |
     /// | `TOKIO_CONSOLE_BIND`                | A HOST:PORT description, such as `localhost:1234`                         | `127.0.0.1:6669`  |
-    /// | `TOKIO_CONSOLE_PUBLISH_INTERVAL_MS` | The number of milliseconds to wait between sending updates to the console | 1000ms (1s)       |
+    /// | `TOKIO_CONSOLE_PUBLISH_INTERVAL`    | The number of milliseconds to wait between sending updates to the console | 1000ms (1s)       |
     /// | `TOKIO_CONSOLE_RECORD_PATH`         | The file path to save a recording                                         | None              |
     /// | `RUST_LOG`                          | Configures what events are logged events. See [`Targets`] for details.    | "error"           |
     ///
@@ -203,7 +203,7 @@ impl Builder {
     /// ```rust
     /// use tracing_subscriber::prelude::*;
     ///
-    /// let console_layer = console_subscriber::TasksLayer::builder().build_console_layer();
+    /// let console_layer = console_subscriber::TasksLayer::builder().spawn();
     ///
     /// tracing_subscriber::registry()
     ///     .with(console_layer)
@@ -225,7 +225,7 @@ impl Builder {
             })
             .unwrap_or_else(|| Targets::default().with_default(LevelFilter::ERROR));
 
-        let console_layer = self.build_console_layer();
+        let console_layer = self.spawn();
 
         tracing_subscriber::registry()
             .with(console_layer)
@@ -270,7 +270,7 @@ impl Builder {
     ///
     /// let console_layer = console_subscriber::TasksLayer::builder()
     ///     .with_default_env()
-    ///     .build_console_layer();
+    ///     .spawn();
     ///
     /// tracing_subscriber::registry()
     ///     .with(console_layer)
@@ -285,7 +285,7 @@ impl Builder {
     /// [`fmt::Layer`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/fmt/struct.Layer.html
     /// [`console_subscriber::init`]: crate::init()
     #[must_use = "a `Layer` must be added to a `tracing::Subscriber` in order to be used"]
-    pub fn build_console_layer(self) -> ConsoleLayer {
+    pub fn spawn(self) -> ConsoleLayer {
         fn console_filter(meta: &tracing::Metadata<'_>) -> bool {
             // events will have *targets* beginning with "runtime"
             if meta.is_event() {
@@ -354,9 +354,9 @@ impl Builder {
 ///
 /// | **Environment Variable**            | **Purpose**                                                               | **Default Value** |
 /// |-------------------------------------|---------------------------------------------------------------------------|-------------------|
-/// | `TOKIO_CONSOLE_RETENTION_SECS`      | The number of seconds to accumulate completed tracing data                | 3600s (1h)        |
+/// | `TOKIO_CONSOLE_RETENTION`           | The number of seconds to accumulate completed tracing data                | 3600s (1h)        |
 /// | `TOKIO_CONSOLE_BIND`                | A HOST:PORT description, such as `localhost:1234`                         | `127.0.0.1:6669`  |
-/// | `TOKIO_CONSOLE_PUBLISH_INTERVAL_MS` | The number of milliseconds to wait between sending updates to the console | 1000ms (1s)       |
+/// | `TOKIO_CONSOLE_PUBLISH_INTERVAL`    | The number of milliseconds to wait between sending updates to the console | 1000ms (1s)       |
 /// | `TOKIO_CONSOLE_RECORD_PATH`         | The file path to save a recording                                         | None              |
 /// | `RUST_LOG`                          | Configures what events are logged events. See [`Targets`] for details.    | "error"           |
 ///
@@ -427,11 +427,9 @@ pub fn init() {
 /// [`tracing_subscriber::fmt`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/fmt/index.html
 /// [`fmt::Layer`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/fmt/struct.Layer.html
 /// [`console_subscriber::init`]: crate::init()
-#[must_use = "build() without init() will not set the default tracing subscriber"]
-pub fn build() -> ConsoleLayer {
-    TasksLayer::builder()
-        .with_default_env()
-        .build_console_layer()
+#[must_use = "spawn() without init() will not set the default tracing subscriber"]
+pub fn spawn() -> ConsoleLayer {
+    TasksLayer::builder().with_default_env().spawn()
 }
 
 fn duration_from_env(var_name: &str) -> Option<Duration> {
