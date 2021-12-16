@@ -39,7 +39,7 @@ This crate is the primary consumer of `tokio-console` telemetry, a command-line
 application that provides an interactive debugging interface.
 
 [wire format]: https://crates.io/crates/console-api
-
+[subscriber]: https://crates.io/crates/console-subscriber
 ## Getting Started
 
 To use the console CLI to debug an asynchronous application, the application
@@ -52,15 +52,168 @@ Once the application is instrumented, install the console CLI using
 cargo install tokio-console
 ```
 
-[`tracing`]: https://crates.io/crates/tracing
-[`tracing-subscriber`]: https://crates.io/crates/tracing-subscriber
-[`Layer`]:https://docs.rs/tracing-subscriber/0.3/tracing_subscriber/layer/index.html
-[default]: https://docs.rs/tracing/latest/0.1/dispatcher/index.html#setting-the-default-subscriber
-[env]: https://docs.rs/tokio-console/0.1/tokio-console/struct.builder#method.with_default_env
-[builder]: https://docs.rs/tokio-console/0.1/tokio-console/struct.builder
+Running `tokio-console` without any arguments will connect to an application on
+localhost listening on the default port, port 6669:
+
+```shell
+tokio-console
+```
+
+If the application is not running locally, or was configured to listen on a
+different port, the console will also accept a target address as a command-like
+argument:
+
+```shell
+tokio-console http://192.168.0.42:9090
+```
+
+A DNS name can also be provided as the target address:
+```shell
+tokio-console http://my.instrumented.application.local:6669
+```
+
+When the console CLI is launched, it displays a list of all [asynchronous tasks]
+in the program:
+
+![tasks list](https://raw.githubusercontent.com/tokio-rs/console/main/assets/tasks_list.png)
+
+Using the <kbd>&#8593;</kbd> and <kbd>&#8595;</kbd> arrow keys, an individual task can be highlighted.
+Pressing<kbd>enter</kbd> while a task is highlighted displays details about that
+task:
+
+![task details](https://raw.githubusercontent.com/tokio-rs/console/main/assets/details2.png)
+
+Pressing the <kbd>escape</kbd> key returns to the task list.
+
+The <kbd>r</kbd> key switches from the list of tasks to a list of [resources],
+such as synchronization primitives, I/O resources, et cetera:
+
+![resource list](https://raw.githubusercontent.com/tokio-rs/console/main/assets/resources.png)
+
+
+Pressing the <kbd>t</kbd> key switches the view back to the task list.
+
+Like the task list view, the resource list view can be navigated using the
+<kbd>&#8593;</kbd> and <kbd>&#8595;</kbd> arrow keys. Pressing <kbd>enter</kbd>
+while a resource is highlighted displays details about that resource:
+
+![resource details --- oneshot](https://raw.githubusercontent.com/tokio-rs/console/main/assets/resource_details1.png)
+
+The resource details view lists the tasks currently waiting on that resource.
+This may be a single task, as in the [`tokio::sync::oneshot`] channel above, or
+a large number of tasks, such as this [`tokio::sync::Semaphore`]:
+
+![resource details --- semaphore](https://raw.githubusercontent.com/tokio-rs/console/main/assets/resource_details2.png)
+
+Like the task details view, pressing the <kbd>escape</kbd> key while viewing a resource's details
+returns to the resource list.
+
 [`tokio-console`]: https://github.com/tokio-rs/console
 [Tokio]: https://tokio.rs
+[asynchronous tasks]: https://tokio.rs/tokio/tutorial/spawning#tasks
+[resources]: https://tokio.rs/tokio/tutorial/async#async-fn-as-a-future
+[`tokio::sync::oneshot`]: https://docs.rs/tokio/latest/tokio/sync/oneshot/index.html
+[`tokio::sync::Semaphore`]: https://docs.rs/tokio/latest/tokio/sync/struct.Semaphore.html
 
+### Command-Line Arguments
+
+Running `tokio-console --help` displays a list of all available command-line
+arguments:
+```shell
+$ tokio-console --help
+
+tokio-console 0.1.0
+
+USAGE:
+    tokio-console [OPTIONS] [TARGET_ADDR]
+
+ARGS:
+    <TARGET_ADDR>
+            The address of a console-enabled process to connect to.
+
+            This may be an IP address and port, or a DNS name.
+
+            [default: http://127.0.0.1:6669]
+
+OPTIONS:
+        --ascii-only
+            Explicitly use only ASCII characters
+
+        --colorterm <truecolor>
+            Overrides the value of the `COLORTERM` environment variable.
+
+            If this is set to `24bit` or `truecolor`, 24-bit RGB color support will be enabled.
+
+            [env: COLORTERM=truecolor]
+            [possible values: 24bit, truecolor]
+
+    -h, --help
+            Print help information
+
+        --lang <LANG>
+            Overrides the terminal's default language
+
+            [env: LANG=en_US.UTF-8]
+            [default: en_us.UTF-8]
+
+        --log <ENV_FILTER>
+            Log level filter for the console's internal diagnostics.
+
+            The console will log to stderr if a log level filter is provided. Since the console
+            application runs interactively, stderr should generally be redirected to a file to avoid
+            interfering with the console's text output.
+
+            [env: RUST_LOG=]
+            [default: off]
+
+        --no-colors
+            Disable ANSI colors entirely
+
+        --no-duration-colors
+            Disable color-coding for duration units
+
+        --no-terminated-colors
+            Disable color-coding for terminated tasks
+
+        --palette <PALETTE>
+            Explicitly set which color palette to use
+
+            [possible values: 8, 16, 256, all, off]
+
+        --retain-for <RETAIN_FOR>
+            How long to continue displaying completed tasks and dropped resources after they have
+            been closed.
+
+            This accepts either a duration, parsed as a combination of time spans (such as `5days
+            2min 2s`), or `none` to disable removing completed tasks and dropped resources.
+
+            Each time span is an integer number followed by a suffix. Supported suffixes are:
+
+            * `nsec`, `ns` -- nanoseconds
+
+            * `usec`, `us` -- microseconds
+
+            * `msec`, `ms` -- milliseconds
+
+            * `seconds`, `second`, `sec`, `s`
+
+            * `minutes`, `minute`, `min`, `m`
+
+            * `hours`, `hour`, `hr`, `h`
+
+            * `days`, `day`, `d`
+
+            * `weeks`, `week`, `w`
+
+            * `months`, `month`, `M` -- defined as 30.44 days
+
+            * `years`, `year`, `y` -- defined as 365.25 days
+
+            [default: 6s]
+
+    -V, --version
+            Print version information
+```
 
 ## Getting Help
 
