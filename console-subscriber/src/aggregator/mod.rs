@@ -1,4 +1,6 @@
-use super::{AttributeUpdate, AttributeUpdateOp, Command, Event, UpdateType, WakeOp, Watch};
+use super::{
+    AttributeUpdate, AttributeUpdateOp, Command, Event, Shared, UpdateType, WakeOp, Watch,
+};
 use crate::{record::Recorder, WatchRequest};
 use console_api as proto;
 use proto::resources::resource;
@@ -42,8 +44,9 @@ pub(crate) struct Aggregator {
     /// How long to keep task data after a task has completed.
     retention: Duration,
 
-    /// Triggers a flush when the event buffer is approaching capacity.
-    flush_capacity: Arc<Flush>,
+    /// Shared state, including a `Notify` that triggers a flush when the event
+    /// buffer is approaching capacity.
+    shared: Arc<Shared>,
 
     /// Currently active RPCs streaming task events.
     watchers: ShrinkVec<Watch<proto::instrument::Update>>,
@@ -99,7 +102,7 @@ pub(crate) struct Aggregator {
     temporality: Temporality,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct Flush {
     pub(crate) should_flush: Notify,
     triggered: AtomicBool,
@@ -285,12 +288,10 @@ impl Aggregator {
         events: mpsc::Receiver<Event>,
         rpcs: mpsc::Receiver<Command>,
         builder: &crate::Builder,
+        shared: Arc<crate::Shared>,
     ) -> Self {
         Self {
-            flush_capacity: Arc::new(Flush {
-                should_flush: Notify::new(),
-                triggered: AtomicBool::new(false),
-            }),
+            shared,
             rpcs,
             publish_interval: builder.publish_interval,
             retention: builder.retention,
@@ -316,10 +317,6 @@ impl Aggregator {
         }
     }
 
-    pub(crate) fn flush(&self) -> &Arc<Flush> {
-        &self.flush_capacity
-    }
-
     pub(crate) async fn run(mut self) {
         let mut publish = tokio::time::interval(self.publish_interval);
         loop {
@@ -333,7 +330,7 @@ impl Aggregator {
                 }
 
                 // triggered when the event buffer is approaching capacity
-                _ = self.flush_capacity.should_flush.notified() => {
+                _ = self.shared.flush.should_flush.notified() => {
                     tracing::debug!("approaching capacity; draining buffer");
                     false
                 }
@@ -399,7 +396,7 @@ impl Aggregator {
             }
             self.cleanup_closed();
             if drained {
-                self.flush_capacity.has_flushed();
+                self.shared.flush.has_flushed();
             }
         }
     }
@@ -445,6 +442,7 @@ impl Aggregator {
                     .map(|(_, value)| value.to_proto())
                     .collect(),
                 stats_update: self.task_stats.as_proto(Include::All),
+                dropped_events: self.shared.dropped_tasks.swap(0, AcqRel) as u64,
             }),
             resource_update: Some(proto::resources::ResourceUpdate {
                 new_resources: self
@@ -454,6 +452,7 @@ impl Aggregator {
                     .collect(),
                 stats_update: self.resource_stats.as_proto(Include::All),
                 new_poll_ops: (*self.all_poll_ops).clone(),
+                dropped_events: self.shared.dropped_resources.swap(0, AcqRel) as u64,
             }),
             async_op_update: Some(proto::async_ops::AsyncOpUpdate {
                 new_async_ops: self
@@ -462,6 +461,7 @@ impl Aggregator {
                     .map(|(_, value)| value.to_proto())
                     .collect(),
                 stats_update: self.async_op_stats.as_proto(Include::All),
+                dropped_events: self.shared.dropped_async_ops.swap(0, AcqRel) as u64,
             }),
             now: Some(now.into()),
             new_metadata: Some(proto::RegisterMetadata {
@@ -534,6 +534,8 @@ impl Aggregator {
                     .map(|(_, value)| value.to_proto())
                     .collect(),
                 stats_update: self.task_stats.as_proto(Include::UpdatedOnly),
+
+                dropped_events: self.shared.dropped_tasks.swap(0, AcqRel) as u64,
             }),
             resource_update: Some(proto::resources::ResourceUpdate {
                 new_resources: self
@@ -543,6 +545,8 @@ impl Aggregator {
                     .collect(),
                 stats_update: self.resource_stats.as_proto(Include::UpdatedOnly),
                 new_poll_ops,
+
+                dropped_events: self.shared.dropped_resources.swap(0, AcqRel) as u64,
             }),
             async_op_update: Some(proto::async_ops::AsyncOpUpdate {
                 new_async_ops: self
@@ -551,6 +555,8 @@ impl Aggregator {
                     .map(|(_, value)| value.to_proto())
                     .collect(),
                 stats_update: self.async_op_stats.as_proto(Include::UpdatedOnly),
+
+                dropped_events: self.shared.dropped_async_ops.swap(0, AcqRel) as u64,
             }),
         };
 

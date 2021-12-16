@@ -6,7 +6,10 @@ use std::{
     cell::RefCell,
     fmt,
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
     time::{Duration, SystemTime},
 };
 use thread_local::ThreadLocal;
@@ -51,7 +54,7 @@ use crate::visitors::{PollOpVisitor, StateUpdateVisitor};
 pub struct ConsoleLayer {
     current_spans: ThreadLocal<RefCell<SpanStack>>,
     tx: mpsc::Sender<Event>,
-    flush: Arc<aggregator::Flush>,
+    shared: Arc<Shared>,
     /// When the channel capacity goes under this number, a flush in the aggregator
     /// will be triggered.
     flush_under_capacity: usize,
@@ -120,6 +123,26 @@ pub struct Server {
     addr: SocketAddr,
     aggregator: Option<Aggregator>,
     client_buffer: usize,
+}
+
+/// State shared between the `ConsoleLayer` and the `Aggregator` task.
+#[derive(Debug, Default)]
+struct Shared {
+    /// Used to notify the aggregator task when the event buffer should be
+    /// flushed.
+    flush: aggregator::Flush,
+
+    /// A counter of how many task events were dropped because the event buffer
+    /// was at capacity.
+    dropped_tasks: AtomicUsize,
+
+    /// A counter of how many async op events were dropped because the event buffer
+    /// was at capacity.
+    dropped_async_ops: AtomicUsize,
+
+    /// A counter of how many resource events were dropped because the event buffer
+    /// was at capacity.
+    dropped_resources: AtomicUsize,
 }
 
 struct Watch<T>(mpsc::Sender<Result<T, tonic::Status>>);
@@ -269,10 +292,8 @@ impl ConsoleLayer {
 
         let (tx, events) = mpsc::channel(config.event_buffer_capacity);
         let (subscribe, rpcs) = mpsc::channel(256);
-
-        let aggregator = Aggregator::new(events, rpcs, &config);
-        let flush = aggregator.flush().clone();
-
+        let shared = Arc::new(Shared::default());
+        let aggregator = Aggregator::new(events, rpcs, &config, shared.clone());
         // Conservatively, start to trigger a flush when half the channel is full.
         // This tries to reduce the chance of losing events to a full channel.
         let flush_under_capacity = config.event_buffer_capacity / 2;
@@ -286,7 +307,7 @@ impl ConsoleLayer {
         let layer = Self {
             current_spans: ThreadLocal::new(),
             tx,
-            flush,
+            shared,
             flush_under_capacity,
             spawn_callsites: Callsites::default(),
             waker_callsites: Callsites::default(),
@@ -419,7 +440,7 @@ impl ConsoleLayer {
             .cloned()
     }
 
-    fn send(&self, event: Event) {
+    fn send(&self, dropped: &AtomicUsize, event: Event) {
         use mpsc::error::TrySendError;
 
         match self.tx.try_reserve() {
@@ -433,12 +454,13 @@ impl ConsoleLayer {
                 // approaching the high water line...but if the executor wait
                 // time is very high, maybe the aggregator task hasn't been
                 // polled yet. so... eek?!
+                dropped.fetch_add(1, Ordering::Release);
             }
         }
 
         let capacity = self.tx.capacity();
         if capacity <= self.flush_under_capacity {
-            self.flush.trigger();
+            self.shared.flush.trigger();
         }
     }
 }
@@ -448,23 +470,43 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn register_callsite(&self, meta: &'static Metadata<'static>) -> subscriber::Interest {
-        match (meta.name(), meta.target()) {
-            ("runtime.spawn", _) | ("task", "tokio::task") => self.spawn_callsites.insert(meta),
-            (_, "runtime::waker") | (_, "tokio::task::waker") => self.waker_callsites.insert(meta),
-            (ResourceVisitor::RES_SPAN_NAME, _) => self.resource_callsites.insert(meta),
-            (AsyncOpVisitor::ASYNC_OP_SPAN_NAME, _) => self.async_op_callsites.insert(meta),
-            ("runtime.resource.async_op.poll", _) => self.async_op_poll_callsites.insert(meta),
-            (_, PollOpVisitor::POLL_OP_EVENT_TARGET) => self.poll_op_callsites.insert(meta),
+        let dropped = match (meta.name(), meta.target()) {
+            ("runtime.spawn", _) | ("task", "tokio::task") => {
+                self.spawn_callsites.insert(meta);
+                &self.shared.dropped_tasks
+            }
+            (_, "runtime::waker") | (_, "tokio::task::waker") => {
+                self.waker_callsites.insert(meta);
+                &self.shared.dropped_tasks
+            }
+            (ResourceVisitor::RES_SPAN_NAME, _) => {
+                self.resource_callsites.insert(meta);
+                &self.shared.dropped_resources
+            }
+            (AsyncOpVisitor::ASYNC_OP_SPAN_NAME, _) => {
+                self.async_op_callsites.insert(meta);
+                &self.shared.dropped_async_ops
+            }
+            ("runtime.resource.async_op.poll", _) => {
+                self.async_op_poll_callsites.insert(meta);
+                &self.shared.dropped_async_ops
+            }
+            (_, PollOpVisitor::POLL_OP_EVENT_TARGET) => {
+                self.poll_op_callsites.insert(meta);
+                &self.shared.dropped_async_ops
+            }
             (_, StateUpdateVisitor::RE_STATE_UPDATE_EVENT_TARGET) => {
-                self.resource_state_update_callsites.insert(meta)
+                self.resource_state_update_callsites.insert(meta);
+                &self.shared.dropped_resources
             }
             (_, StateUpdateVisitor::AO_STATE_UPDATE_EVENT_TARGET) => {
-                self.async_op_state_update_callsites.insert(meta)
+                self.async_op_state_update_callsites.insert(meta);
+                &self.shared.dropped_async_ops
             }
-            (_, _) => {}
-        }
+            (_, _) => &self.shared.dropped_tasks,
+        };
 
-        self.send(Event::Metadata(meta));
+        self.send(dropped, Event::Metadata(meta));
         subscriber::Interest::always()
     }
 
@@ -475,13 +517,16 @@ where
             let mut task_visitor = TaskVisitor::new(metadata.into());
             attrs.record(&mut task_visitor);
             let (fields, location) = task_visitor.result();
-            self.send(Event::Spawn {
-                id: id.clone(),
-                at,
-                metadata,
-                fields,
-                location,
-            });
+            self.send(
+                &self.shared.dropped_tasks,
+                Event::Spawn {
+                    id: id.clone(),
+                    at,
+                    metadata,
+                    fields,
+                    location,
+                },
+            );
             return;
         }
 
@@ -500,17 +545,20 @@ where
                 let parent_id = self.current_spans.get().and_then(|stack| {
                     self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
                 });
-                self.send(Event::Resource {
-                    id: id.clone(),
-                    parent_id,
-                    metadata,
-                    at,
-                    concrete_type,
-                    kind,
-                    location,
-                    is_internal,
-                    inherit_child_attrs,
-                });
+                self.send(
+                    &self.shared.dropped_resources,
+                    Event::Resource {
+                        id: id.clone(),
+                        parent_id,
+                        metadata,
+                        at,
+                        concrete_type,
+                        kind,
+                        location,
+                        is_internal,
+                        inherit_child_attrs,
+                    },
+                );
             } // else unknown resource span format
             return;
         }
@@ -529,15 +577,18 @@ where
                 });
 
                 if let Some(resource_id) = resource_id {
-                    self.send(Event::AsyncResourceOp {
-                        id: id.clone(),
-                        parent_id,
-                        resource_id,
-                        at,
-                        metadata,
-                        source,
-                        inherit_child_attrs,
-                    });
+                    self.send(
+                        &self.shared.dropped_async_ops,
+                        Event::AsyncResourceOp {
+                            id: id.clone(),
+                            parent_id,
+                            resource_id,
+                            at,
+                            metadata,
+                            source,
+                            inherit_child_attrs,
+                        },
+                    );
                 }
             }
             // else async op span needs to have a source field
@@ -561,7 +612,7 @@ where
                         .unwrap_or(false);
                     op = op.self_wake(self_wake);
                 }
-                self.send(Event::Waker { id, op, at });
+                self.send(&self.shared.dropped_tasks, Event::Waker { id, op, at });
             }
             // else unknown waker event... what to do? can't trace it from here...
             return;
@@ -587,14 +638,17 @@ where
 
                     // poll op event should be emitted in the context of an async op and task spans
                     if let Some((task_id, async_op_id)) = task_and_async_op_ids {
-                        self.send(Event::PollOp {
-                            metadata,
-                            op_name,
-                            resource_id,
-                            async_op_id,
-                            task_id,
-                            is_ready,
-                        });
+                        self.send(
+                            &self.shared.dropped_async_ops,
+                            Event::PollOp {
+                                metadata,
+                                op_name,
+                                resource_id,
+                                async_op_id,
+                                task_id,
+                                is_ready,
+                            },
+                        );
                     }
                 }
             }
@@ -612,11 +666,14 @@ where
                 let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
                 event.record(&mut state_update_visitor);
                 if let Some(update) = state_update_visitor.result() {
-                    self.send(Event::StateUpdate {
-                        update_id: resource_id,
-                        update_type: UpdateType::Resource,
-                        update,
-                    })
+                    self.send(
+                        &self.shared.dropped_resources,
+                        Event::StateUpdate {
+                            update_id: resource_id,
+                            update_type: UpdateType::Resource,
+                            update,
+                        },
+                    )
                 }
             }
             return;
@@ -631,11 +688,14 @@ where
                 let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
                 event.record(&mut state_update_visitor);
                 if let Some(update) = state_update_visitor.result() {
-                    self.send(Event::StateUpdate {
-                        update_id: async_op_id,
-                        update_type: UpdateType::AsyncOp,
-                        update,
-                    });
+                    self.send(
+                        &self.shared.dropped_async_ops,
+                        Event::StateUpdate {
+                            update_id: async_op_id,
+                            update_type: UpdateType::AsyncOp,
+                            update,
+                        },
+                    );
                 }
             }
         }
@@ -652,11 +712,14 @@ where
             .push(id.clone());
 
         let parent_id = cx.span(id).and_then(|s| s.parent().map(|p| p.id()));
-        self.send(Event::Enter {
-            at: SystemTime::now(),
-            id: id.clone(),
-            parent_id,
-        });
+        self.send(
+            &self.shared.dropped_tasks,
+            Event::Enter {
+                at: SystemTime::now(),
+                id: id.clone(),
+                parent_id,
+            },
+        );
     }
 
     fn on_exit(&self, id: &span::Id, cx: Context<'_, S>) {
@@ -671,11 +734,14 @@ where
 
         let parent_id = cx.span(id).and_then(|s| s.parent().map(|p| p.id()));
 
-        self.send(Event::Exit {
-            id: id.clone(),
-            parent_id,
-            at: SystemTime::now(),
-        });
+        self.send(
+            &self.shared.dropped_tasks,
+            Event::Exit {
+                id: id.clone(),
+                parent_id,
+                at: SystemTime::now(),
+            },
+        );
     }
 
     fn on_close(&self, id: span::Id, cx: Context<'_, S>) {
@@ -684,10 +750,13 @@ where
         }
 
         let _default = dispatcher::set_default(&self.no_dispatch);
-        self.send(Event::Close {
-            at: SystemTime::now(),
-            id,
-        });
+        self.send(
+            &self.shared.dropped_tasks,
+            Event::Close {
+                at: SystemTime::now(),
+                id,
+            },
+        );
     }
 }
 
@@ -697,7 +766,7 @@ impl fmt::Debug for ConsoleLayer {
             // mpsc::Sender debug impl is not very useful
             .field("tx", &format_args!("<...>"))
             .field("tx.capacity", &self.tx.capacity())
-            .field("flush", &self.flush)
+            .field("shared", &self.shared)
             .field("spawn_callsites", &self.spawn_callsites)
             .field("waker_callsites", &self.waker_callsites)
             .finish()
