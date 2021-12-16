@@ -252,6 +252,10 @@ enum WakeOp {
     Drop,
 }
 
+/// Marker type used to indicate that a span is actually tracked by the console.
+#[derive(Debug)]
+struct Tracked {}
+
 impl ConsoleLayer {
     /// Returns a `ConsoleLayer` built with the default settings.
     ///
@@ -377,10 +381,6 @@ impl ConsoleLayer {
         self.async_op_callsites.contains(meta)
     }
 
-    fn is_async_op_poll(&self, meta: &'static Metadata<'static>) -> bool {
-        self.async_op_poll_callsites.contains(meta)
-    }
-
     fn is_id_spawned<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
     where
         S: Subscriber + for<'a> LookupSpan<'a>,
@@ -408,23 +408,13 @@ impl ConsoleLayer {
             .unwrap_or(false)
     }
 
-    fn is_id_async_op_poll<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
-    where
-        S: Subscriber + for<'a> LookupSpan<'a>,
-    {
-        cx.span(id)
-            .map(|span| self.is_async_op_poll(span.metadata()))
-            .unwrap_or(false)
-    }
-
     fn is_id_tracked<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
     where
         S: Subscriber + for<'a> LookupSpan<'a>,
     {
-        self.is_id_async_op(id, cx)
-            || self.is_id_resource(id, cx)
-            || self.is_id_spawned(id, cx)
-            || self.is_id_async_op_poll(id, cx)
+        cx.span(id)
+            .map(|span| span.extensions().get::<Tracked>().is_some())
+            .unwrap_or(false)
     }
 
     fn first_entered<P>(&self, stack: &SpanStack, p: P) -> Option<span::Id>
@@ -440,14 +430,19 @@ impl ConsoleLayer {
             .cloned()
     }
 
-    fn send(&self, dropped: &AtomicUsize, event: Event) {
+    fn send(&self, dropped: &AtomicUsize, event: Event) -> bool {
         use mpsc::error::TrySendError;
 
-        match self.tx.try_reserve() {
-            Ok(permit) => permit.send(event),
+        // Return whether or not we actually sent the event.
+        let sent = match self.tx.try_reserve() {
+            Ok(permit) => {
+                permit.send(event);
+                true
+            }
             Err(TrySendError::Closed(_)) => {
                 // we should warn here eventually, but nop for now because we
                 // can't trigger tracing events...
+                false
             }
             Err(TrySendError::Full(_)) => {
                 // this shouldn't happen, since we trigger a flush when
@@ -455,13 +450,16 @@ impl ConsoleLayer {
                 // time is very high, maybe the aggregator task hasn't been
                 // polled yet. so... eek?!
                 dropped.fetch_add(1, Ordering::Release);
+                false
             }
-        }
+        };
 
         let capacity = self.tx.capacity();
         if capacity <= self.flush_under_capacity {
             self.shared.flush.trigger();
         }
+
+        sent
     }
 }
 
@@ -512,7 +510,7 @@ where
 
     fn on_new_span(&self, attrs: &span::Attributes<'_>, id: &span::Id, ctx: Context<'_, S>) {
         let metadata = attrs.metadata();
-        if self.is_spawn(metadata) {
+        let sent = if self.is_spawn(metadata) {
             let at = SystemTime::now();
             let mut task_visitor = TaskVisitor::new(metadata.into());
             attrs.record(&mut task_visitor);
@@ -526,11 +524,8 @@ where
                     fields,
                     location,
                 },
-            );
-            return;
-        }
-
-        if self.is_resource(metadata) {
+            )
+        } else if self.is_resource(metadata) {
             let mut resource_visitor = ResourceVisitor::default();
             attrs.record(&mut resource_visitor);
             if let Some(result) = resource_visitor.result() {
@@ -558,12 +553,12 @@ where
                         is_internal,
                         inherit_child_attrs,
                     },
-                );
-            } // else unknown resource span format
-            return;
-        }
-
-        if self.is_async_op(metadata) {
+                )
+            } else {
+                // else unknown resource span format
+                false
+            }
+        } else if self.is_async_op(metadata) {
             let mut async_op_visitor = AsyncOpVisitor::default();
             attrs.record(&mut async_op_visitor);
             if let Some((source, inherit_child_attrs)) = async_op_visitor.result() {
@@ -588,10 +583,30 @@ where
                             source,
                             inherit_child_attrs,
                         },
-                    );
+                    )
+                } else {
+                    false
                 }
+            } else {
+                // else async op span needs to have a source field
+                false
             }
-            // else async op span needs to have a source field
+        } else {
+            false
+        };
+
+        // If we were able to record the span, add a marker extension indicating
+        // that it's tracked by the console.
+        if sent {
+            if let Some(span) = ctx.span(id) {
+                span.extensions_mut().insert(Tracked {});
+            } else {
+                debug_assert!(
+                    false,
+                    "span should exist if `on_new_span` was called for its ID ({:?})",
+                    id
+                );
+            }
         }
     }
 
@@ -673,7 +688,7 @@ where
                             update_type: UpdateType::Resource,
                             update,
                         },
-                    )
+                    );
                 }
             }
             return;
