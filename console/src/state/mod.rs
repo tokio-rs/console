@@ -7,6 +7,7 @@ use crate::{
 use console_api as proto;
 use std::{
     cell::RefCell,
+    cmp::Ordering,
     collections::HashMap,
     convert::{TryFrom, TryInto},
     fmt,
@@ -51,13 +52,13 @@ pub(crate) struct Metadata {
     //TODO: add more metadata as needed
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub(crate) struct Field {
     pub(crate) name: InternedStr,
     pub(crate) value: FieldValue,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub(crate) enum FieldValue {
     Bool(bool),
     Str(String),
@@ -72,7 +73,7 @@ enum Temporality {
     Paused,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub(crate) struct Attribute {
     field: Field,
     unit: Option<String>,
@@ -333,31 +334,11 @@ impl Field {
     }
 
     fn make_formatted(styles: &view::Styles, fields: &mut Vec<Field>) -> Vec<Vec<Span<'static>>> {
-        use std::cmp::Ordering;
-
         let key_style = styles.fg(Color::LightBlue).add_modifier(Modifier::BOLD);
         let delim_style = styles.fg(Color::LightBlue).add_modifier(Modifier::DIM);
         let val_style = styles.fg(Color::Yellow);
 
-        fields.sort_unstable_by(|left, right| {
-            if &*left.name == Field::NAME {
-                return Ordering::Less;
-            }
-
-            if &*right.name == Field::NAME {
-                return Ordering::Greater;
-            }
-
-            if &*left.name == Field::SPAWN_LOCATION {
-                return Ordering::Greater;
-            }
-
-            if &*right.name == Field::SPAWN_LOCATION {
-                return Ordering::Less;
-            }
-
-            left.name.cmp(&right.name)
-        });
+        fields.sort_unstable();
 
         let mut formatted = Vec::with_capacity(fields.len());
         let mut fields = fields.iter();
@@ -377,6 +358,29 @@ impl Field {
             }
         }
         formatted
+    }
+}
+
+impl Ord for Field {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (&*self.name, &*other.name) {
+            // the `NAME` field should always come first
+            (Field::NAME, Field::NAME) => Ordering::Equal,
+            (Field::NAME, _) => Ordering::Less,
+            (_, Field::NAME) => Ordering::Greater,
+
+            // the `SPAWN_LOCATION` field should always come last (it's long)
+            (Field::SPAWN_LOCATION, Field::SPAWN_LOCATION) => Ordering::Equal,
+            (Field::SPAWN_LOCATION, _) => Ordering::Greater,
+            (_, Field::SPAWN_LOCATION) => Ordering::Less,
+            (this, that) => this.cmp(that),
+        }
+    }
+}
+
+impl PartialOrd for Field {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -417,6 +421,38 @@ impl FieldValue {
     }
 }
 
+impl From<proto::field::Value> for FieldValue {
+    fn from(pb: proto::field::Value) -> Self {
+        match pb {
+            proto::field::Value::BoolVal(v) => Self::Bool(v),
+            proto::field::Value::StrVal(v) => Self::Str(v),
+            proto::field::Value::I64Val(v) => Self::I64(v),
+            proto::field::Value::U64Val(v) => Self::U64(v),
+            proto::field::Value::DebugVal(v) => Self::Debug(v),
+        }
+    }
+}
+
+impl Ord for Attribute {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.field
+            .cmp(&other.field)
+            // TODO(eliza): *maybe* this should compare so that larger units are
+            // greater than smaller units (e.g. `ms` > `us`), rather than
+            // alphabetically?
+            // but, meh...
+            .then_with(|| self.unit.cmp(&other.unit))
+    }
+}
+
+impl PartialOrd for Attribute {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+// === impl Attribute ===
+
 impl Attribute {
     fn make_formatted(
         styles: &view::Styles,
@@ -426,6 +462,8 @@ impl Attribute {
         let delim_style = styles.fg(Color::LightBlue).add_modifier(Modifier::DIM);
         let val_style = styles.fg(Color::Yellow);
         let unit_style = styles.fg(Color::LightBlue);
+
+        attributes.sort_unstable();
 
         let mut formatted = Vec::with_capacity(attributes.len());
         let attributes = attributes.iter();
@@ -443,18 +481,6 @@ impl Attribute {
             formatted.push(elems)
         }
         formatted
-    }
-}
-
-impl From<proto::field::Value> for FieldValue {
-    fn from(pb: proto::field::Value) -> Self {
-        match pb {
-            proto::field::Value::BoolVal(v) => Self::Bool(v),
-            proto::field::Value::StrVal(v) => Self::Str(v),
-            proto::field::Value::I64Val(v) => Self::I64(v),
-            proto::field::Value::U64Val(v) => Self::U64(v),
-            proto::field::Value::DebugVal(v) => Self::Debug(v),
-        }
     }
 }
 
