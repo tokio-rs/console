@@ -721,13 +721,8 @@ where
             return;
         }
         let _default = dispatcher::set_default(&self.no_dispatch);
-        self.current_spans
-            .get_or_default()
-            .borrow_mut()
-            .push(id.clone());
-
         let parent_id = cx.span(id).and_then(|s| s.parent().map(|p| p.id()));
-        self.send(
+        let sent = self.send(
             &self.shared.dropped_tasks,
             Event::Enter {
                 at: SystemTime::now(),
@@ -735,6 +730,15 @@ where
                 parent_id,
             },
         );
+
+        // if we were able to record the send successfully, track entering the
+        // span. if not, ignore the enter, to avoid inconsistent data.
+        if sent {
+            self.current_spans
+                .get_or_default()
+                .borrow_mut()
+                .push(id.clone());
+        }
     }
 
     fn on_exit(&self, id: &span::Id, cx: Context<'_, S>) {
@@ -744,7 +748,12 @@ where
 
         let _default = dispatcher::set_default(&self.no_dispatch);
         if let Some(spans) = self.current_spans.get() {
-            spans.borrow_mut().pop(id);
+            if !spans.borrow_mut().pop(id) {
+                // we did not actually pop the span --- entering it may not have
+                // been successfully recorded. in this case, ignore the exit,
+                // since the aggregator was never informed of the entry.
+                return;
+            }
         }
 
         let parent_id = cx.span(id).and_then(|s| s.parent().map(|p| p.id()));
