@@ -21,9 +21,7 @@ keywords = [
     "tokio-console",
     "debugging",
     "async",
-    "non-blocking",
     "tonic",
-    "protobuf",
 ]
 
 [features]

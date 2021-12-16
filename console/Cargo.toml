@@ -23,7 +23,6 @@ keywords = [
     "debugging",
     "console",
     "async",
-    "non-blocking",
 ]
 
 [dependencies]
