@@ -19,6 +19,17 @@ message AsyncOpUpdate {
     repeated AsyncOp new_async_ops = 1;
     // Any async op stats that have changed since the last update.
     map<uint64, Stats> stats_update = 2;
+    // A count of how many async op events (e.g. polls, creation, etc) were not
+    // recorded because the application's event buffer was at capacity.
+    //
+    // If everything is working normally, this should be 0. If it is greater
+    // than 0, that may indicate that some data is missing from this update, and
+    // it may be necessary to increase the number of events buffered by the
+    // application to ensure that data loss is avoided.
+    //
+    // If the application's instrumentation ensures reliable delivery of events,
+    // this will always be 0.
+    uint64 dropped_events = 3;
 }
 
 // An async operation.
