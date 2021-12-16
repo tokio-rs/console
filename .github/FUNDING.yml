@@ -1,0 +1,10 @@
+# These are supported funding model platforms
+
+github:
+  # To support development of the console and other Tokio projects,
+  # you can donate to the Tokio organization!
+  - tokio-rs
+  # Eliza is willing to offer hands-on support --- including help
+  # with issues involving proprietary software --- in her free time,
+  # in exchange for a donation.
+  - hawkw
