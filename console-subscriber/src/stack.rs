@@ -34,6 +34,9 @@ impl SpanStack {
         !duplicate
     }
 
+    /// Pop a currently entered span.
+    ///
+    /// Returns `true` if the span was actually exited.
     #[inline]
     pub(crate) fn pop(&mut self, expected_id: &Id) -> bool {
         if let Some((idx, _)) = self
