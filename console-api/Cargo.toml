@@ -4,6 +4,27 @@ version = "0.1.0"
 license = "MIT"
 edition = "2021"
 rust-version = "1.56.0"
+authors = ["Eliza Weisman <eliza@buoyant.io>", "Tokio Contributors <team@tokio.rs>",]
+readme = "README.md"
+repository = "https://github.com/tokio-rs/console/"
+homepage = "https://github.com/tokio-rs/console/blob/main/console-api"
+description = """
+Protobuf wire format bindings for the Tokio console.
+"""
+categories = [
+    "development-tools::debugging",
+    "development-tools::profiling",
+    "asynchronous",
+]
+keywords = [
+    "tracing",
+    "tokio-console",
+    "debugging",
+    "async",
+    "non-blocking",
+    "tonic",
+    "protobuf",
+]
 
 [features]
 # Generate code that is compatible with Tonic's `transport` module.
@@ -22,3 +43,8 @@ tracing-core = "0.1.17"
 tonic-build = { version = "0.6", default-features = false, features = [
     "prost",
 ] }
+
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

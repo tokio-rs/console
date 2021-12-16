@@ -1,7 +1,7 @@
 # tokio-console subscriber
 
 &#x1F4E1;&#xFE0F;  A [`tracing-subscriber`] [`Layer`] for collecting
-[`tokio-console`] instrumentation.
+[`tokio-console`] telemetry.
 
 [![crates.io][crates-badge]][crates-url]
 [![Documentation][docs-badge]][docs-url]

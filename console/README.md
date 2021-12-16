@@ -1,6 +1,7 @@
 # tokio-console CLI
 
-&#x1f39b;&#xfe0f; The [`tokio-console`] command-line application.
+&#x1f39b;&#xfe0f; The [Tokio console][`tokio-console`]: a debugger for
+asynchronous Rust programs.
 
 [![crates.io][crates-badge]][crates-url]
 [![Documentation][docs-badge]][docs-url]
