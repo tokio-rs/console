@@ -4,8 +4,27 @@ version = "0.1.0"
 license = "MIT"
 edition = "2021"
 rust-version = "1.56.0"
+authors = ["Eliza Weisman <eliza@buoyant.io>", "Tokio Contributors <team@tokio.rs>",]
+readme = "README.md"
+repository = "https://github.com/tokio-rs/console/"
+homepage = "https://github.com/tokio-rs/console/blob/main/console-subscriber"
+description = """
+A `tracing-subscriber::Layer` for collecting Tokio console telemetry.
+"""
+categories = [
+    "development-tools::debugging",
+    "development-tools::profiling",
+    "asynchronous",
+]
+keywords = [
+    "tracing",
+    "tracing-subscriber",
+    "tokio-console",
+    "debugging",
+    "async",
+    "non-blocking",
+]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
 default = []
 parking_lot = ["parking_lot_crate", "tracing-subscriber/parking_lot"]
@@ -30,6 +49,9 @@ parking_lot_crate = { package = "parking_lot", version = "0.11", optional = true
 humantime = "2.1.0"
 
 [dev-dependencies]
-
 tokio = { version = "^1.7", features = ["full", "rt-multi-thread"] }
 futures = "0.3"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

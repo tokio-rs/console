@@ -5,6 +5,26 @@ license = "MIT"
 repository = "https://github.com/tokio-rs/console"
 edition = "2021"
 rust-version = "1.56.0"
+authors = ["Eliza Weisman <eliza@buoyant.io>", "Tokio Contributors <team@tokio.rs>",]
+readme = "README.md"
+homepage = "https://github.com/tokio-rs/console/blob/main/console"
+description = """
+The Tokio console: a debugger for async Rust.
+"""
+categories = [
+    "development-tools::debugging",
+    "development-tools::profiling",
+    "command-line-utilities",
+    "asynchronous",
+]
+keywords = [
+    "tracing",
+    "tokio-console",
+    "debugging",
+    "console",
+    "async",
+    "non-blocking",
+]
 
 [dependencies]
 atty = "0.2"
