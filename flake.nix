@@ -13,8 +13,8 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        tokio-console = import ./default.nix { inherit pkgs; };
-        devShell = import ./shell.nix { inherit pkgs; };
+        tokio-console = import ./nix { inherit pkgs; };
+        devShell = import ./nix/shell.nix { inherit pkgs; };
       in
       {
         inherit devShell;

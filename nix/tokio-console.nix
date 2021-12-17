@@ -17,8 +17,6 @@ let
       name = "src";
     };
 
-  cargoTOML = lib.importTOML ./console/Cargo.toml;
-
   # Ignore some extra things that don't factor into the main build to help with
   # caching.
   extraIgnores = ''
@@ -33,7 +31,9 @@ let
     /LICENSE
   '';
 
-  src = gitignoreSource extraIgnores ./.;
+  src = gitignoreSource extraIgnores ../.;
+
+  cargoTOML = lib.importTOML "${src}/console/Cargo.toml";
 in
 rustPlatform.buildRustPackage rec {
   pname = cargoTOML.package.name;
