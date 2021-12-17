@@ -4,23 +4,20 @@ pub use tui::{backend::CrosstermBackend, Terminal};
 
 pub fn init_crossterm() -> color_eyre::Result<(Terminal<CrosstermBackend<io::Stdout>>, OnShutdown)>
 {
-    use crossterm::{
-        event::{DisableMouseCapture, EnableMouseCapture},
-        terminal::{self, EnterAlternateScreen, LeaveAlternateScreen},
-    };
+    use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
     terminal::enable_raw_mode().wrap_err("Failed to enable crossterm raw mode")?;
 
     let mut stdout = std::io::stdout();
-    crossterm::execute!(stdout, EnterAlternateScreen, EnableMouseCapture)
-        .wrap_err("Failed to enable crossterm alternate screen and mouse capture")?;
+    crossterm::execute!(stdout, EnterAlternateScreen)
+        .wrap_err("Failed to enable crossterm alternate screen")?;
     let backend = CrosstermBackend::new(io::stdout());
     let term = Terminal::new(backend).wrap_err("Failed to create crossterm terminal")?;
 
     let cleanup = OnShutdown::new(|| {
         // Be a good terminal citizen...
         let mut stdout = std::io::stdout();
-        crossterm::execute!(stdout, LeaveAlternateScreen, DisableMouseCapture)
-            .wrap_err("Failed to disable crossterm alternate screen and mouse capture")?;
+        crossterm::execute!(stdout, LeaveAlternateScreen)
+            .wrap_err("Failed to disable crossterm alternate screen")?;
         terminal::disable_raw_mode().wrap_err("Failed to enable crossterm raw mode")?;
         Ok(())
     });
