@@ -5,12 +5,6 @@
 [![Build Status][actions-badge]][actions-url]
 [![Discord chat][discord-badge]][discord-url]
 
-⚠️ **extremely serious warning:** this is _pre-alpha_ software undergoing active
-development! currently, the wire format has _no stability guarantees_ &mdash;
-the crates in this repository are not guaranteed to be interoperable except
-within the same Git revision. when these crates are published to crates.io, the
-wire format will follow semver, but currently, anything could happen!
-
 [Chat][discord-url] | [API Documentation (`main` branch)][main-docs]
 
 [main-docs]: https://tokio-console.netlify.app
