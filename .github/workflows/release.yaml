@@ -9,6 +9,8 @@ on:
 
 jobs:
   create-release:
+    # only publish from the origin repository
+    if: github.repository_owner == 'tokio-rs'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -24,7 +26,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  upload-assets:
+  upload-bins:
+    # only publish from the origin repository
+    if: github.repository_owner == 'tokio-rs'
+    # only upload binaries if the tag is a `tokio-console` release
+    if: contains(github.ref, 'tokio-console')
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -32,8 +38,6 @@ jobs:
       steps:
         - uses: actions/checkout@v2
         - uses: taiki-e/upload-rust-binary-action@v1
-          # only upload assets if the tag is a `tokio-console` release
-          if: contains(github.ref, 'tokio-console')
           with:
             bin: tokio-console
           env:
