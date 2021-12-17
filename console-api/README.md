@@ -56,6 +56,14 @@ may be useful for anyone implementing other software that also consumes the
 [`console-subscriber`]: https://crates.io/crates/console-subscriber
 [protobuf]: https://developers.google.com/protocol-buffers
 
+### Stability
+
+&#x26A0;&#xfe0f; The protobuf wire format is not currently considered totally
+stable. While we will try to avoid unnecessary protobuf-incompatible changes,
+protobuf compatibility is only guaranteed within SemVer-compatible releases of
+this crate. For example, the protobuf as of `console-api` v0.2.5 may not be
+backwards-compatible with `console-api` v0.1.12.
+
 ### Crate Feature Flags
 
 This crate provides the following feature flags:
@@ -64,7 +72,7 @@ This crate provides the following feature flags:
   module] (disabled by default)
 
 [Tonic]: https://crates.io/crates/tonic
-[`transport`]: https://docs.rs/tonic/latest/tonic/transport/index.html
+[`transport` module]: https://docs.rs/tonic/latest/tonic/transport/index.html
 
 ## Getting Help
 
