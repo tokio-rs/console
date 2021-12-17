@@ -1,34 +1,12 @@
-name: Release
+name: Upload Binaries
 
 on:
-  push:
-    tags:
-      - console-subscriber-v[0-9]+.*
-      - console-api-v[0-9]+.*
-      - tokio-console-v[0-9]+.*
+  release:
 
 jobs:
-  create-release:
-    # only publish from the origin repository
-    if: github.repository_owner == 'tokio-rs'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: extract tag
-        id: tag
-        run:
-          echo ::set-output name=TAG::$(echo $GITHUB_REF | sed -r 's/.*(console-subscriber|console-api|tokio-console).*/\1/')
-      - uses: taiki-e/create-gh-release-action@v1
-        with:
-          changelog: ${{ steps.tag.outputs.TAG }}/CHANGELOG.md
-          branch: main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   upload-bins:
-    # only upload binaries if we're on the origin repository and if the tag is a
-    # `tokio-console` release
-    if: ${{ github.repository_owner == 'tokio-rs' && contains(github.ref, 'tokio-console') }}
+    # only upload binaries if the tag is a`tokio-console` release
+    if: contains(github.ref, 'tokio-console')
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
