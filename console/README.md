@@ -31,10 +31,11 @@ applications, which collects and displays in-depth diagnostic data on the
 asynchronous tasks, resources, and operations in an application. The console
 system consists of two primary components:
 
-* _instrumentation_, embedded in the application, which collects data from the
-  async runtime and exposes it over the console's [wire format]
-* _consumers_, which connect to the instrumented application, recieve telemetry
-  data, and display it to the user
+* &#x1f4e1;&#xfe0f; _instrumentation_, embedded in the application, which
+  collects data from the async runtime and exposes it over the console's wire
+  format
+* &#x1f6f0;&#xfe0f; _consumers_, which connect to the instrumented application,
+  recieve telemetry data, and display it to the user
 
 This crate is the primary consumer of `tokio-console` telemetry, a command-line
 application that provides an interactive debugging interface.
