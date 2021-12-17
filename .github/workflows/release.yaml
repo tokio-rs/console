@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - console-subscriber-v[0-9]+.*
+      - console-api-v[0-9]+.*
+      - tokio-console-v[0-9]+.*
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: extract tag
+        id: tag
+        run:
+          echo ::set-output name=TAG::$(echo $GITHUB_REF | sed -r
+          's/.*(console-subscriber|console-api|tokio-console).*/\1/'))
+      - uses: taiki-e/create-gh-release-action@v1
+        with:
+          changelog: ${{ steps.tag.outputs.TAG }}/CHANGELOG.md
+          branch: main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  upload-assets:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+      runs-on: ${{ matrix.os }}
+      steps:
+        - uses: actions/checkout@v2
+        - uses: taiki-e/upload-rust-binary-action@v1
+          # only upload assets if the tag is a `tokio-console` release
+          if: contains(github.ref, 'tokio-console')
+          with:
+            bin: tokio-console
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
