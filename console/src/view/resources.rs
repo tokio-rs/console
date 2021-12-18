@@ -14,7 +14,7 @@ use tui::{
     layout,
     style::{self, Color, Style},
     text::Spans,
-    widgets::{Cell, Paragraph, Row, Table},
+    widgets::{Cell, Row, Table},
 };
 
 #[derive(Debug, Default)]
@@ -152,6 +152,8 @@ impl TableList for ResourcesTable {
             table_list_state.len()
         ))]);
 
+        let controls = table::Controls::for_area(&area, styles);
+
         let layout = layout::Layout::default()
             .direction(layout::Direction::Vertical)
             .margin(0);
@@ -159,8 +161,8 @@ impl TableList for ResourcesTable {
         let chunks = layout
             .constraints(
                 [
-                    layout::Constraint::Length(1),
-                    layout::Constraint::Min(area.height - 1),
+                    layout::Constraint::Length(controls.height),
+                    layout::Constraint::Max(area.height),
                 ]
                 .as_ref(),
             )
@@ -189,7 +191,7 @@ impl TableList for ResourcesTable {
             .highlight_style(Style::default().add_modifier(style::Modifier::BOLD));
 
         frame.render_stateful_widget(table, tasks_area, &mut table_list_state.table_state);
-        frame.render_widget(Paragraph::new(table::controls(styles)), controls_area);
+        frame.render_widget(controls.paragraph, controls_area);
 
         table_list_state
             .sorted_items
