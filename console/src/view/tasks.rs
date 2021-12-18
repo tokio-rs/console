@@ -13,7 +13,7 @@ use tui::{
     layout,
     style::{self, Color, Style},
     text::{Span, Spans, Text},
-    widgets::{self, Cell, ListItem, Paragraph, Row, Table},
+    widgets::{self, Cell, ListItem, Row, Table},
 };
 
 #[derive(Debug, Default)]
@@ -200,31 +200,33 @@ impl TableList for TasksTable {
             .direction(layout::Direction::Vertical)
             .margin(0);
 
+        let controls = table::Controls::for_area(&area, styles);
+
         let (controls_area, tasks_area, warnings_area) = if warnings.is_empty() {
             let chunks = layout
                 .constraints(
                     [
-                        layout::Constraint::Length(1),
-                        layout::Constraint::Min(area.height - 1),
+                        layout::Constraint::Length(controls.height),
+                        layout::Constraint::Max(area.height),
                     ]
                     .as_ref(),
                 )
                 .split(area);
             (chunks[0], chunks[1], None)
         } else {
+            let warnings_height = warnings.len() as u16 + 2;
             let chunks = layout
                 .constraints(
                     [
-                        layout::Constraint::Length(1),
-                        layout::Constraint::Length(warnings.len() as u16 + 2),
-                        layout::Constraint::Min(area.height - 1),
+                        layout::Constraint::Length(controls.height),
+                        layout::Constraint::Length(warnings_height),
+                        layout::Constraint::Max(area.height),
                     ]
                     .as_ref(),
                 )
                 .split(area);
             (chunks[0], chunks[2], Some(chunks[1]))
         };
-
         // Fill all remaining characters in the frame with the task's fields.
         //
         // Ideally we'd use Min(0), and it would fill the rest of the space. But that is broken
@@ -254,7 +256,7 @@ impl TableList for TasksTable {
             .highlight_style(Style::default().add_modifier(style::Modifier::BOLD));
 
         frame.render_stateful_widget(table, tasks_area, &mut table_list_state.table_state);
-        frame.render_widget(Paragraph::new(table::controls(styles)), controls_area);
+        frame.render_widget(controls.paragraph, controls_area);
 
         if let Some(area) = warnings_area {
             let block = styles
