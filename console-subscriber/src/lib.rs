@@ -27,6 +27,7 @@ mod builder;
 mod callsites;
 mod record;
 mod stack;
+mod stats;
 pub(crate) mod sync;
 mod visitors;
 
