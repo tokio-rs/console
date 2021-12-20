@@ -1074,9 +1074,9 @@ fn update_attribute(attribute: &mut Attribute, update: &AttributeUpdate) {
         (Some(DebugVal(v)), Some(DebugVal(upd))) => *v = upd,
 
         (Some(U64Val(v)), Some(U64Val(upd))) => match update.op {
-            Some(AttributeUpdateOp::Add) => *v += upd,
+            Some(AttributeUpdateOp::Add) => *v = v.saturating_add(upd),
 
-            Some(AttributeUpdateOp::Sub) => *v -= upd,
+            Some(AttributeUpdateOp::Sub) => *v = v.saturating_sub(upd),
 
             Some(AttributeUpdateOp::Override) => *v = upd,
 
@@ -1087,9 +1087,9 @@ fn update_attribute(attribute: &mut Attribute, update: &AttributeUpdate) {
         },
 
         (Some(I64Val(v)), Some(I64Val(upd))) => match update.op {
-            Some(AttributeUpdateOp::Add) => *v += upd,
+            Some(AttributeUpdateOp::Add) => *v = v.saturating_add(upd),
 
-            Some(AttributeUpdateOp::Sub) => *v -= upd,
+            Some(AttributeUpdateOp::Sub) => *v = v.saturating_sub(upd),
 
             Some(AttributeUpdateOp::Override) => *v = upd,
 
