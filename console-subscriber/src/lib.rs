@@ -166,7 +166,7 @@ enum Event {
     Spawn {
         id: span::Id,
         metadata: &'static Metadata<'static>,
-        at: SystemTime,
+        stats: Arc<stats::TaskStats>,
         fields: Vec<proto::Field>,
         location: Option<proto::Location>,
     },

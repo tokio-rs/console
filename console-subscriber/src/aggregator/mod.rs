@@ -122,19 +122,6 @@ enum Temporality {
     Live,
     Paused,
 }
-
-#[derive(Default)]
-struct PollStats {
-    /// The number of polls in progress
-    current_polls: u64,
-    /// The total number of polls
-    polls: u64,
-    first_poll: Option<SystemTime>,
-    last_poll_started: Option<SystemTime>,
-    last_poll_ended: Option<SystemTime>,
-    busy_time: Duration,
-}
-
 // Represent static data for resources
 struct Resource {
     id: Id,
@@ -169,22 +156,6 @@ struct Task {
     metadata: &'static Metadata<'static>,
     fields: Vec<proto::Field>,
     location: Option<proto::Location>,
-}
-
-struct TaskStats {
-    // task stats
-    created_at: Option<SystemTime>,
-    dropped_at: Option<SystemTime>,
-
-    // waker stats
-    wakes: u64,
-    waker_clones: u64,
-    waker_drops: u64,
-    self_wakes: u64,
-    last_wake: Option<SystemTime>,
-
-    poll_times_histogram: Histogram<u64>,
-    poll_stats: PollStats,
 }
 
 struct AsyncOp {
@@ -565,7 +536,7 @@ impl Aggregator {
             Event::Spawn {
                 id,
                 metadata,
-                at,
+                stats,
                 fields,
                 location,
             } => {
@@ -580,13 +551,7 @@ impl Aggregator {
                     },
                 );
 
-                self.task_stats.insert(
-                    id,
-                    TaskStats {
-                        created_at: Some(at),
-                        ..Default::default()
-                    },
-                );
+                self.task_stats.insert(id, stats);
             }
 
             Event::Enter { id, parent_id, at } => {
