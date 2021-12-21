@@ -116,25 +116,34 @@ impl TaskStats {
         }
     }
 
-    pub(crate) fn clone_waker(&self) {
-        self.waker_clones.fetch_add(1, Release);
+    pub(crate) fn record_wake_op(&self, op: crate::WakeOp, at: SystemTime) {
+        use crate::WakeOp;
+        match op {
+            WakeOp::Clone => {
+                self.waker_clones.fetch_add(1, Release);
+            }
+            WakeOp::Drop => {
+                self.waker_drops.fetch_add(1, Release);
+            }
+            WakeOp::WakeByRef { self_wake } => self.wake(at, self_wake),
+            WakeOp::Wake { self_wake } => {
+                // Note: `Waker::wake` does *not* call the `drop`
+                // implementation, so waking by value doesn't
+                // trigger a drop event. so, count this as a `drop`
+                // to ensure the task's number of wakers can be
+                // calculated as `clones` - `drops`.
+                //
+                // see
+                // https://github.com/rust-lang/rust/blob/673d0db5e393e9c64897005b470bfeb6d5aec61b/library/core/src/task/wake.rs#L211-L212
+                self.waker_drops.fetch_add(1, Release);
+
+                self.wake(at, self_wake)
+            }
+        }
         self.make_dirty();
     }
 
-    pub(crate) fn drop_waker(&self) {
-        self.waker_drops.fetch_add(1, Release);
-        self.make_dirty();
-    }
-
-    pub(crate) fn wake(&self, at: SystemTime, self_wake: bool) {
-        self.wake2(at, self_wake, true)
-    }
-
-    pub(crate) fn wake_by_ref(&self, at: SystemTime, self_wake: bool) {
-        self.wake2(at, self_wake, false)
-    }
-
-    fn wake2(&self, at: SystemTime, self_wake: bool, by_val: bool) {
+    fn wake(&self, at: SystemTime, self_wake: bool) {
         let mut timestamps = self.timestamps.lock();
         timestamps.last_wake = cmp::max(timestamps.last_wake, Some(at));
         self.wakes.fetch_add(1, Release);
@@ -142,20 +151,6 @@ impl TaskStats {
         if self_wake {
             self.wakes.fetch_add(1, Release);
         }
-
-        if by_val {
-            // Note: `Waker::wake` does *not* call the `drop`
-            // implementation, so waking by value doesn't
-            // trigger a drop event. so, count this as a `drop`
-            // to ensure the task's number of wakers can be
-            // calculated as `clones` - `drops`.
-            //
-            // see
-            // https://github.com/rust-lang/rust/blob/673d0db5e393e9c64897005b470bfeb6d5aec61b/library/core/src/task/wake.rs#L211-L212
-            self.waker_drops.fetch_add(1, Release);
-        }
-
-        self.make_dirty();
     }
 
     pub(crate) fn start_poll(&self, at: SystemTime) {
