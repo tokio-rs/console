@@ -336,7 +336,7 @@ impl ConsoleLayer {
     /// events being dropped more frequently.
     ///
     /// See also [`Builder::event_buffer_capacity`].
-    pub const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 1024 * 10;
+    pub const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 1024 * 100;
     /// Default maximum capacity for th echannel of events sent from a
     /// [`Server`] to each subscribed client.
     ///
