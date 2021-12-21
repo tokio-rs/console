@@ -1,6 +1,7 @@
-use crate::sync::Mutex;
+use crate::{attribute, sync::Mutex};
 use hdrhistogram::Histogram;
 use std::cmp;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::*};
 use std::time::{Duration, SystemTime};
 
@@ -26,9 +27,18 @@ pub(crate) trait Unsent {
     fn take_unsent(&self) -> bool;
 }
 
+// An entity (e.g Task, Resource) that at some point in
+// time can be dropped. This generally refers to spans that
+// have been closed indicating that a task, async op or a
+// resource is not in use anymore
+pub(crate) trait DroppedAt {
+    fn dropped_at(&self) -> Option<SystemTime>;
+}
+
 #[derive(Debug)]
 pub(crate) struct TaskStats {
-    dirty: AtomicBool,
+    is_dirty: AtomicBool,
+    is_dropped: AtomicBool,
     // task stats
     created_at: SystemTime,
     timestamps: Mutex<TaskTimestamps>,
@@ -48,17 +58,24 @@ struct TaskTimestamps {
     last_wake: Option<SystemTime>,
 }
 
-#[derive(Debug, Default)]
-struct AsyncOpStats {
-    created_at: SystemTime,
-    dropped_at: Option<SystemTime>,
-    task_id: Option<Id>,
+#[derive(Debug)]
+pub(crate) struct AsyncOpStats {
+    task_id: AtomicUsize,
+    stats: ResourceStats,
     poll_stats: PollStats,
-    attributes: HashMap<FieldKey, Attribute>,
+}
+
+#[derive(Debug)]
+pub(crate) struct ResourceStats {
+    is_dirty: AtomicBool,
+    is_dropped: AtomicBool,
+    created_at: SystemTime,
+    dropped_at: Mutex<Option<SystemTime>>,
+    attributes: Mutex<attribute::Attributes>,
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct PollStats {
+struct PollStats {
     /// The number of polls in progress
     current_polls: AtomicUsize,
     /// The total number of polls
@@ -81,7 +98,8 @@ impl TaskStats {
         // grows exponentially with higher a sigfig
         let poll_times_histogram = Histogram::<u64>::new(2).unwrap();
         Self {
-            dirty: AtomicBool::new(true),
+            is_dirty: AtomicBool::new(true),
+            is_dropped: AtomicBool::new(false),
             created_at,
             timestamps: Mutex::new(TaskTimestamps::default()),
             poll_stats: PollStats {
@@ -100,23 +118,72 @@ impl TaskStats {
 
     pub(crate) fn clone_waker(&self) {
         self.waker_clones.fetch_add(1, Release);
-        let _ = self.dirty.compare_exchange(false, true, AcqRel, Acquire);
+        self.make_dirty();
     }
 
     pub(crate) fn drop_waker(&self) {
         self.waker_drops.fetch_add(1, Release);
-        let _ = self.dirty.compare_exchange(false, true, AcqRel, Acquire);
+        self.make_dirty();
     }
 
     pub(crate) fn wake(&self, at: SystemTime, self_wake: bool) {
+        self.wake2(at, self_wake, true)
+    }
+
+    pub(crate) fn wake_by_ref(&self, at: SystemTime, self_wake: bool) {
+        self.wake2(at, self_wake, false)
+    }
+
+    fn wake2(&self, at: SystemTime, self_wake: bool, by_val: bool) {
         let mut timestamps = self.timestamps.lock();
         timestamps.last_wake = cmp::max(timestamps.last_wake, Some(at));
         self.wakes.fetch_add(1, Release);
+
         if self_wake {
             self.wakes.fetch_add(1, Release);
         }
 
-        let _ = self.dirty.compare_exchange(false, true, AcqRel, Acquire);
+        if by_val {
+            // Note: `Waker::wake` does *not* call the `drop`
+            // implementation, so waking by value doesn't
+            // trigger a drop event. so, count this as a `drop`
+            // to ensure the task's number of wakers can be
+            // calculated as `clones` - `drops`.
+            //
+            // see
+            // https://github.com/rust-lang/rust/blob/673d0db5e393e9c64897005b470bfeb6d5aec61b/library/core/src/task/wake.rs#L211-L212
+            self.waker_drops.fetch_add(1, Release);
+        }
+
+        self.make_dirty();
+    }
+
+    pub(crate) fn start_poll(&self, at: SystemTime) {
+        self.poll_stats.start_poll(at);
+        self.make_dirty();
+    }
+
+    pub(crate) fn end_poll(&self, at: SystemTime) {
+        self.poll_stats.end_poll(at);
+        self.make_dirty();
+    }
+
+    pub(crate) fn drop_task(&self, dropped_at: SystemTime) {
+        if self.is_dropped.swap(true, AcqRel) {
+            // The task was already dropped.
+            // TODO(eliza): this could maybe panic in debug mode...
+            return;
+        }
+
+        let mut timestamps = self.timestamps.lock();
+        let _prev = timestamps.dropped_at.replace(dropped_at);
+        debug_assert_eq!(_prev, None, "tried to drop a task twice; this is a bug!");
+        self.make_dirty();
+    }
+
+    #[inline]
+    fn make_dirty(&self) {
+        self.is_dirty.swap(true, AcqRel);
     }
 }
 
@@ -142,16 +209,149 @@ impl ToProto for TaskStats {
 impl Unsent for TaskStats {
     #[inline]
     fn take_unsent(&self) -> bool {
-        self.dirty
-            .compare_exchange(true, false, AcqRel, Acquire)
-            .is_ok()
+        self.is_dirty.swap(false, AcqRel)
+    }
+}
+
+impl DroppedAt for TaskStats {
+    fn dropped_at(&self) -> Option<SystemTime> {
+        // avoid acquiring the lock if we know we haven't tried to drop this
+        // thing yet
+        if self.is_dropped.load(Acquire) {
+            return self.timestamps.lock().dropped_at;
+        }
+
+        None
+    }
+}
+
+// === impl AsyncOpStats ===
+
+impl AsyncOpStats {
+    pub(crate) fn new(created_at: SystemTime) -> Self {
+        Self {
+            task_id: AtomicUsize::new(0),
+            stats: ResourceStats::new(created_at),
+            poll_stats: PollStats::default(),
+        }
+    }
+
+    pub(crate) fn task_id(&self) -> Option<u64> {
+        let id = self.task_id.load(Acquire);
+        if id > 0 {
+            Some(id as u64)
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn drop_async_op(&self, dropped_at: SystemTime) {
+        self.stats.drop_resource(dropped_at)
+    }
+
+    pub(crate) fn start_poll(&self, at: SystemTime) {
+        self.poll_stats.start_poll(at);
+        self.make_dirty();
+    }
+
+    pub(crate) fn end_poll(&self, at: SystemTime) {
+        self.poll_stats.end_poll(at);
+        self.make_dirty();
+    }
+
+    #[inline]
+    fn make_dirty(&self) {
+        self.stats.make_dirty()
+    }
+}
+
+impl Unsent for AsyncOpStats {
+    #[inline]
+    fn take_unsent(&self) -> bool {
+        self.stats.take_unsent()
+    }
+}
+
+impl DroppedAt for AsyncOpStats {
+    fn dropped_at(&self) -> Option<SystemTime> {
+        self.stats.dropped_at()
+    }
+}
+
+impl ToProto for AsyncOpStats {
+    type Output = proto::async_ops::Stats;
+
+    fn to_proto(&self) -> Self::Output {
+        let attributes = self.stats.attributes.lock().values().cloned().collect();
+        proto::async_ops::Stats {
+            poll_stats: Some(self.poll_stats.to_proto()),
+            created_at: Some(self.stats.created_at.into()),
+            dropped_at: self.stats.dropped_at.lock().map(Into::into),
+            task_id: self.task_id().map(Into::into),
+            attributes,
+        }
+    }
+}
+
+// === impl ResourceStats ===
+
+impl ResourceStats {
+    pub(crate) fn new(created_at: SystemTime) -> Self {
+        Self {
+            is_dirty: AtomicBool::new(true),
+            is_dropped: AtomicBool::new(false),
+            created_at,
+            dropped_at: Mutex::new(None),
+            attributes: Default::default(),
+        }
+    }
+
+    #[inline]
+    pub(crate) fn drop_resource(&self, dropped_at: SystemTime) {
+        if self.is_dropped.swap(true, AcqRel) {
+            // The task was already dropped.
+            // TODO(eliza): this could maybe panic in debug mode...
+            return;
+        }
+
+        let mut timestamp = self.dropped_at.lock();
+        let _prev = timestamp.replace(dropped_at);
+        debug_assert_eq!(
+            _prev, None,
+            "tried to drop a resource/async op twice; this is a bug!"
+        );
+        self.make_dirty();
+    }
+
+    #[inline]
+    fn make_dirty(&self) {
+        self.is_dirty.swap(true, AcqRel);
+    }
+}
+
+impl Unsent for ResourceStats {
+    #[inline]
+    fn take_unsent(&self) -> bool {
+        self.is_dirty.swap(false, AcqRel)
+    }
+}
+
+impl DroppedAt for ResourceStats {
+    fn dropped_at(&self) -> Option<SystemTime> {
+        // avoid acquiring the lock if we know we haven't tried to drop this
+        // thing yet
+        if self.is_dropped.load(Acquire) {
+            return *self.dropped_at.lock();
+        }
+
+        None
     }
 }
 
 // === impl PollStats ===
 
 impl PollStats {
-    pub(crate) fn start_poll(&self, at: SystemTime) {
+    fn start_poll(&self, at: SystemTime) {
         if self.current_polls.fetch_add(1, AcqRel) == 0 {
             // We are starting the first poll
             let mut timestamps = self.timestamps.lock();
@@ -165,7 +365,7 @@ impl PollStats {
         }
     }
 
-    pub(crate) fn end_poll(&self, at: SystemTime) {
+    fn end_poll(&self, at: SystemTime) {
         if self.current_polls.fetch_sub(1, AcqRel) == 1 {
             // We are ending the last current poll
             let mut timestamps = self.timestamps.lock();

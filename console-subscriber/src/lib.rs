@@ -23,6 +23,7 @@ use tracing_core::{
 use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
 mod aggregator;
+mod attribute;
 mod builder;
 mod callsites;
 mod record;
