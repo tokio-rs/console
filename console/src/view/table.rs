@@ -40,6 +40,8 @@ pub(crate) struct TableListState<T: TableList> {
     pub(crate) selected_column: usize,
     pub(crate) sort_descending: bool,
     pub(crate) table_state: TableState,
+
+    last_key_event: Option<input::KeyEvent>,
 }
 
 pub(crate) struct Controls {
@@ -66,18 +68,19 @@ impl<T: TableList> TableListState<T> {
         }
     }
 
-    pub(in crate::view) fn key_input(&mut self, input::KeyEvent { code, .. }: input::KeyEvent) {
+    pub(in crate::view) fn key_input(&mut self, event: input::KeyEvent) {
         use input::KeyCode::*;
         let header_len = T::HEADER.len();
+        let code = event.code;
         match code {
-            Left => {
+            Left | Char('h') => {
                 if self.selected_column == 0 {
                     self.selected_column = header_len - 1;
                 } else {
                     self.selected_column -= 1;
                 }
             }
-            Right => {
+            Right | Char('l') => {
                 if self.selected_column == header_len - 1 {
                     self.selected_column = 0;
                 } else {
@@ -85,14 +88,20 @@ impl<T: TableList> TableListState<T> {
                 }
             }
             Char('i') => self.sort_descending = !self.sort_descending,
-            Down => self.scroll_next(),
-            Up => self.scroll_prev(),
+            Down | Char('j') => self.scroll_next(),
+            Up | Char('k') => self.scroll_prev(),
+            Char('G') => self.scroll_to_last(),
+            Char('g') if self.last_key_event.map(|e| e.code) == Some(Char('g')) => {
+                self.scroll_to_first()
+            }
             _ => {} // do nothing for now...
         }
 
         if let Ok(sort_by) = T::Sort::try_from(self.selected_column) {
             self.sort_by = sort_by;
         }
+
+        self.last_key_event = Some(event);
     }
 
     pub(in crate::view) fn scroll_with(
@@ -138,6 +147,14 @@ impl<T: TableList> TableListState<T> {
         })
     }
 
+    pub(in crate::view) fn scroll_to_last(&mut self) {
+        self.scroll_with(|resources, _| resources.len() - 1)
+    }
+
+    pub(in crate::view) fn scroll_to_first(&mut self) {
+        self.scroll_with(|_, _| 0)
+    }
+
     pub(in crate::view) fn selected_item(&self) -> Weak<RefCell<T::Row>> {
         self.table_state
             .selected()
@@ -178,6 +195,7 @@ where
             table_state: Default::default(),
             selected_column,
             sort_descending: false,
+            last_key_event: None,
         }
     }
 }
@@ -187,15 +205,23 @@ impl Controls {
         let text = Text::from(Spans::from(vec![
             Span::raw("controls: "),
             bold(styles.if_utf8("\u{2190}\u{2192}", "left, right")),
+            Span::raw(" or "),
+            bold("h, l"),
             text::Span::raw(" = select column (sort), "),
             bold(styles.if_utf8("\u{2191}\u{2193}", "up, down")),
+            Span::raw(" or "),
+            bold("k, j"),
             text::Span::raw(" = scroll, "),
             bold(styles.if_utf8("\u{21B5}", "enter")),
             text::Span::raw(" = view details, "),
             bold("i"),
             text::Span::raw(" = invert sort (highest/lowest), "),
             bold("q"),
-            text::Span::raw(" = quit"),
+            text::Span::raw(" = quit "),
+            bold("gg"),
+            text::Span::raw(" = scroll to top, "),
+            bold("G"),
+            text::Span::raw(" = scroll to bottom"),
         ]));
 
         // how many lines do we need to display the controls?
