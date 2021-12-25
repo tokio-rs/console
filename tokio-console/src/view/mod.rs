@@ -1,3 +1,5 @@
+use crate::intern::{InternedStr, Strings};
+use crate::view::help::HelpView;
 use crate::view::{resources::ResourcesTable, table::TableListState, tasks::TasksTable};
 use crate::{input, state::State};
 use std::{borrow::Cow, cmp};
@@ -8,6 +10,7 @@ use tui::{
 };
 
 mod async_ops;
+mod help;
 mod mini_histogram;
 mod resource;
 mod resources;
@@ -36,6 +39,8 @@ pub struct View {
     tasks_list: TableListState<TasksTable, 11>,
     resources_list: TableListState<ResourcesTable, 9>,
     state: ViewState,
+    help: HelpView,
+    show_help: bool,
     pub(crate) styles: Styles,
 }
 
@@ -89,6 +94,8 @@ impl View {
             state: ViewState::TasksList,
             tasks_list: TableListState::<TasksTable, 11>::default(),
             resources_list: TableListState::<ResourcesTable, 9>::default(),
+            help: HelpView::new(String::new()),
+            show_help: false,
             styles,
         }
     }
@@ -164,6 +171,17 @@ impl View {
                     }
                 }
             }
+            _ => {
+                // If at any point we encounter `h` we display the help text for that particular view
+                match event {
+                    key!(Char('?')) => {
+                        self.show_help = true;
+                    }
+                    _ => {
+                        todo!()
+                    }
+                }
+            }
         }
         update_kind
     }
@@ -191,6 +209,10 @@ impl View {
             ViewState::ResourceInstance(ref mut view) => {
                 view.render(&self.styles, frame, area, state);
             }
+        }
+
+        if self.show_help {
+            self.help.render(&self.styles, frame, area, state);
         }
 
         state.retain_active();
