@@ -1,6 +1,6 @@
 use crate::{
     intern::{self, InternedStr},
-    state::{format_location, pb_duration, Field, Metadata, Visibility},
+    state::{format_location, pb_duration, Field, Ids, Metadata, Visibility},
     util::Percentage,
     view,
     warnings::Linter,
@@ -19,6 +19,7 @@ use tui::{style::Color, text::Span};
 #[derive(Default, Debug)]
 pub(crate) struct TasksState {
     tasks: HashMap<u64, Rc<RefCell<Task>>>,
+    pub(crate) ids: Ids,
     new_tasks: Vec<TaskRef>,
     pub(crate) linters: Vec<Linter<Task>>,
 }
@@ -149,9 +150,13 @@ impl TasksState {
                 .collect::<Vec<_>>();
 
             let formatted_fields = Field::make_formatted(styles, &mut fields);
-            let id = task.id?.id;
-            let stats = stats_update.remove(&id)?.into();
+            let id = task.id?;
+
+            let stats = stats_update.remove(&id.id)?.into();
             let location = format_location(task.location);
+
+            // remap the server's ID to a pretty, sequential task ID
+            let id = self.ids.id_for(id.id);
 
             let short_desc = strings.string(match name.as_ref() {
                 Some(name) => format!("{} ({})", id, name),
@@ -175,6 +180,7 @@ impl TasksState {
         });
         self.tasks.extend(new_tasks);
         for (id, stats) in stats_update {
+            let id = self.ids.id_for(id);
             if let Some(task) = self.tasks.get_mut(&id) {
                 let mut task = task.borrow_mut();
                 tracing::trace!(?task, "processing stats update for");

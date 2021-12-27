@@ -8,7 +8,7 @@ use console_api as proto;
 use std::{
     cell::RefCell,
     cmp::Ordering,
-    collections::HashMap,
+    collections::hash_map::{Entry, HashMap},
     convert::{TryFrom, TryInto},
     fmt,
     io::Cursor,
@@ -39,6 +39,7 @@ pub(crate) struct State {
     retain_for: Option<Duration>,
     strings: intern::Strings,
 }
+
 pub(crate) enum Visibility {
     Show,
     Hide,
@@ -77,6 +78,12 @@ enum Temporality {
 pub(crate) struct Attribute {
     field: Field,
     unit: Option<String>,
+}
+
+#[derive(Debug)]
+pub(crate) struct Ids {
+    next: u64,
+    map: HashMap<u64, u64>,
 }
 
 impl State {
@@ -158,6 +165,7 @@ impl State {
                 &mut self.strings,
                 &self.metas,
                 async_ops_update,
+                &mut self.resources_state.ids,
                 visibility,
             )
         }
@@ -481,6 +489,31 @@ impl Attribute {
             formatted.push(elems)
         }
         formatted
+    }
+}
+
+// === impl Ids ===
+
+impl Ids {
+    pub(crate) fn id_for(&mut self, span_id: u64) -> u64 {
+        match self.map.entry(span_id) {
+            Entry::Occupied(entry) => *entry.get(),
+            Entry::Vacant(entry) => {
+                let id = self.next;
+                entry.insert(id);
+                self.next = self.next.wrapping_add(1);
+                id
+            }
+        }
+    }
+}
+
+impl Default for Ids {
+    fn default() -> Self {
+        Self {
+            next: 1,
+            map: Default::default(),
+        }
     }
 }
 
