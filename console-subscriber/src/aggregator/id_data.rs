@@ -1,5 +1,5 @@
-use super::{shrink::ShrinkMap, DroppedAt, Id, Ids, ToProto};
-use std::collections::{HashMap, HashSet};
+use super::{shrink::ShrinkMap, DroppedAt, Id, ToProto};
+use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::time::{Duration, SystemTime};
 
@@ -66,9 +66,12 @@ impl<T> IdData<T> {
         match include {
             Include::UpdatedOnly => self
                 .since_last_update()
-                .map(|(id, d)| (*id, d.to_proto()))
+                .map(|(id, d)| (id.into_u64(), d.to_proto()))
                 .collect(),
-            Include::All => self.all().map(|(id, d)| (*id, d.to_proto())).collect(),
+            Include::All => self
+                .all()
+                .map(|(id, d)| (id.into_u64(), d.to_proto()))
+                .collect(),
         }
     }
 
@@ -78,7 +81,6 @@ impl<T> IdData<T> {
         now: SystemTime,
         retention: Duration,
         has_watchers: bool,
-        ids: &mut Ids,
     ) {
         let _span = tracing::debug_span!(
             "drop_closed",
@@ -90,7 +92,6 @@ impl<T> IdData<T> {
         // drop closed entities
         tracing::trace!(?retention, has_watchers, "dropping closed");
 
-        let mut dropped_ids = HashSet::new();
         stats.data.retain_and_shrink(|id, (stats, dirty)| {
             if let Some(dropped_at) = stats.dropped_at() {
                 let dropped_for = now.duration_since(dropped_at).unwrap_or_default();
@@ -105,10 +106,6 @@ impl<T> IdData<T> {
                     stats.dirty = *dirty,
                     should_drop,
                 );
-
-                if should_drop {
-                    dropped_ids.insert(*id);
-                }
                 return !should_drop;
             }
 
@@ -118,13 +115,6 @@ impl<T> IdData<T> {
         // drop closed entities which no longer have stats.
         self.data
             .retain_and_shrink(|id, (_, _)| stats.data.contains_key(id));
-
-        if !dropped_ids.is_empty() {
-            // drop closed entities which no longer have stats.
-            self.data
-                .retain_and_shrink(|id, (_, _)| stats.data.contains_key(id));
-            ids.remove_all(&dropped_ids);
-        }
     }
 }
 
