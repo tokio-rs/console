@@ -465,13 +465,13 @@ impl Aggregator {
             // Then send the initial state --- if this fails, the subscription is already dead.
             if stream_sender.send(rx).is_ok()
                 && subscription.update(&proto::tasks::TaskDetails {
-                    task_id: Some(id.into()),
+                    task_id: Some(id.clone().into()),
                     now: Some(now.into()),
                     poll_times_histogram: serialize_histogram(&stats.poll_times_histogram).ok(),
                 })
             {
                 self.details_watchers
-                    .entry(id)
+                    .entry(id.clone())
                     .or_insert_with(Vec::new)
                     .push(subscription);
             }
@@ -537,10 +537,10 @@ impl Aggregator {
         let stats = &self.task_stats;
         // Assuming there are much fewer task details subscribers than there are
         // stats updates, iterate over `details_watchers` and compact the map.
-        self.details_watchers.retain_and_shrink(|&id, watchers| {
-            if let Some(task_stats) = stats.get(&id) {
+        self.details_watchers.retain_and_shrink(|id, watchers| {
+            if let Some(task_stats) = stats.get(id) {
                 let details = proto::tasks::TaskDetails {
-                    task_id: Some(id.into()),
+                    task_id: Some(id.clone().into()),
                     now: Some(now.into()),
                     poll_times_histogram: serialize_histogram(&task_stats.poll_times_histogram)
                         .ok(),
@@ -570,9 +570,9 @@ impl Aggregator {
                 location,
             } => {
                 self.tasks.insert(
-                    id,
+                    id.clone(),
                     Task {
-                        id,
+                        id: id.clone(),
                         metadata,
                         fields,
                         location,
@@ -689,9 +689,9 @@ impl Aggregator {
                 ..
             } => {
                 self.resources.insert(
-                    id,
+                    id.clone(),
                     Resource {
-                        id,
+                        id: id.clone(),
                         parent_id,
                         kind,
                         metadata,
@@ -719,8 +719,8 @@ impl Aggregator {
                 task_id,
                 is_ready,
             } => {
-                let mut async_op_stats = self.async_op_stats.update_or_default(async_op_id);
-                async_op_stats.task_id.get_or_insert(task_id);
+                let mut async_op_stats = self.async_op_stats.update_or_default(async_op_id.clone());
+                async_op_stats.task_id.get_or_insert(task_id.clone());
 
                 let poll_op = proto::resources::PollOp {
                     metadata: Some(metadata.into()),
@@ -741,7 +741,7 @@ impl Aggregator {
                 update,
                 ..
             } => {
-                let mut to_update = vec![(update_id, update_type.clone())];
+                let mut to_update = vec![(update_id.clone(), update_type.clone())];
 
                 fn update_entry(e: Entry<'_, FieldKey, Attribute>, upd: &AttributeUpdate) {
                     e.and_modify(|attr| update_attribute(attr, upd))
@@ -756,7 +756,7 @@ impl Aggregator {
                             .and_then(|r| self.resources.get(r.parent_id.as_ref()?))
                             .filter(|parent| parent.inherit_child_attrs)
                         {
-                            to_update.push((parent.id, UpdateType::Resource));
+                            to_update.push((parent.id.clone(), UpdateType::Resource));
                         }
                     }
                     UpdateType::AsyncOp => {
@@ -766,7 +766,7 @@ impl Aggregator {
                             .and_then(|r| self.async_ops.get(r.parent_id.as_ref()?))
                             .filter(|parent| parent.inherit_child_attrs)
                         {
-                            to_update.push((parent.id, UpdateType::AsyncOp));
+                            to_update.push((parent.id.clone(), UpdateType::AsyncOp));
                         }
                     }
                 }
@@ -781,7 +781,7 @@ impl Aggregator {
                     };
 
                     let upd_key = FieldKey {
-                        update_id,
+                        update_id: update_id.clone(),
                         field_name,
                     };
 
@@ -815,9 +815,9 @@ impl Aggregator {
                 ..
             } => {
                 self.async_ops.insert(
-                    id,
+                    id.clone(),
                     AsyncOp {
-                        id,
+                        id: id.clone(),
                         resource_id,
                         metadata,
                         source,
@@ -891,7 +891,7 @@ impl ToProto for Task {
 
     fn to_proto(&self) -> Self::Output {
         proto::tasks::Task {
-            id: Some(self.id.into()),
+            id: Some(self.id.clone().into()),
             // TODO: more kinds of tasks...
             kind: proto::tasks::task::Kind::Spawn as i32,
             metadata: Some(self.metadata.into()),
@@ -924,8 +924,8 @@ impl ToProto for Resource {
 
     fn to_proto(&self) -> Self::Output {
         proto::resources::Resource {
-            id: Some(self.id.into()),
-            parent_resource_id: self.parent_id.map(Into::into),
+            id: Some(self.id.clone().into()),
+            parent_resource_id: self.parent_id.clone().map(Into::into),
             kind: Some(self.kind.clone()),
             metadata: Some(self.metadata.into()),
             concrete_type: self.concrete_type.clone(),
@@ -953,11 +953,11 @@ impl ToProto for AsyncOp {
 
     fn to_proto(&self) -> Self::Output {
         proto::async_ops::AsyncOp {
-            id: Some(self.id.into()),
+            id: Some(self.id.clone().into()),
             metadata: Some(self.metadata.into()),
-            resource_id: Some(self.resource_id.into()),
+            resource_id: Some(self.resource_id.clone().into()),
             source: self.source.clone(),
-            parent_async_op_id: self.parent_id.map(Into::into),
+            parent_async_op_id: self.parent_id.clone().map(Into::into),
         }
     }
 }
@@ -971,7 +971,7 @@ impl ToProto for AsyncOpStats {
             poll_stats: Some(self.poll_stats.to_proto()),
             created_at: self.created_at.map(Into::into),
             dropped_at: self.dropped_at.map(Into::into),
-            task_id: self.task_id.map(Into::into),
+            task_id: self.task_id.clone().map(Into::into),
             attributes,
         }
     }
