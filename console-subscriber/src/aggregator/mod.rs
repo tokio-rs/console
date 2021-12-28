@@ -93,9 +93,6 @@ pub(crate) struct Aggregator {
     /// This is emptied on every state update.
     new_poll_ops: Vec<proto::resources::PollOp>,
 
-    /// A sink to record all events to a file.
-    recorder: Option<Recorder>,
-
     /// The time "state" of the aggregator, such as paused or live.
     temporality: Temporality,
 }
@@ -168,10 +165,6 @@ impl Aggregator {
             async_op_stats: IdData::default(),
             all_poll_ops: Default::default(),
             new_poll_ops: Default::default(),
-            recorder: builder
-                .recording_path
-                .as_ref()
-                .map(|path| Recorder::new(path).expect("creating recorder")),
             temporality: Temporality::Live,
         }
     }
@@ -232,10 +225,6 @@ impl Aggregator {
             while let Some(event) = self.events.recv().now_or_never() {
                 match event {
                     Some(event) => {
-                        // always be recording...
-                        if let Some(ref recorder) = self.recorder {
-                            recorder.record(&event);
-                        }
                         self.update_state(event);
                         drained = true;
                     }

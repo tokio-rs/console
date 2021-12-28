@@ -39,6 +39,7 @@ mod visitors;
 use aggregator::Aggregator;
 pub use builder::Builder;
 use callsites::Callsites;
+use record::Recorder;
 use stack::SpanStack;
 use visitors::{AsyncOpVisitor, ResourceVisitor, ResourceVisitorResult, TaskVisitor, WakerVisitor};
 
@@ -110,6 +111,9 @@ pub struct ConsoleLayer {
 
     /// Used for unsetting the default dispatcher inside of span callbacks.
     no_dispatch: Dispatch,
+
+    /// A sink to record all events to a file.
+    recorder: Option<Recorder>,
 }
 
 /// A gRPC [`Server`] that implements the [`tokio-console` wire format][wire].
@@ -293,7 +297,10 @@ impl ConsoleLayer {
         // Conservatively, start to trigger a flush when half the channel is full.
         // This tries to reduce the chance of losing events to a full channel.
         let flush_under_capacity = config.event_buffer_capacity / 2;
-
+        let recorder = config
+            .recording_path
+            .as_ref()
+            .map(|path| Recorder::new(path).expect("creating recorder"));
         let server = Server {
             aggregator: Some(aggregator),
             addr: config.server_addr,
@@ -314,6 +321,7 @@ impl ConsoleLayer {
             resource_state_update_callsites: Callsites::default(),
             async_op_state_update_callsites: Callsites::default(),
             no_dispatch: Dispatch::new(NoSubscriber::default()),
+            recorder,
         };
         (layer, server)
     }
@@ -462,6 +470,12 @@ impl ConsoleLayer {
 
         sent
     }
+
+    fn record(&self, event: impl FnOnce() -> record::Event) {
+        if let Some(ref recorder) = self.recorder {
+            recorder.record(event());
+        }
+    }
 }
 
 impl<S> Layer<S> for ConsoleLayer
@@ -516,6 +530,11 @@ where
             let mut task_visitor = TaskVisitor::new(metadata.into());
             attrs.record(&mut task_visitor);
             let (fields, location) = task_visitor.result();
+            self.record(|| record::Event::Spawn {
+                id: id.into_u64(),
+                at,
+                fields: record::SerializeFields(fields.clone()),
+            });
             if let Some(stats) = self.send_stats(&self.shared.dropped_tasks, move || {
                 let stats = Arc::new(stats::TaskStats::new(at));
                 let event = Event::Spawn {
@@ -628,6 +647,11 @@ where
                         }
 
                         stats.record_wake_op(op, at);
+                        self.record(|| record::Event::Waker {
+                            id: id.into_u64(),
+                            at,
+                            op,
+                        });
                     }
                 }
             }
@@ -747,6 +771,11 @@ where
                     .get_or_default()
                     .borrow_mut()
                     .push(id.clone());
+
+                self.record(|| record::Event::Enter {
+                    id: id.into_u64(),
+                    at: now,
+                });
             }
         }
     }
@@ -775,24 +804,31 @@ where
                 if let Some(parent) = span.parent() {
                     update(&parent, Some(now));
                 }
-                self.current_spans
-                    .get_or_default()
-                    .borrow_mut()
-                    .push(id.clone());
+                self.current_spans.get_or_default().borrow_mut().pop(id);
+
+                self.record(|| record::Event::Exit {
+                    id: id.into_u64(),
+                    at: now,
+                });
             }
         }
     }
 
     fn on_close(&self, id: span::Id, cx: Context<'_, S>) {
         if let Some(span) = cx.span(&id) {
+            let now = SystemTime::now();
             let exts = span.extensions();
             if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
-                stats.drop_task(SystemTime::now());
+                stats.drop_task(now);
             } else if let Some(stats) = exts.get::<Arc<stats::AsyncOpStats>>() {
-                stats.drop_async_op(SystemTime::now());
+                stats.drop_async_op(now);
             } else if let Some(stats) = exts.get::<Arc<stats::ResourceStats>>() {
-                stats.drop_resource(SystemTime::now());
+                stats.drop_resource(now);
             }
+            self.record(|| record::Event::Close {
+                id: id.into_u64(),
+                at: now,
+            });
         }
     }
 }
