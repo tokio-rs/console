@@ -22,7 +22,7 @@ mod std_impl {
     }
 
     impl<T: ?Sized> Mutex<T> {
-        pub(crate) fn read(&self) -> MutexGuard<'_, T> {
+        pub(crate) fn lock(&self) -> MutexGuard<'_, T> {
             self.0.lock().unwrap_or_else(PoisonError::into_inner)
         }
     }

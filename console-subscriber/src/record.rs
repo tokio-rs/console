@@ -98,28 +98,31 @@ impl Recorder {
 
     pub(crate) fn record(&self, event: &crate::Event) {
         let event = match event {
-            crate::Event::Spawn { id, at, fields, .. } => Event::Spawn {
+            crate::Event::Spawn {
+                id, fields, stats, ..
+            } => Event::Spawn {
                 id: id.into_u64(),
-                at: *at,
+                at: stats.created_at,
                 fields: SerializeFields(fields),
             },
-            crate::Event::Enter { id, at, .. } => Event::Enter {
-                id: id.into_u64(),
-                at: *at,
-            },
-            crate::Event::Exit { id, at, .. } => Event::Exit {
-                id: id.into_u64(),
-                at: *at,
-            },
-            crate::Event::Close { id, at } => Event::Close {
-                id: id.into_u64(),
-                at: *at,
-            },
-            crate::Event::Waker { id, op, at } => Event::Waker {
-                id: id.into_u64(),
-                at: *at,
-                op: *op,
-            },
+            // TODO(eliza): this more or less bricks recording, lol...put this back.
+            // crate::Event::Enter { id, at, .. } => Event::Enter {
+            //     id: id.into_u64(),
+            //     at: *at,
+            // },
+            // crate::Event::Exit { id, at, .. } => Event::Exit {
+            //     id: id.into_u64(),
+            //     at: *at,
+            // },
+            // crate::Event::Close { id, at } => Event::Close {
+            //     id: id.into_u64(),
+            //     at: *at,
+            // },
+            // crate::Event::Waker { id, op, at } => Event::Waker {
+            //     id: id.into_u64(),
+            //     at: *at,
+            //     op: *op,
+            // },
             _ => return,
         };
 

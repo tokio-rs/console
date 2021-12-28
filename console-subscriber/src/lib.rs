@@ -130,6 +130,11 @@ pub struct Server {
     client_buffer: usize,
 }
 
+pub(crate) trait ToProto {
+    type Output;
+    fn to_proto(&self) -> Self::Output;
+}
+
 /// State shared between the `ConsoleLayer` and the `Aggregator` task.
 #[derive(Debug, Default)]
 struct Shared {
@@ -609,7 +614,7 @@ where
             if let Some((id, mut op)) = visitor.result() {
                 if let Some(span) = ctx.span(&id) {
                     let exts = span.extensions();
-                    if let Some(stats) = exts.get::<stats::TaskStats>() {
+                    if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
                         if op.is_wake() {
                             // Are we currently inside the task's span? If so, the task
                             // has woken itself.
@@ -716,15 +721,15 @@ where
 
     fn on_enter(&self, id: &span::Id, cx: Context<'_, S>) {
         fn update<S: Subscriber + for<'a> LookupSpan<'a>>(
-            span: SpanRef<S>,
+            span: &SpanRef<S>,
             at: Option<SystemTime>,
         ) -> Option<SystemTime> {
             let exts = span.extensions();
-            if let Some(stats) = exts.get::<stats::TaskStats>() {
+            if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
                 let at = at.unwrap_or_else(SystemTime::now);
                 stats.start_poll(at);
                 Some(at)
-            } else if let Some(stats) = exts.get::<stats::AsyncOpStats>() {
+            } else if let Some(stats) = exts.get::<Arc<stats::AsyncOpStats>>() {
                 let at = at.unwrap_or_else(SystemTime::now);
                 stats.start_poll(at);
                 Some(at)
@@ -734,10 +739,9 @@ where
         }
 
         if let Some(span) = cx.span(id) {
-            let now = SystemTime::now();
-            if let Some(at) = update(span, None) {
+            if let Some(now) = update(&span, None) {
                 if let Some(parent) = span.parent() {
-                    update(parent, Some(at));
+                    update(&parent, Some(now));
                 }
                 self.current_spans
                     .get_or_default()
@@ -749,15 +753,15 @@ where
 
     fn on_exit(&self, id: &span::Id, cx: Context<'_, S>) {
         fn update<S: Subscriber + for<'a> LookupSpan<'a>>(
-            span: SpanRef<S>,
+            span: &SpanRef<S>,
             at: Option<SystemTime>,
         ) -> Option<SystemTime> {
             let exts = span.extensions();
-            if let Some(stats) = exts.get::<stats::TaskStats>() {
+            if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
                 let at = at.unwrap_or_else(SystemTime::now);
                 stats.end_poll(at);
                 Some(at)
-            } else if let Some(stats) = exts.get::<stats::AsyncOpStats>() {
+            } else if let Some(stats) = exts.get::<Arc<stats::AsyncOpStats>>() {
                 let at = at.unwrap_or_else(SystemTime::now);
                 stats.end_poll(at);
                 Some(at)
@@ -767,10 +771,9 @@ where
         }
 
         if let Some(span) = cx.span(id) {
-            let now = SystemTime::now();
-            if let Some(at) = update(span, None) {
+            if let Some(now) = update(&span, None) {
                 if let Some(parent) = span.parent() {
-                    update(parent, Some(at));
+                    update(&parent, Some(now));
                 }
                 self.current_spans
                     .get_or_default()
@@ -783,11 +786,11 @@ where
     fn on_close(&self, id: span::Id, cx: Context<'_, S>) {
         if let Some(span) = cx.span(&id) {
             let exts = span.extensions();
-            if let Some(stats) = exts.get::<stats::TaskStats>() {
+            if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
                 stats.drop_task(SystemTime::now());
-            } else if let Some(stats) = exts.get::<stats::AsyncOpStats>() {
+            } else if let Some(stats) = exts.get::<Arc<stats::AsyncOpStats>>() {
                 stats.drop_async_op(SystemTime::now());
-            } else if let Some(stats) = exts.get::<stats::ResourceStats>() {
+            } else if let Some(stats) = exts.get::<Arc<stats::ResourceStats>>() {
                 stats.drop_resource(SystemTime::now());
             }
         }

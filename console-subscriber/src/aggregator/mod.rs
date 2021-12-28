@@ -1,7 +1,9 @@
-use super::{
-    AttributeUpdate, AttributeUpdateOp, Command, Event, Shared, UpdateType, WakeOp, Watch,
+use super::{AttributeUpdate, AttributeUpdateOp, Command, Event, Shared, Watch};
+use crate::{
+    record::Recorder,
+    stats::{self, Unsent},
+    ToProto, WatchRequest,
 };
-use crate::{record::Recorder, WatchRequest};
 use console_api as proto;
 use proto::resources::resource;
 use proto::Attribute;
@@ -66,19 +68,19 @@ pub(crate) struct Aggregator {
     tasks: IdData<Task>,
 
     /// Map of task IDs to task stats.
-    task_stats: IdData<TaskStats>,
+    task_stats: IdData<Arc<stats::TaskStats>>,
 
     /// Map of resource IDs to resource static data.
     resources: IdData<Resource>,
 
     /// Map of resource IDs to resource stats.
-    resource_stats: IdData<ResourceStats>,
+    resource_stats: IdData<Arc<stats::ResourceStats>>,
 
     /// Map of AsyncOp IDs to AsyncOp static data.
     async_ops: IdData<AsyncOp>,
 
     /// Map of AsyncOp IDs to AsyncOp stats.
-    async_op_stats: IdData<AsyncOpStats>,
+    async_op_stats: IdData<Arc<stats::AsyncOpStats>>,
 
     /// *All* PollOp events for AsyncOps on Resources.
     ///
@@ -104,19 +106,6 @@ pub(crate) struct Flush {
     triggered: AtomicBool,
 }
 
-// An entity (e.g Task, Resource) that at some point in
-// time can be dropped. This generally refers to spans that
-// have been closed indicating that a task, async op or a
-// resource is not in use anymore
-pub(crate) trait DroppedAt {
-    fn dropped_at(&self) -> Option<SystemTime>;
-}
-
-pub(crate) trait ToProto {
-    type Output;
-    fn to_proto(&self) -> Self::Output;
-}
-
 #[derive(Debug)]
 enum Temporality {
     Live,
@@ -125,6 +114,7 @@ enum Temporality {
 // Represent static data for resources
 struct Resource {
     id: Id,
+    is_dirty: AtomicBool,
     parent_id: Option<Id>,
     metadata: &'static Metadata<'static>,
     concrete_type: String,
@@ -134,25 +124,10 @@ struct Resource {
     inherit_child_attrs: bool,
 }
 
-/// Represents a key for a `proto::field::Name`. Because the
-/// proto::field::Name might not be unique we also include the
-/// resource id in this key
-#[derive(Hash, PartialEq, Eq)]
-struct FieldKey {
-    update_id: Id,
-    field_name: proto::field::Name,
-}
-
-#[derive(Default)]
-struct ResourceStats {
-    created_at: Option<SystemTime>,
-    dropped_at: Option<SystemTime>,
-    attributes: HashMap<FieldKey, Attribute>,
-}
-
 /// Represents static data for tasks
 struct Task {
     id: Id,
+    is_dirty: AtomicBool,
     metadata: &'static Metadata<'static>,
     fields: Vec<proto::Field>,
     location: Option<proto::Location>,
@@ -160,85 +135,12 @@ struct Task {
 
 struct AsyncOp {
     id: Id,
+    is_dirty: AtomicBool,
     parent_id: Option<Id>,
     resource_id: Id,
     metadata: &'static Metadata<'static>,
     source: String,
     inherit_child_attrs: bool,
-}
-
-#[derive(Default)]
-struct AsyncOpStats {
-    created_at: Option<SystemTime>,
-    dropped_at: Option<SystemTime>,
-    task_id: Option<Id>,
-    poll_stats: PollStats,
-    attributes: HashMap<FieldKey, Attribute>,
-}
-
-impl DroppedAt for ResourceStats {
-    fn dropped_at(&self) -> Option<SystemTime> {
-        self.dropped_at
-    }
-}
-
-impl DroppedAt for TaskStats {
-    fn dropped_at(&self) -> Option<SystemTime> {
-        self.dropped_at
-    }
-}
-
-impl DroppedAt for AsyncOpStats {
-    fn dropped_at(&self) -> Option<SystemTime> {
-        self.dropped_at
-    }
-}
-
-impl PollStats {
-    fn update_on_span_enter(&mut self, timestamp: SystemTime) {
-        if self.current_polls == 0 {
-            self.last_poll_started = Some(timestamp);
-            if self.first_poll == None {
-                self.first_poll = Some(timestamp);
-            }
-            self.polls += 1;
-        }
-        self.current_polls += 1;
-    }
-
-    fn update_on_span_exit(&mut self, timestamp: SystemTime) {
-        self.current_polls -= 1;
-        if self.current_polls == 0 {
-            if let Some(last_poll_started) = self.last_poll_started {
-                let elapsed = timestamp.duration_since(last_poll_started).unwrap();
-                self.last_poll_ended = Some(timestamp);
-                self.busy_time += elapsed;
-            }
-        }
-    }
-
-    fn since_last_poll(&self, timestamp: SystemTime) -> Option<Duration> {
-        self.last_poll_started
-            .map(|lps| timestamp.duration_since(lps).unwrap())
-    }
-}
-
-impl Default for TaskStats {
-    fn default() -> Self {
-        TaskStats {
-            created_at: None,
-            dropped_at: None,
-            wakes: 0,
-            waker_clones: 0,
-            waker_drops: 0,
-            self_wakes: 0,
-            last_wake: None,
-            // significant figures should be in the [0-5] range and memory usage
-            // grows exponentially with higher a sigfig
-            poll_times_histogram: Histogram::<u64>::new(2).unwrap(),
-            poll_stats: PollStats::default(),
-        }
-    }
 }
 
 impl Aggregator {
@@ -438,7 +340,8 @@ impl Aggregator {
                 && subscription.update(&proto::tasks::TaskDetails {
                     task_id: Some(id.clone().into()),
                     now: Some(now.into()),
-                    poll_times_histogram: serialize_histogram(&stats.poll_times_histogram).ok(),
+                    poll_times_histogram: None, // TODO(eliza): put back
+                                                // poll_times_histogram: serialize_histogram(&stats.poll_times_histogram).ok(),
                 })
             {
                 self.details_watchers
@@ -513,8 +416,9 @@ impl Aggregator {
                 let details = proto::tasks::TaskDetails {
                     task_id: Some(id.clone().into()),
                     now: Some(now.into()),
-                    poll_times_histogram: serialize_histogram(&task_stats.poll_times_histogram)
-                        .ok(),
+                    // poll_times_histogram: serialize_histogram(&task_stats.poll_times_histogram)
+                    //     .ok(),
+                    poll_times_histogram: None, // TODO(eliza): put back
                 };
                 watchers.retain(|watch| watch.update(&details));
                 !watchers.is_empty()
@@ -544,6 +448,7 @@ impl Aggregator {
                     id.clone(),
                     Task {
                         id: id.clone(),
+                        is_dirty: AtomicBool::new(false),
                         metadata,
                         fields,
                         location,
@@ -554,95 +459,7 @@ impl Aggregator {
                 self.task_stats.insert(id, stats);
             }
 
-            Event::Enter { id, parent_id, at } => {
-                if let Some(mut task_stats) = self.task_stats.update(&id) {
-                    task_stats.poll_stats.update_on_span_enter(at);
-                    return;
-                }
-
-                if let Some(mut async_op_stats) =
-                    parent_id.and_then(|parent_id| self.async_op_stats.update(&parent_id))
-                {
-                    async_op_stats.poll_stats.update_on_span_enter(at);
-                }
-            }
-
-            Event::Exit { id, parent_id, at } => {
-                if let Some(mut task_stats) = self.task_stats.update(&id) {
-                    task_stats.poll_stats.update_on_span_exit(at);
-                    if let Some(since_last_poll) = task_stats.poll_stats.since_last_poll(at) {
-                        task_stats
-                            .poll_times_histogram
-                            .record(since_last_poll.as_nanos().try_into().unwrap_or(u64::MAX))
-                            .unwrap();
-                    }
-                    return;
-                }
-
-                if let Some(mut async_op_stats) =
-                    parent_id.and_then(|parent_id| self.async_op_stats.update(&parent_id))
-                {
-                    async_op_stats.poll_stats.update_on_span_exit(at);
-                }
-            }
-
-            Event::Close { id, at } => {
-                if let Some(mut task_stats) = self.task_stats.update(&id) {
-                    task_stats.dropped_at = Some(at);
-                }
-
-                if let Some(mut resource_stats) = self.resource_stats.update(&id) {
-                    resource_stats.dropped_at = Some(at);
-                }
-
-                if let Some(mut async_op_stats) = self.async_op_stats.update(&id) {
-                    async_op_stats.dropped_at = Some(at);
-                }
-            }
-
-            Event::Waker { id, op, at } => {
-                // It's possible for wakers to exist long after a task has
-                // finished. We don't want those cases to create a "new"
-                // task that isn't closed, just to insert some waker stats.
-                //
-                // It may be useful to eventually be able to report about
-                // "wasted" waker ops, but we'll leave that for another time.
-                if let Some(mut task_stats) = self.task_stats.update(&id) {
-                    match op {
-                        WakeOp::Wake { self_wake } | WakeOp::WakeByRef { self_wake } => {
-                            task_stats.wakes += 1;
-                            task_stats.last_wake = Some(at);
-
-                            // If the  task has woken itself, increment the
-                            // self-wake count.
-                            if self_wake {
-                                task_stats.self_wakes += 1;
-                            }
-
-                            // Note: `Waker::wake` does *not* call the `drop`
-                            // implementation, so waking by value doesn't
-                            // trigger a drop event. so, count this as a `drop`
-                            // to ensure the task's number of wakers can be
-                            // calculated as `clones` - `drops`.
-                            //
-                            // see
-                            // https://github.com/rust-lang/rust/blob/673d0db5e393e9c64897005b470bfeb6d5aec61b/library/core/src/task/wake.rs#L211-L212
-                            if let WakeOp::Wake { .. } = op {
-                                task_stats.waker_drops += 1;
-                            }
-                        }
-                        WakeOp::Clone => {
-                            task_stats.waker_clones += 1;
-                        }
-                        WakeOp::Drop => {
-                            task_stats.waker_drops += 1;
-                        }
-                    }
-                }
-            }
-
             Event::Resource {
-                at,
                 id,
                 parent_id,
                 metadata,
@@ -651,12 +468,13 @@ impl Aggregator {
                 location,
                 is_internal,
                 inherit_child_attrs,
-                ..
+                stats,
             } => {
                 self.resources.insert(
                     id.clone(),
                     Resource {
                         id: id.clone(),
+                        is_dirty: AtomicBool::new(false),
                         parent_id,
                         kind,
                         metadata,
@@ -667,13 +485,7 @@ impl Aggregator {
                     },
                 );
 
-                self.resource_stats.insert(
-                    id,
-                    ResourceStats {
-                        created_at: Some(at),
-                        ..Default::default()
-                    },
-                );
+                self.resource_stats.insert(id, stats);
             }
 
             Event::PollOp {
@@ -684,20 +496,22 @@ impl Aggregator {
                 task_id,
                 is_ready,
             } => {
-                let mut async_op_stats = self.async_op_stats.update_or_default(async_op_id.clone());
-                async_op_stats.task_id.get_or_insert(task_id.clone());
+                // TODO(eliza): put back
 
-                let poll_op = proto::resources::PollOp {
-                    metadata: Some(metadata.into()),
-                    resource_id: Some(resource_id.into()),
-                    name: op_name,
-                    task_id: Some(task_id.into()),
-                    async_op_id: Some(async_op_id.into()),
-                    is_ready,
-                };
+                // let mut async_op_stats = self.async_op_stats.update_or_default(async_op_id.clone());
+                // async_op_stats.task_id.get_or_insert(task_id.clone());
 
-                self.all_poll_ops.push(poll_op.clone());
-                self.new_poll_ops.push(poll_op);
+                // let poll_op = proto::resources::PollOp {
+                //     metadata: Some(metadata.into()),
+                //     resource_id: Some(resource_id.into()),
+                //     name: op_name,
+                //     task_id: Some(task_id.into()),
+                //     async_op_id: Some(async_op_id.into()),
+                //     is_ready,
+                // };
+
+                // self.all_poll_ops.push(poll_op.clone());
+                // self.new_poll_ops.push(poll_op);
             }
 
             Event::StateUpdate {
@@ -706,83 +520,84 @@ impl Aggregator {
                 update,
                 ..
             } => {
-                let mut to_update = vec![(update_id.clone(), update_type.clone())];
+                // let update_id = self.ids.id_for(update_id);
+                //         let mut to_update = vec![(update_id, update_type.clone())];
 
-                fn update_entry(e: Entry<'_, FieldKey, Attribute>, upd: &AttributeUpdate) {
-                    e.and_modify(|attr| update_attribute(attr, upd))
-                        .or_insert_with(|| upd.clone().into());
-                }
+                //         fn update_entry(e: Entry<'_, FieldKey, Attribute>, upd: &AttributeUpdate) {
+                //             e.and_modify(|attr| update_attribute(attr, upd))
+                //                 .or_insert_with(|| upd.clone().into());
+                //         }
 
-                match update_type {
-                    UpdateType::Resource => {
-                        if let Some(parent) = self
-                            .resources
-                            .get(&update_id)
-                            .and_then(|r| self.resources.get(r.parent_id.as_ref()?))
-                            .filter(|parent| parent.inherit_child_attrs)
-                        {
-                            to_update.push((parent.id.clone(), UpdateType::Resource));
-                        }
-                    }
-                    UpdateType::AsyncOp => {
-                        if let Some(parent) = self
-                            .async_ops
-                            .get(&update_id)
-                            .and_then(|r| self.async_ops.get(r.parent_id.as_ref()?))
-                            .filter(|parent| parent.inherit_child_attrs)
-                        {
-                            to_update.push((parent.id.clone(), UpdateType::AsyncOp));
-                        }
-                    }
-                }
+                //         match update_type {
+                //             UpdateType::Resource => {
+                //                 if let Some(parent) = self
+                //                     .resources
+                //                     .get(&update_id)
+                //                     .and_then(|r| self.resources.get(r.parent_id.as_ref()?))
+                //                     .filter(|parent| parent.inherit_child_attrs)
+                //                 {
+                //                     to_update.push((parent.id, UpdateType::Resource));
+                //                 }
+                //             }
+                //             UpdateType::AsyncOp => {
+                //                 if let Some(parent) = self
+                //                     .async_ops
+                //                     .get(&update_id)
+                //                     .and_then(|r| self.async_ops.get(r.parent_id.as_ref()?))
+                //                     .filter(|parent| parent.inherit_child_attrs)
+                //                 {
+                //                     to_update.push((parent.id, UpdateType::AsyncOp));
+                //                 }
+                //             }
+                //         }
 
-                for (update_id, update_type) in to_update {
-                    let field_name = match update.field.name.as_ref() {
-                        Some(name) => name.clone(),
-                        None => {
-                            tracing::warn!(?update.field, "field missing name, skipping...");
-                            return;
-                        }
-                    };
+                //         for (update_id, update_type) in to_update {
+                //             let field_name = match update.field.name.as_ref() {
+                //                 Some(name) => name.clone(),
+                //                 None => {
+                //                     tracing::warn!(?update.field, "field missing name, skipping...");
+                //                     return;
+                //                 }
+                //             };
 
-                    let upd_key = FieldKey {
-                        update_id: update_id.clone(),
-                        field_name,
-                    };
+                //             let upd_key = FieldKey {
+                //                 update_id,
+                //                 field_name,
+                //             };
 
-                    match update_type {
-                        UpdateType::Resource => {
-                            let mut stats = self.resource_stats.update(&update_id);
-                            let entry = stats.as_mut().map(|s| s.attributes.entry(upd_key));
-                            if let Some(entry) = entry {
-                                update_entry(entry, &update);
-                            }
-                        }
-                        UpdateType::AsyncOp => {
-                            let mut stats = self.async_op_stats.update(&update_id);
-                            let entry = stats.as_mut().map(|s| s.attributes.entry(upd_key));
-                            if let Some(entry) = entry {
-                                update_entry(entry, &update);
-                            }
-                        }
-                    };
-                }
+                //             match update_type {
+                //                 UpdateType::Resource => {
+                //                     let mut stats = self.resource_stats.update(&update_id);
+                //                     let entry = stats.as_mut().map(|s| s.attributes.entry(upd_key));
+                //                     if let Some(entry) = entry {
+                //                         update_entry(entry, &update);
+                //                     }
+                //                 }
+                //                 UpdateType::AsyncOp => {
+                //                     let mut stats = self.async_op_stats.update(&update_id);
+                //                     let entry = stats.as_mut().map(|s| s.attributes.entry(upd_key));
+                //                     if let Some(entry) = entry {
+                //                         update_entry(entry, &update);
+                //                     }
+                //                 }
+                //             };
+                //         }
             }
 
             Event::AsyncResourceOp {
-                at,
                 id,
                 source,
                 resource_id,
                 metadata,
                 parent_id,
                 inherit_child_attrs,
-                ..
+                stats,
             } => {
                 self.async_ops.insert(
                     id.clone(),
                     AsyncOp {
                         id: id.clone(),
+                        is_dirty: AtomicBool::new(false),
                         resource_id,
                         metadata,
                         source,
@@ -791,13 +606,7 @@ impl Aggregator {
                     },
                 );
 
-                self.async_op_stats.insert(
-                    id,
-                    AsyncOpStats {
-                        created_at: Some(at),
-                        ..Default::default()
-                    },
-                );
+                self.async_op_stats.insert(id, stats);
             }
         }
     }
@@ -837,20 +646,6 @@ impl<T: Clone> Watch<T> {
     }
 }
 
-impl ToProto for PollStats {
-    type Output = proto::PollStats;
-
-    fn to_proto(&self) -> Self::Output {
-        proto::PollStats {
-            polls: self.polls,
-            first_poll: self.first_poll.map(Into::into),
-            last_poll_started: self.last_poll_started.map(Into::into),
-            last_poll_ended: self.last_poll_ended.map(Into::into),
-            busy_time: Some(self.busy_time.into()),
-        }
-    }
-}
-
 impl ToProto for Task {
     type Output = proto::tasks::Task;
 
@@ -867,20 +662,13 @@ impl ToProto for Task {
     }
 }
 
-impl ToProto for TaskStats {
-    type Output = proto::tasks::Stats;
+impl Unsent for Task {
+    fn take_unsent(&self) -> bool {
+        self.is_dirty.swap(false, AcqRel)
+    }
 
-    fn to_proto(&self) -> Self::Output {
-        proto::tasks::Stats {
-            poll_stats: Some(self.poll_stats.to_proto()),
-            created_at: self.created_at.map(Into::into),
-            dropped_at: self.dropped_at.map(Into::into),
-            wakes: self.wakes,
-            waker_clones: self.waker_clones,
-            self_wakes: self.self_wakes,
-            waker_drops: self.waker_drops,
-            last_wake: self.last_wake.map(Into::into),
-        }
+    fn is_unsent(&self) -> bool {
+        self.is_dirty.load(Acquire)
     }
 }
 
@@ -900,16 +688,13 @@ impl ToProto for Resource {
     }
 }
 
-impl ToProto for ResourceStats {
-    type Output = proto::resources::Stats;
+impl Unsent for Resource {
+    fn take_unsent(&self) -> bool {
+        self.is_dirty.swap(false, AcqRel)
+    }
 
-    fn to_proto(&self) -> Self::Output {
-        let attributes = self.attributes.values().cloned().collect();
-        proto::resources::Stats {
-            created_at: self.created_at.map(Into::into),
-            dropped_at: self.dropped_at.map(Into::into),
-            attributes,
-        }
+    fn is_unsent(&self) -> bool {
+        self.is_dirty.load(Acquire)
     }
 }
 
@@ -927,18 +712,13 @@ impl ToProto for AsyncOp {
     }
 }
 
-impl ToProto for AsyncOpStats {
-    type Output = proto::async_ops::Stats;
+impl Unsent for AsyncOp {
+    fn take_unsent(&self) -> bool {
+        self.is_dirty.swap(false, AcqRel)
+    }
 
-    fn to_proto(&self) -> Self::Output {
-        let attributes = self.attributes.values().cloned().collect();
-        proto::async_ops::Stats {
-            poll_stats: Some(self.poll_stats.to_proto()),
-            created_at: self.created_at.map(Into::into),
-            dropped_at: self.dropped_at.map(Into::into),
-            task_id: self.task_id.clone().map(Into::into),
-            attributes,
-        }
+    fn is_unsent(&self) -> bool {
+        self.is_dirty.load(Acquire)
     }
 }
 

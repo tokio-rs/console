@@ -1,16 +1,14 @@
-use crate::{attribute, sync::Mutex};
+use crate::{attribute, sync::Mutex, ToProto};
 use hdrhistogram::Histogram;
 use std::cmp;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::*};
+use std::sync::{
+    atomic::{AtomicBool, AtomicUsize, Ordering::*},
+    Arc,
+};
 use std::time::{Duration, SystemTime};
 
 use console_api as proto;
-
-pub(crate) trait ToProto {
-    type Output;
-    fn to_proto(&self) -> Self::Output;
-}
 
 /// A type which records whether it has unsent updates.
 ///
@@ -25,6 +23,7 @@ pub(crate) trait Unsent {
     /// current update. If this returns `true`, it will be included, so it
     /// becomes no longer dirty.
     fn take_unsent(&self) -> bool;
+    fn is_unsent(&self) -> bool;
 }
 
 // An entity (e.g Task, Resource) that at some point in
@@ -35,12 +34,47 @@ pub(crate) trait DroppedAt {
     fn dropped_at(&self) -> Option<SystemTime>;
 }
 
+impl<T: DroppedAt> DroppedAt for Arc<T> {
+    fn dropped_at(&self) -> Option<SystemTime> {
+        T::dropped_at(self)
+    }
+}
+
+impl<T: Unsent> Unsent for Arc<T> {
+    fn take_unsent(&self) -> bool {
+        T::take_unsent(self)
+    }
+
+    fn is_unsent(&self) -> bool {
+        T::is_unsent(self)
+    }
+}
+
+impl<T: ToProto> ToProto for Arc<T> {
+    type Output = T::Output;
+    fn to_proto(&self) -> T::Output {
+        T::to_proto(self)
+    }
+}
+
+// pub(crate) trait Stats: ToProto {
+//     fn dropped_at(&self) -> Option<SystemTime>;
+
+//     fn to_proto_if_unsent(&self) -> Option<<Self as ToProto>::Output> {
+//         if self.take_unsent() {
+//             Some(self.to_proto)
+//         } else {
+//             None
+//         }
+//     }
+// }
+
 #[derive(Debug)]
 pub(crate) struct TaskStats {
     is_dirty: AtomicBool,
     is_dropped: AtomicBool,
     // task stats
-    created_at: SystemTime,
+    pub(crate) created_at: SystemTime,
     timestamps: Mutex<TaskTimestamps>,
 
     // waker stats
@@ -163,6 +197,10 @@ impl TaskStats {
         self.make_dirty();
     }
 
+    pub(crate) fn since_last_poll(&self, now: SystemTime) -> Option<Duration> {
+        self.poll_stats.since_last_poll(now)
+    }
+
     pub(crate) fn drop_task(&self, dropped_at: SystemTime) {
         if self.is_dropped.swap(true, AcqRel) {
             // The task was already dropped.
@@ -205,6 +243,10 @@ impl Unsent for TaskStats {
     #[inline]
     fn take_unsent(&self) -> bool {
         self.is_dirty.swap(false, AcqRel)
+    }
+
+    fn is_unsent(&self) -> bool {
+        self.is_dirty.load(Acquire)
     }
 }
 
@@ -254,6 +296,10 @@ impl AsyncOpStats {
         self.make_dirty();
     }
 
+    pub(crate) fn since_last_poll(&self, now: SystemTime) -> Option<Duration> {
+        self.poll_stats.since_last_poll(now)
+    }
+
     #[inline]
     fn make_dirty(&self) {
         self.stats.make_dirty()
@@ -264,6 +310,11 @@ impl Unsent for AsyncOpStats {
     #[inline]
     fn take_unsent(&self) -> bool {
         self.stats.take_unsent()
+    }
+
+    #[inline]
+    fn is_unsent(&self) -> bool {
+        self.stats.is_unsent()
     }
 }
 
@@ -329,6 +380,10 @@ impl Unsent for ResourceStats {
     fn take_unsent(&self) -> bool {
         self.is_dirty.swap(false, AcqRel)
     }
+
+    fn is_unsent(&self) -> bool {
+        self.is_dirty.load(Acquire)
+    }
 }
 
 impl DroppedAt for ResourceStats {
@@ -340,6 +395,19 @@ impl DroppedAt for ResourceStats {
         }
 
         None
+    }
+}
+
+impl ToProto for ResourceStats {
+    type Output = proto::resources::Stats;
+
+    fn to_proto(&self) -> Self::Output {
+        let attributes = self.attributes.lock().values().cloned().collect();
+        proto::resources::Stats {
+            created_at: Some(self.created_at.into()),
+            dropped_at: self.dropped_at.lock().map(Into::into),
+            attributes,
+        }
     }
 }
 
@@ -381,6 +449,13 @@ impl PollStats {
                 timestamps.busy_time += elapsed;
             }
         }
+    }
+
+    fn since_last_poll(&self, timestamp: SystemTime) -> Option<Duration> {
+        self.timestamps
+            .lock()
+            .last_poll_started
+            .map(|lps| timestamp.duration_since(lps).unwrap())
     }
 }
 
