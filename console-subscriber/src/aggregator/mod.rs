@@ -9,7 +9,7 @@ use tokio::sync::{mpsc, Notify};
 
 use futures::FutureExt;
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::hash_map::{Entry, HashMap},
     convert::TryInto,
     sync::{
         atomic::{AtomicBool, Ordering::*},
@@ -17,14 +17,12 @@ use std::{
     },
     time::{Duration, SystemTime},
 };
-use tracing_core::{span, Metadata};
+use tracing_core::{span::Id, Metadata};
 
 use hdrhistogram::{
     serialization::{Serializer, V2SerializeError, V2Serializer},
     Histogram,
 };
-
-pub type Id = u64;
 
 mod id_data;
 mod shrink;
@@ -93,8 +91,6 @@ pub(crate) struct Aggregator {
     /// This is emptied on every state update.
     new_poll_ops: Vec<proto::resources::PollOp>,
 
-    ids: Ids,
-
     /// A sink to record all events to a file.
     recorder: Option<Recorder>,
 
@@ -119,15 +115,6 @@ pub(crate) trait DroppedAt {
 pub(crate) trait ToProto {
     type Output;
     fn to_proto(&self) -> Self::Output;
-}
-
-#[derive(Debug, Default)]
-pub(crate) struct Ids {
-    /// A counter for the pretty task IDs.
-    next: Id,
-
-    /// A table that contains the span ID to pretty ID mappings.
-    id_mappings: ShrinkMap<span::Id, Id>,
 }
 
 #[derive(Debug)]
@@ -165,7 +152,7 @@ struct Resource {
 /// resource id in this key
 #[derive(Hash, PartialEq, Eq)]
 struct FieldKey {
-    update_id: u64,
+    update_id: Id,
     field_name: proto::field::Name,
 }
 
@@ -308,7 +295,6 @@ impl Aggregator {
             async_op_stats: IdData::default(),
             all_poll_ops: Default::default(),
             new_poll_ops: Default::default(),
-            ids: Ids::default(),
             recorder: builder
                 .recording_path
                 .as_ref()
@@ -406,27 +392,12 @@ impl Aggregator {
         // been sent off.
         let now = SystemTime::now();
         let has_watchers = !self.watchers.is_empty();
-        self.tasks.drop_closed(
-            &mut self.task_stats,
-            now,
-            self.retention,
-            has_watchers,
-            &mut self.ids,
-        );
-        self.resources.drop_closed(
-            &mut self.resource_stats,
-            now,
-            self.retention,
-            has_watchers,
-            &mut self.ids,
-        );
-        self.async_ops.drop_closed(
-            &mut self.async_op_stats,
-            now,
-            self.retention,
-            has_watchers,
-            &mut self.ids,
-        );
+        self.tasks
+            .drop_closed(&mut self.task_stats, now, self.retention, has_watchers);
+        self.resources
+            .drop_closed(&mut self.resource_stats, now, self.retention, has_watchers);
+        self.async_ops
+            .drop_closed(&mut self.async_op_stats, now, self.retention, has_watchers);
     }
 
     /// Add the task subscription to the watchers after sending the first update
@@ -494,13 +465,13 @@ impl Aggregator {
             // Then send the initial state --- if this fails, the subscription is already dead.
             if stream_sender.send(rx).is_ok()
                 && subscription.update(&proto::tasks::TaskDetails {
-                    task_id: Some(id.into()),
+                    task_id: Some(id.clone().into()),
                     now: Some(now.into()),
                     poll_times_histogram: serialize_histogram(&stats.poll_times_histogram).ok(),
                 })
             {
                 self.details_watchers
-                    .entry(id)
+                    .entry(id.clone())
                     .or_insert_with(Vec::new)
                     .push(subscription);
             }
@@ -566,10 +537,10 @@ impl Aggregator {
         let stats = &self.task_stats;
         // Assuming there are much fewer task details subscribers than there are
         // stats updates, iterate over `details_watchers` and compact the map.
-        self.details_watchers.retain_and_shrink(|&id, watchers| {
-            if let Some(task_stats) = stats.get(&id) {
+        self.details_watchers.retain_and_shrink(|id, watchers| {
+            if let Some(task_stats) = stats.get(id) {
                 let details = proto::tasks::TaskDetails {
-                    task_id: Some(id.into()),
+                    task_id: Some(id.clone().into()),
                     now: Some(now.into()),
                     poll_times_histogram: serialize_histogram(&task_stats.poll_times_histogram)
                         .ok(),
@@ -598,11 +569,10 @@ impl Aggregator {
                 fields,
                 location,
             } => {
-                let id = self.ids.id_for(id);
                 self.tasks.insert(
-                    id,
+                    id.clone(),
                     Task {
-                        id,
+                        id: id.clone(),
                         metadata,
                         fields,
                         location,
@@ -620,8 +590,6 @@ impl Aggregator {
             }
 
             Event::Enter { id, parent_id, at } => {
-                let id = self.ids.id_for(id);
-                let parent_id = parent_id.map(|id| self.ids.id_for(id));
                 if let Some(mut task_stats) = self.task_stats.update(&id) {
                     task_stats.poll_stats.update_on_span_enter(at);
                     return;
@@ -635,8 +603,6 @@ impl Aggregator {
             }
 
             Event::Exit { id, parent_id, at } => {
-                let id = self.ids.id_for(id);
-                let parent_id = parent_id.map(|id| self.ids.id_for(id));
                 if let Some(mut task_stats) = self.task_stats.update(&id) {
                     task_stats.poll_stats.update_on_span_exit(at);
                     if let Some(since_last_poll) = task_stats.poll_stats.since_last_poll(at) {
@@ -656,7 +622,6 @@ impl Aggregator {
             }
 
             Event::Close { id, at } => {
-                let id = self.ids.id_for(id);
                 if let Some(mut task_stats) = self.task_stats.update(&id) {
                     task_stats.dropped_at = Some(at);
                 }
@@ -671,7 +636,6 @@ impl Aggregator {
             }
 
             Event::Waker { id, op, at } => {
-                let id = self.ids.id_for(id);
                 // It's possible for wakers to exist long after a task has
                 // finished. We don't want those cases to create a "new"
                 // task that isn't closed, just to insert some waker stats.
@@ -724,12 +688,10 @@ impl Aggregator {
                 inherit_child_attrs,
                 ..
             } => {
-                let id = self.ids.id_for(id);
-                let parent_id = parent_id.map(|id| self.ids.id_for(id));
                 self.resources.insert(
-                    id,
+                    id.clone(),
                     Resource {
-                        id,
+                        id: id.clone(),
                         parent_id,
                         kind,
                         metadata,
@@ -757,12 +719,8 @@ impl Aggregator {
                 task_id,
                 is_ready,
             } => {
-                let async_op_id = self.ids.id_for(async_op_id);
-                let resource_id = self.ids.id_for(resource_id);
-                let task_id = self.ids.id_for(task_id);
-
-                let mut async_op_stats = self.async_op_stats.update_or_default(async_op_id);
-                async_op_stats.task_id.get_or_insert(task_id);
+                let mut async_op_stats = self.async_op_stats.update_or_default(async_op_id.clone());
+                async_op_stats.task_id.get_or_insert(task_id.clone());
 
                 let poll_op = proto::resources::PollOp {
                     metadata: Some(metadata.into()),
@@ -783,8 +741,7 @@ impl Aggregator {
                 update,
                 ..
             } => {
-                let update_id = self.ids.id_for(update_id);
-                let mut to_update = vec![(update_id, update_type.clone())];
+                let mut to_update = vec![(update_id.clone(), update_type.clone())];
 
                 fn update_entry(e: Entry<'_, FieldKey, Attribute>, upd: &AttributeUpdate) {
                     e.and_modify(|attr| update_attribute(attr, upd))
@@ -799,7 +756,7 @@ impl Aggregator {
                             .and_then(|r| self.resources.get(r.parent_id.as_ref()?))
                             .filter(|parent| parent.inherit_child_attrs)
                         {
-                            to_update.push((parent.id, UpdateType::Resource));
+                            to_update.push((parent.id.clone(), UpdateType::Resource));
                         }
                     }
                     UpdateType::AsyncOp => {
@@ -809,7 +766,7 @@ impl Aggregator {
                             .and_then(|r| self.async_ops.get(r.parent_id.as_ref()?))
                             .filter(|parent| parent.inherit_child_attrs)
                         {
-                            to_update.push((parent.id, UpdateType::AsyncOp));
+                            to_update.push((parent.id.clone(), UpdateType::AsyncOp));
                         }
                     }
                 }
@@ -824,7 +781,7 @@ impl Aggregator {
                     };
 
                     let upd_key = FieldKey {
-                        update_id,
+                        update_id: update_id.clone(),
                         field_name,
                     };
 
@@ -857,14 +814,10 @@ impl Aggregator {
                 inherit_child_attrs,
                 ..
             } => {
-                let id = self.ids.id_for(id);
-                let parent_id = parent_id.map(|id| self.ids.id_for(id));
-                let resource_id = self.ids.id_for(resource_id);
-
                 self.async_ops.insert(
-                    id,
+                    id.clone(),
                     AsyncOp {
-                        id,
+                        id: id.clone(),
                         resource_id,
                         metadata,
                         source,
@@ -938,7 +891,7 @@ impl ToProto for Task {
 
     fn to_proto(&self) -> Self::Output {
         proto::tasks::Task {
-            id: Some(self.id.into()),
+            id: Some(self.id.clone().into()),
             // TODO: more kinds of tasks...
             kind: proto::tasks::task::Kind::Spawn as i32,
             metadata: Some(self.metadata.into()),
@@ -971,8 +924,8 @@ impl ToProto for Resource {
 
     fn to_proto(&self) -> Self::Output {
         proto::resources::Resource {
-            id: Some(self.id.into()),
-            parent_resource_id: self.parent_id.map(Into::into),
+            id: Some(self.id.clone().into()),
+            parent_resource_id: self.parent_id.clone().map(Into::into),
             kind: Some(self.kind.clone()),
             metadata: Some(self.metadata.into()),
             concrete_type: self.concrete_type.clone(),
@@ -1000,11 +953,11 @@ impl ToProto for AsyncOp {
 
     fn to_proto(&self) -> Self::Output {
         proto::async_ops::AsyncOp {
-            id: Some(self.id.into()),
+            id: Some(self.id.clone().into()),
             metadata: Some(self.metadata.into()),
-            resource_id: Some(self.resource_id.into()),
+            resource_id: Some(self.resource_id.clone().into()),
             source: self.source.clone(),
-            parent_async_op_id: self.parent_id.map(Into::into),
+            parent_async_op_id: self.parent_id.clone().map(Into::into),
         }
     }
 }
@@ -1018,7 +971,7 @@ impl ToProto for AsyncOpStats {
             poll_stats: Some(self.poll_stats.to_proto()),
             created_at: self.created_at.map(Into::into),
             dropped_at: self.dropped_at.map(Into::into),
-            task_id: self.task_id.map(Into::into),
+            task_id: self.task_id.clone().map(Into::into),
             attributes,
         }
     }
@@ -1030,27 +983,6 @@ impl From<AttributeUpdate> for Attribute {
             field: Some(upd.field),
             unit: upd.unit,
         }
-    }
-}
-
-// === impl Ids ===
-
-impl Ids {
-    fn id_for(&mut self, span_id: span::Id) -> Id {
-        match self.id_mappings.entry(span_id) {
-            Entry::Occupied(entry) => *entry.get(),
-            Entry::Vacant(entry) => {
-                let task_id = self.next;
-                entry.insert(task_id);
-                self.next = self.next.wrapping_add(1);
-                task_id
-            }
-        }
-    }
-
-    #[inline]
-    fn remove_all(&mut self, ids: &HashSet<Id>) {
-        self.id_mappings.retain(|_, id| !ids.contains(id));
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::{
     intern::{self, InternedStr},
-    state::{pb_duration, Attribute, Field, Metadata, Visibility},
+    state::{pb_duration, Attribute, Field, Ids, Metadata, Visibility},
     view,
 };
 use console_api as proto;
@@ -16,6 +16,7 @@ use tui::text::Span;
 #[derive(Default, Debug)]
 pub(crate) struct AsyncOpsState {
     async_ops: HashMap<u64, Rc<RefCell<AsyncOp>>>,
+    ids: Ids,
     new_async_ops: Vec<AsyncOpRef>,
 }
 
@@ -124,6 +125,7 @@ impl AsyncOpsState {
         strings: &mut intern::Strings,
         metas: &HashMap<u64, Metadata>,
         update: proto::async_ops::AsyncOpUpdate,
+        resource_ids: &mut Ids,
         visibility: Visibility,
     ) {
         let mut stats_update = update.stats_update;
@@ -153,14 +155,16 @@ impl AsyncOpsState {
             };
 
             let id = async_op.id?.id;
-            let resource_id = async_op.resource_id?.id;
+            let stats = AsyncOpStats::from_proto(stats_update.remove(&id)?, meta, styles, strings);
+
+            let id = self.ids.id_for(id);
+            let resource_id = resource_ids.id_for(async_op.resource_id?.id);
             let parent_id = match async_op.parent_async_op_id {
-                Some(id) => strings.string(format!("{}", id.id)),
+                Some(id) => strings.string(format!("{}", self.ids.id_for(id.id))),
                 None => strings.string("n/a".to_string()),
             };
 
             let source = strings.string(async_op.source);
-            let stats = AsyncOpStats::from_proto(stats_update.remove(&id)?, meta, styles, strings);
 
             let async_op = AsyncOp {
                 id,
@@ -178,6 +182,7 @@ impl AsyncOpsState {
         self.async_ops.extend(new_async_ops);
 
         for (id, stats) in stats_update {
+            let id = self.ids.id_for(id);
             if let Some(async_op) = self.async_ops.get_mut(&id) {
                 let mut async_op = async_op.borrow_mut();
                 if let Some(meta) = metas.get(&async_op.meta_id) {

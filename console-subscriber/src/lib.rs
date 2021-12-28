@@ -16,7 +16,7 @@ use thread_local::ThreadLocal;
 use tokio::sync::{mpsc, oneshot};
 use tracing_core::{
     dispatcher::{self, Dispatch},
-    span,
+    span::{self, Id},
     subscriber::{self, NoSubscriber, Subscriber},
     Metadata,
 };
@@ -38,7 +38,6 @@ use visitors::{AsyncOpVisitor, ResourceVisitor, ResourceVisitorResult, TaskVisit
 
 pub use builder::{init, spawn};
 
-use crate::aggregator::Id;
 use crate::visitors::{PollOpVisitor, StateUpdateVisitor};
 
 /// A [`ConsoleLayer`] is a [`tracing_subscriber::Layer`] that records [`tracing`]
@@ -904,7 +903,14 @@ impl proto::instrument::instrument_server::Instrument for Server {
         let task_id = req
             .into_inner()
             .id
-            .ok_or_else(|| tonic::Status::invalid_argument("missing task_id"))?;
+            .ok_or_else(|| tonic::Status::invalid_argument("missing task_id"))?
+            .id;
+
+        // `tracing` reserves span ID 0 for niche optimization for `Option<Id>`.
+        let id = std::num::NonZeroU64::new(task_id)
+            .map(Id::from_non_zero_u64)
+            .ok_or_else(|| tonic::Status::invalid_argument("task_id cannot be 0"))?;
+
         let permit = self.subscribe.reserve().await.map_err(|_| {
             tonic::Status::internal("cannot start new watch, aggregation task is not running")
         })?;
@@ -912,7 +918,7 @@ impl proto::instrument::instrument_server::Instrument for Server {
         // Check with the aggregator task to request a stream if the task exists.
         let (stream_sender, stream_recv) = oneshot::channel();
         permit.send(Command::WatchTaskDetail(WatchRequest {
-            id: task_id.into(),
+            id,
             stream_sender,
             buffer: self.client_buffer,
         }));

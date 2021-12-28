@@ -1,5 +1,5 @@
 use crate::intern::{self, InternedStr};
-use crate::state::{format_location, Attribute, Field, Metadata, Visibility};
+use crate::state::{format_location, Attribute, Field, Ids, Metadata, Visibility};
 use crate::view;
 use console_api as proto;
 use std::{
@@ -14,6 +14,7 @@ use tui::{style::Color, text::Span};
 #[derive(Default, Debug)]
 pub(crate) struct ResourcesState {
     resources: HashMap<u64, Rc<RefCell<Resource>>>,
+    pub(crate) ids: Ids,
     new_resources: Vec<ResourceRef>,
 }
 
@@ -166,7 +167,10 @@ impl ResourcesState {
             };
 
             let id = resource.id?.id;
-            let parent_id = resource.parent_resource_id.map(|id| id.id);
+            let stats = ResourceStats::from_proto(stats_update.remove(&id)?, meta, styles, strings);
+
+            let id = self.ids.id_for(id);
+            let parent_id = resource.parent_resource_id.map(|id| self.ids.id_for(id.id));
 
             let parent = strings.string(match parent_id {
                 Some(id) => parents
@@ -187,7 +191,6 @@ impl ResourcesState {
                     .unwrap_or_else(|| "n/a".to_string()),
             );
 
-            let stats = ResourceStats::from_proto(stats_update.remove(&id)?, meta, styles, strings);
             let location = format_location(resource.location);
             let visibility = if resource.is_internal {
                 TypeVisibility::Internal
@@ -216,6 +219,7 @@ impl ResourcesState {
         self.resources.extend(new_resources);
 
         for (id, stats) in stats_update {
+            let id = self.ids.id_for(id);
             if let Some(resource) = self.resources.get_mut(&id) {
                 let mut r = resource.borrow_mut();
                 if let Some(meta) = metas.get(&r.meta_id) {
