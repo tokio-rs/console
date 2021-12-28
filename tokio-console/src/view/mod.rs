@@ -1,4 +1,3 @@
-use crate::intern::{InternedStr, Strings};
 use crate::view::help::HelpView;
 use crate::view::{resources::ResourcesTable, table::TableListState, tasks::TasksTable};
 use crate::{input, state::State};
@@ -39,8 +38,7 @@ pub struct View {
     tasks_list: TableListState<TasksTable, 11>,
     resources_list: TableListState<ResourcesTable, 9>,
     state: ViewState,
-    help: HelpView,
-    show_help: bool,
+    show_help_toggle: bool,
     pub(crate) styles: Styles,
 }
 
@@ -94,8 +92,7 @@ impl View {
             state: ViewState::TasksList,
             tasks_list: TableListState::<TasksTable, 11>::default(),
             resources_list: TableListState::<ResourcesTable, 9>::default(),
-            help: HelpView::new(String::new()),
-            show_help: false,
+            show_help_toggle: false,
             styles,
         }
     }
@@ -103,6 +100,17 @@ impl View {
     pub(crate) fn update_input(&mut self, event: input::Event, state: &State) -> UpdateKind {
         use ViewState::*;
         let mut update_kind = UpdateKind::Other;
+
+        if input::is_help_toggle(&event) {
+            // TODO: Pause state if we are about to show the help toggle
+            self.show_help_toggle = !self.show_help_toggle;
+        }
+
+        if self.show_help_toggle && !input::is_help_toggle(&event) {
+            // We have some other key pressed; clear the help popup.
+            self.show_help_toggle = !self.show_help_toggle;
+        }
+
         match self.state {
             TasksList => {
                 // The enter key changes views, so handle here since we can
@@ -171,17 +179,6 @@ impl View {
                     }
                 }
             }
-            _ => {
-                // If at any point we encounter `h` we display the help text for that particular view
-                match event {
-                    key!(Char('?')) => {
-                        self.show_help = true;
-                    }
-                    _ => {
-                        todo!()
-                    }
-                }
-            }
         }
         update_kind
     }
@@ -211,11 +208,12 @@ impl View {
             }
         }
 
-        if self.show_help {
-            self.help.render(&self.styles, frame, area, state);
-        }
-
         state.retain_active();
+
+        if self.show_help_toggle {
+            let mut help_view = HelpView::new(String::from("Some help text"));
+            help_view.render(&self.styles, frame, area, state);
+        }
     }
 
     pub(crate) fn current_view(&self) -> &ViewState {

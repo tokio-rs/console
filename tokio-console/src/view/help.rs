@@ -1,9 +1,9 @@
 use tui::{
     layout::{self, Constraint, Direction, Layout},
-    widgets::{Block, Borders, Clear},
+    widgets::{Clear, Paragraph},
 };
 
-use crate::{intern::InternedStr, state::State, view};
+use crate::{state::State, view};
 
 /// Simple view for help popup
 pub(crate) struct HelpView {
@@ -19,8 +19,8 @@ impl HelpView {
         &mut self,
         styles: &view::Styles,
         frame: &mut tui::terminal::Frame<B>,
-        area: layout::Rect,
-        state: &mut State,
+        _area: layout::Rect,
+        _state: &mut State,
     ) {
         let r = frame.size();
         let popup_layout = Layout::default()
@@ -39,16 +39,20 @@ impl HelpView {
             .direction(Direction::Horizontal)
             .constraints(
                 [
-                    Constraint::Percentage(30),
+                    Constraint::Percentage(20),
                     Constraint::Percentage(60),
-                    Constraint::Percentage(30),
+                    Constraint::Percentage(20),
                 ]
                 .as_ref(),
             )
             .split(popup_layout[1])[1];
 
-        let block = Block::default().title("Help").borders(Borders::ALL);
+        // TODO: This doesn't have to be a clone
+        let display_text =
+            Paragraph::new(self.help_text.clone()).block(styles.border_block().title("Help"));
+
+        // Clear the help block area and render the popup
         frame.render_widget(Clear, popup_area);
-        frame.render_widget(block, popup_area);
+        frame.render_widget(display_text, popup_area);
     }
 }
