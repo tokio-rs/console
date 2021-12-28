@@ -17,8 +17,10 @@ mod styles;
 mod table;
 mod task;
 mod tasks;
+use self::resource::ResourceView;
 pub(crate) use self::styles::{Palette, Styles};
 pub(crate) use self::table::SortBy;
+use self::task::TaskView;
 
 const DUR_LEN: usize = 10;
 // This data is only updated every second, so it doesn't make a ton of
@@ -101,15 +103,7 @@ impl View {
         use ViewState::*;
         let mut update_kind = UpdateKind::Other;
 
-        if input::is_help_toggle(&event) {
-            // TODO: Pause state if we are about to show the help toggle
-            self.show_help_toggle = !self.show_help_toggle;
-        }
-
-        if self.show_help_toggle && !input::is_help_toggle(&event) {
-            // We have some other key pressed; clear the help popup.
-            self.show_help_toggle = !self.show_help_toggle;
-        }
+        self.handl_help_popup(event);
 
         match self.state {
             TasksList => {
@@ -183,36 +177,55 @@ impl View {
         update_kind
     }
 
+    fn handl_help_popup(&mut self, event: crossterm::event::Event) {
+        if input::is_help_toggle(&event) {
+            // TODO: Pause state if we are about to show the help toggle
+            self.show_help_toggle = !self.show_help_toggle;
+        }
+        if self.show_help_toggle && !input::is_help_toggle(&event) {
+            // We have some other key pressed; clear the help popup.
+            self.show_help_toggle = !self.show_help_toggle;
+        }
+    }
+
     pub(crate) fn render<B: tui::backend::Backend>(
         &mut self,
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
         state: &mut State,
     ) {
+        let mut help_content;
         match self.state {
             ViewState::TasksList => {
                 self.tasks_list.render(&self.styles, frame, area, state, ());
+                help_content = HelpView::new(TableListState::<TasksTable>::render_help_content(
+                    &self.styles,
+                ));
             }
             ViewState::ResourcesList => {
                 self.resources_list
                     .render(&self.styles, frame, area, state, ());
+                help_content = HelpView::new(
+                    TableListState::<ResourcesTable>::render_help_content(&self.styles),
+                );
             }
             ViewState::TaskInstance(ref mut view) => {
                 let now = state
                     .last_updated_at()
                     .expect("task view implies we've received an update");
                 view.render(&self.styles, frame, area, now);
+                help_content = HelpView::new(TaskView::render_help_content(&self.styles));
             }
             ViewState::ResourceInstance(ref mut view) => {
                 view.render(&self.styles, frame, area, state);
+                help_content = HelpView::new(ResourceView::render_help_content(&self.styles));
             }
         }
 
         state.retain_active();
 
         if self.show_help_toggle {
-            let mut help_view = HelpView::new(String::from("Some help text"));
-            help_view.render(&self.styles, frame, area, state);
+            help_content.render(&self.styles, frame, area, state);
         }
     }
 

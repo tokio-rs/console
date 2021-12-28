@@ -180,6 +180,30 @@ impl<T: TableList<N>, const N: usize> TableListState<T, N> {
     ) {
         T::render(self, styles, frame, area, state, ctx)
     }
+
+    pub(in crate::view) fn render_help_content(styles: &view::Styles) -> Spans<'static> {
+        Spans::from(vec![
+            Span::raw("controls: "),
+            bold(styles.if_utf8("\u{2190}\u{2192}", "left, right")),
+            Span::raw(" or "),
+            bold("h, l"),
+            text::Span::raw(" = select column (sort), "),
+            bold(styles.if_utf8("\u{2191}\u{2193}", "up, down")),
+            Span::raw(" or "),
+            bold("k, j"),
+            text::Span::raw(" = scroll, "),
+            bold(styles.if_utf8("\u{21B5}", "enter")),
+            text::Span::raw(" = view details, "),
+            bold("i"),
+            text::Span::raw(" = invert sort (highest/lowest), "),
+            bold("q"),
+            text::Span::raw(" = quit "),
+            bold("gg"),
+            text::Span::raw(" = scroll to top, "),
+            bold("G"),
+            text::Span::raw(" = scroll to bottom"),
+        ])
+    }
 }
 
 impl<T, const N: usize> Default for TableListState<T, N>

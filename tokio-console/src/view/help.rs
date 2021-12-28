@@ -1,18 +1,24 @@
 use tui::{
     layout::{self, Constraint, Direction, Layout},
+    text::Text,
     widgets::{Clear, Paragraph},
 };
 
 use crate::{state::State, view};
 
 /// Simple view for help popup
-pub(crate) struct HelpView {
-    help_text: String,
+pub(crate) struct HelpView<T> {
+    help_text: Option<T>,
 }
 
-impl HelpView {
-    pub(super) fn new(help_text: String) -> Self {
-        HelpView { help_text }
+impl<T> HelpView<T>
+where
+    T: Into<Text<'static>>,
+{
+    pub(super) fn new(help_text: T) -> Self {
+        HelpView {
+            help_text: Some(help_text),
+        }
     }
 
     pub(crate) fn render<B: tui::backend::Backend>(
@@ -48,8 +54,11 @@ impl HelpView {
             .split(popup_layout[1])[1];
 
         // TODO: This doesn't have to be a clone
-        let display_text =
-            Paragraph::new(self.help_text.clone()).block(styles.border_block().title("Help"));
+        let content = self
+            .help_text
+            .take()
+            .expect("help_text should be initialized");
+        let display_text = Paragraph::new(content).block(styles.border_block().title("Help"));
 
         // Clear the help block area and render the popup
         frame.render_widget(Clear, popup_area);

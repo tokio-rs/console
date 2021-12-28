@@ -267,6 +267,10 @@ impl TaskView {
         frame.render_widget(fields_widget, fields_area);
         frame.render_widget(percentiles_widget, percentiles_area);
     }
+
+    pub(in crate::view) fn render_help_content(styles: &view::Styles) -> Spans<'static> {
+        Spans::from(vec![Span::raw("Help text specific to tasks")])
+    }
 }
 
 impl Details {
