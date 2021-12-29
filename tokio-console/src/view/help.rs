@@ -29,6 +29,12 @@ where
         _state: &mut State,
     ) {
         let r = frame.size();
+        let content = self
+            .help_text
+            .take()
+            .expect("help_text should be initialized")
+            .into();
+
         let popup_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints(
@@ -53,15 +59,28 @@ where
             )
             .split(popup_layout[1])[1];
 
-        // TODO: This doesn't have to be a clone
-        let content = self
-            .help_text
-            .take()
-            .expect("help_text should be initialized");
+        let mut height = 1;
+        let width = content.width() as u16;
+        if popup_area.width < width {
+            height = width / popup_area.width;
+
+            if width % popup_area.width > 0 {
+                height += 1
+            }
+        }
+
+        let content_layout = layout::Layout::default()
+            .direction(layout::Direction::Vertical)
+            .margin(0);
+
+        let content_area = content_layout
+            .constraints([layout::Constraint::Length(height)])
+            .split(popup_area)[0];
+
         let display_text = Paragraph::new(content).block(styles.border_block().title("Help"));
 
         // Clear the help block area and render the popup
         frame.render_widget(Clear, popup_area);
-        frame.render_widget(display_text, popup_area);
+        frame.render_widget(display_text, content_area);
     }
 }

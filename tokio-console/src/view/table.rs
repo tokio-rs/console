@@ -187,7 +187,7 @@ impl<T: TableList<N>, const N: usize> TableListState<T, N> {
             bold(styles.if_utf8("\u{2190}\u{2192}", "left, right")),
             Span::raw(" or "),
             bold("h, l"),
-            text::Span::raw(" = select column (sort), "),
+            text::Span::raw(" = select column (sort),\n"),
             bold(styles.if_utf8("\u{2191}\u{2193}", "up, down")),
             Span::raw(" or "),
             bold("k, j"),
