@@ -28,7 +28,7 @@ keywords = [
 [dependencies]
 atty = "0.2"
 console-api = { version = "0.1.0", path = "../console-api", features = ["transport"] }
-clap = { version = "3.0.0-beta.5", features = ["cargo", "derive", "env"] }
+clap = { version = "3", features = ["cargo", "derive", "env"] }
 tokio = { version = "1", features = ["full", "rt-multi-thread"] }
 tonic = { version = "0.6", features = ["transport"] }
 futures = "0.3"
