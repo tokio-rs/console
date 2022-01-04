@@ -1,7 +1,7 @@
 use tui::{
     layout::{self, Constraint, Direction, Layout},
     text::Text,
-    widgets::{Clear, Paragraph},
+    widgets::{Clear, Paragraph, Wrap},
 };
 
 use crate::{state::State, view};
@@ -59,28 +59,12 @@ where
             )
             .split(popup_layout[1])[1];
 
-        let mut height = 1;
-        let width = content.width() as u16;
-        if popup_area.width < width {
-            height = width / popup_area.width;
-
-            if width % popup_area.width > 0 {
-                height += 1
-            }
-        }
-
-        let content_layout = layout::Layout::default()
-            .direction(layout::Direction::Vertical)
-            .margin(0);
-
-        let content_area = content_layout
-            .constraints([layout::Constraint::Length(height)])
-            .split(popup_area)[0];
-
-        let display_text = Paragraph::new(content).block(styles.border_block().title("Help"));
+        let display_text = Paragraph::new(content)
+            .block(styles.border_block().title("Help"))
+            .wrap(Wrap { trim: true });
 
         // Clear the help block area and render the popup
         frame.render_widget(Clear, popup_area);
-        frame.render_widget(display_text, content_area);
+        frame.render_widget(display_text, popup_area);
     }
 }

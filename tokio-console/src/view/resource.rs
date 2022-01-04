@@ -119,7 +119,7 @@ impl ResourceView {
         self.initial_render = false;
     }
 
-    pub(in crate::view) fn render_help_content(styles: &view::Styles) -> Spans<'static> {
-        Spans::from(vec![Span::raw("Help text specific to resources")])
+    pub(in crate::view) fn render_help_content(_styles: &view::Styles) -> Spans<'static> {
+        Spans::from(vec![Span::raw("A view to display help data for a resource")])
     }
 }
