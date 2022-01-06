@@ -21,11 +21,6 @@ use std::{
 };
 use tracing_core::{span::Id, Metadata};
 
-use hdrhistogram::{
-    serialization::{Serializer, V2SerializeError, V2Serializer},
-    Histogram,
-};
-
 mod id_data;
 mod shrink;
 use self::id_data::{IdData, Include};
@@ -329,8 +324,7 @@ impl Aggregator {
                 && subscription.update(&proto::tasks::TaskDetails {
                     task_id: Some(id.clone().into()),
                     now: Some(now.into()),
-                    poll_times_histogram: None, // TODO(eliza): put back
-                                                // poll_times_histogram: serialize_histogram(&stats.poll_times_histogram).ok(),
+                    poll_times_histogram: stats.serialize_histogram(),
                 })
             {
                 self.details_watchers
@@ -718,13 +712,6 @@ impl From<AttributeUpdate> for Attribute {
             unit: upd.unit,
         }
     }
-}
-
-fn serialize_histogram(histogram: &Histogram<u64>) -> Result<Vec<u8>, V2SerializeError> {
-    let mut serializer = V2Serializer::new();
-    let mut buf = Vec::new();
-    serializer.serialize(histogram, &mut buf)?;
-    Ok(buf)
 }
 
 fn update_attribute(attribute: &mut Attribute, update: &AttributeUpdate) {

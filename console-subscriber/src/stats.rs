@@ -1,5 +1,12 @@
-use crate::{attribute, sync::Mutex, ToProto};
-use hdrhistogram::Histogram;
+use crate::{
+    attribute,
+    sync::{Mutex, MutexGuard},
+    ToProto,
+};
+use hdrhistogram::{
+    serialization::{Serializer, V2Serializer},
+    Histogram,
+};
 use std::cmp;
 use std::collections::HashMap;
 use std::sync::{
@@ -217,6 +224,15 @@ impl TaskStats {
     #[inline]
     fn make_dirty(&self) {
         self.is_dirty.swap(true, AcqRel);
+    }
+
+    pub(crate) fn serialize_histogram(&self) -> Option<Vec<u8>> {
+        let poll_timestamps = self.poll_stats.timestamps.lock();
+        let histogram = poll_timestamps.histogram.as_ref()?;
+        let mut serializer = V2Serializer::new();
+        let mut buf = Vec::new();
+        serializer.serialize(histogram, &mut buf).ok()?;
+        Some(buf)
     }
 }
 
