@@ -130,7 +130,8 @@ impl Config {
         #[cfg(all(feature = "tracing-journald", target_os = "linux"))]
         let (journald, should_fmt) = {
             let journald = tracing_journald::layer().ok();
-            (journald, journald.is_some())
+            let should_fmt = journald.is_none();
+            (journald, should_fmt)
         };
 
         #[cfg(not(all(feature = "tracing-journald", target_os = "linux")))]
