@@ -127,10 +127,17 @@ impl Config {
 
         // If we're on a Linux distro with journald, try logging to the system
         // journal so we don't interfere with text output.
-        let journald = tracing_journald::layer().ok();
+        #[cfg(all(feature = "tracing-journald", target_os = "linux"))]
+        let (journald, should_fmt) = {
+            let journald = tracing_journald::layer().ok();
+            (journald, journald.is_some())
+        };
+
+        #[cfg(not(all(feature = "tracing-journald", target_os = "linux")))]
+        let should_fmt = true;
 
         // Otherwise, log to stderr and rely on the user redirecting output.
-        let fmt = if journald.is_none() {
+        let fmt = if should_fmt {
             Some(
                 tracing_subscriber::fmt::layer()
                     .with_writer(std::io::stderr)
@@ -140,11 +147,12 @@ impl Config {
             None
         };
 
-        tracing_subscriber::registry()
-            .with(journald)
-            .with(fmt)
-            .with(filter)
-            .try_init()?;
+        let registry = tracing_subscriber::registry().with(fmt).with(filter);
+
+        #[cfg(all(feature = "tracing-journald", target_os = "linux"))]
+        let registry = registry.with(journald);
+
+        registry.try_init()?;
 
         Ok(())
     }
