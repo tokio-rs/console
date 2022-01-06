@@ -36,7 +36,15 @@ pub(crate) enum SortBy {
 
 #[derive(Debug)]
 pub(crate) struct Resource {
-    id: u64,
+    /// The resource's pretty (console-generated, sequential) ID.
+    ///
+    /// This is NOT the `tracing::span::Id` for the resource's `tracing` span on the
+    /// remote.
+    num: u64,
+    /// The `tracing::span::Id` on the remote process for this resource's span.
+    ///
+    /// This is used when requesting a resource details stream.
+    span_id: u64,
     id_str: InternedStr,
     parent: InternedStr,
     parent_id: InternedStr,
@@ -68,9 +76,8 @@ impl Default for SortBy {
 impl SortBy {
     pub fn sort(&self, now: SystemTime, resources: &mut Vec<Weak<RefCell<Resource>>>) {
         match self {
-            Self::Rid => {
-                resources.sort_unstable_by_key(|resource| resource.upgrade().map(|r| r.borrow().id))
-            }
+            Self::Rid => resources
+                .sort_unstable_by_key(|resource| resource.upgrade().map(|r| r.borrow().num)),
             Self::Kind => resources.sort_unstable_by_key(|resource| {
                 resource.upgrade().map(|r| r.borrow().kind.clone())
             }),
@@ -166,10 +173,11 @@ impl ResourcesState {
                 }
             };
 
-            let id = resource.id?.id;
-            let stats = ResourceStats::from_proto(stats_update.remove(&id)?, meta, styles, strings);
+            let span_id = resource.id?.id;
+            let stats =
+                ResourceStats::from_proto(stats_update.remove(&span_id)?, meta, styles, strings);
 
-            let id = self.ids.id_for(id);
+            let num = self.ids.id_for(span_id);
             let parent_id = resource.parent_resource_id.map(|id| self.ids.id_for(id.id));
 
             let parent = strings.string(match parent_id {
@@ -199,8 +207,9 @@ impl ResourcesState {
             };
 
             let resource = Resource {
-                id,
-                id_str: strings.string(id.to_string()),
+                num,
+                span_id,
+                id_str: strings.string(num.to_string()),
                 parent,
                 parent_id,
                 kind,
@@ -213,14 +222,14 @@ impl ResourcesState {
             };
             let resource = Rc::new(RefCell::new(resource));
             new_list.push(Rc::downgrade(&resource));
-            Some((id, resource))
+            Some((num, resource))
         });
 
         self.resources.extend(new_resources);
 
-        for (id, stats) in stats_update {
-            let id = self.ids.id_for(id);
-            if let Some(resource) = self.resources.get_mut(&id) {
+        for (span_id, stats) in stats_update {
+            let num = self.ids.id_for(span_id);
+            if let Some(resource) = self.resources.get_mut(&num) {
                 let mut r = resource.borrow_mut();
                 if let Some(meta) = metas.get(&r.meta_id) {
                     r.stats = ResourceStats::from_proto(stats, meta, styles, strings);
@@ -247,7 +256,11 @@ impl ResourcesState {
 
 impl Resource {
     pub(crate) fn id(&self) -> u64 {
-        self.id
+        self.num
+    }
+
+    pub(crate) fn span_id(&self) -> u64 {
+        self.span_id
     }
 
     pub(crate) fn id_str(&self) -> &str {

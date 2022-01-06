@@ -34,7 +34,7 @@ pub(crate) enum SortBy {
 
 #[derive(Debug)]
 pub(crate) struct AsyncOp {
-    id: u64,
+    num: u64,
     parent_id: InternedStr,
     resource_id: u64,
     meta_id: u64,
@@ -69,7 +69,7 @@ impl Default for SortBy {
 impl SortBy {
     pub fn sort(&self, now: SystemTime, ops: &mut Vec<Weak<RefCell<AsyncOp>>>) {
         match self {
-            Self::Aid => ops.sort_unstable_by_key(|ao| ao.upgrade().map(|a| a.borrow().id)),
+            Self::Aid => ops.sort_unstable_by_key(|ao| ao.upgrade().map(|a| a.borrow().num)),
             Self::Task => ops.sort_unstable_by_key(|ao| ao.upgrade().map(|a| a.borrow().task_id())),
             Self::Source => {
                 ops.sort_unstable_by_key(|ao| ao.upgrade().map(|a| a.borrow().source.clone()))
@@ -154,10 +154,11 @@ impl AsyncOpsState {
                 }
             };
 
-            let id = async_op.id?.id;
-            let stats = AsyncOpStats::from_proto(stats_update.remove(&id)?, meta, styles, strings);
+            let span_id = async_op.id?.id;
+            let stats =
+                AsyncOpStats::from_proto(stats_update.remove(&span_id)?, meta, styles, strings);
 
-            let id = self.ids.id_for(id);
+            let num = self.ids.id_for(span_id);
             let resource_id = resource_ids.id_for(async_op.resource_id?.id);
             let parent_id = match async_op.parent_async_op_id {
                 Some(id) => strings.string(format!("{}", self.ids.id_for(id.id))),
@@ -167,7 +168,7 @@ impl AsyncOpsState {
             let source = strings.string(async_op.source);
 
             let async_op = AsyncOp {
-                id,
+                num,
                 parent_id,
                 resource_id,
                 meta_id,
@@ -176,14 +177,14 @@ impl AsyncOpsState {
             };
             let async_op = Rc::new(RefCell::new(async_op));
             new_list.push(Rc::downgrade(&async_op));
-            Some((id, async_op))
+            Some((num, async_op))
         });
 
         self.async_ops.extend(new_async_ops);
 
-        for (id, stats) in stats_update {
-            let id = self.ids.id_for(id);
-            if let Some(async_op) = self.async_ops.get_mut(&id) {
+        for (span_id, stats) in stats_update {
+            let num = self.ids.id_for(span_id);
+            if let Some(async_op) = self.async_ops.get_mut(&num) {
                 let mut async_op = async_op.borrow_mut();
                 if let Some(meta) = metas.get(&async_op.meta_id) {
                     async_op.stats = AsyncOpStats::from_proto(stats, meta, styles, strings);
@@ -210,7 +211,7 @@ impl AsyncOpsState {
 
 impl AsyncOp {
     pub(crate) fn id(&self) -> u64 {
-        self.id
+        self.num
     }
 
     pub(crate) fn parent_id(&self) -> &str {

@@ -81,6 +81,7 @@ async fn main() -> color_eyre::Result<()> {
                 let _ = update_tx.send(update_kind);
                 match update_kind {
                     UpdateKind::SelectTask(task_id) => {
+                        tracing::info!(task_id, "starting details watch");
                         match conn.watch_details(task_id).await {
                             Ok(stream) => {
                                 tokio::spawn(watch_details_stream(task_id, stream, update_rx.clone(), details_tx.clone()));

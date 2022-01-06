@@ -103,7 +103,7 @@ impl View {
                 match event {
                     key!(Enter) => {
                         if let Some(task) = self.tasks_list.selected_item().upgrade() {
-                            update_kind = UpdateKind::SelectTask(task.borrow().id());
+                            update_kind = UpdateKind::SelectTask(task.borrow().span_id());
                             self.state = TaskInstance(self::task::TaskView::new(
                                 task,
                                 state.task_details_ref(),
@@ -123,7 +123,7 @@ impl View {
                 match event {
                     key!(Enter) => {
                         if let Some(res) = self.resources_list.selected_item().upgrade() {
-                            update_kind = UpdateKind::SelectResource(res.borrow().id());
+                            update_kind = UpdateKind::SelectResource(res.borrow().span_id());
                             self.state = ResourceInstance(self::resource::ResourceView::new(res));
                         }
                     }

@@ -56,7 +56,15 @@ pub(crate) type TaskRef = Weak<RefCell<Task>>;
 
 #[derive(Debug)]
 pub(crate) struct Task {
-    id: u64,
+    /// The task's pretty (console-generated, sequential) task ID.
+    ///
+    /// This is NOT the `tracing::span::Id` for the task's tracing span on the
+    /// remote.
+    num: u64,
+    /// The `tracing::span::Id` on the remote process for this task's span.
+    ///
+    /// This is used when requesting a task details stream.
+    span_id: u64,
     short_desc: InternedStr,
     formatted_fields: Vec<Vec<Span<'static>>>,
     stats: TaskStats,
@@ -150,22 +158,23 @@ impl TasksState {
                 .collect::<Vec<_>>();
 
             let formatted_fields = Field::make_formatted(styles, &mut fields);
-            let id = task.id?;
+            let span_id = task.id?.id;
 
-            let stats = stats_update.remove(&id.id)?.into();
+            let stats = stats_update.remove(&span_id)?.into();
             let location = format_location(task.location);
 
             // remap the server's ID to a pretty, sequential task ID
-            let id = self.ids.id_for(id.id);
+            let num = self.ids.id_for(span_id);
 
             let short_desc = strings.string(match name.as_ref() {
-                Some(name) => format!("{} ({})", id, name),
-                None => format!("{}", id),
+                Some(name) => format!("{} ({})", num, name),
+                None => format!("{}", num),
             });
 
             let mut task = Task {
                 name,
-                id,
+                num,
+                span_id,
                 short_desc,
                 formatted_fields,
                 stats,
@@ -176,12 +185,12 @@ impl TasksState {
             task.lint(linters);
             let task = Rc::new(RefCell::new(task));
             new_list.push(Rc::downgrade(&task));
-            Some((id, task))
+            Some((num, task))
         });
         self.tasks.extend(new_tasks);
-        for (id, stats) in stats_update {
-            let id = self.ids.id_for(id);
-            if let Some(task) = self.tasks.get_mut(&id) {
+        for (span_id, stats) in stats_update {
+            let num = self.ids.id_for(span_id);
+            if let Some(task) = self.tasks.get_mut(&num) {
                 let mut task = task.borrow_mut();
                 tracing::trace!(?task, "processing stats update for");
                 task.stats = stats.into();
@@ -225,7 +234,11 @@ impl Details {
 
 impl Task {
     pub(crate) fn id(&self) -> u64 {
-        self.id
+        self.num
+    }
+
+    pub(crate) fn span_id(&self) -> u64 {
+        self.span_id
     }
 
     pub(crate) fn target(&self) -> &str {
@@ -407,7 +420,7 @@ impl Default for SortBy {
 impl SortBy {
     pub fn sort(&self, now: SystemTime, tasks: &mut Vec<Weak<RefCell<Task>>>) {
         match self {
-            Self::Tid => tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().id)),
+            Self::Tid => tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().num)),
             Self::Name => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().name.clone()))
             }
