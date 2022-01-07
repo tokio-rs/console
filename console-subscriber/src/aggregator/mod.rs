@@ -393,9 +393,7 @@ impl Aggregator {
                 let details = proto::tasks::TaskDetails {
                     task_id: Some(id.clone().into()),
                     now: Some(now.into()),
-                    // poll_times_histogram: serialize_histogram(&task_stats.poll_times_histogram)
-                    //     .ok(),
-                    poll_times_histogram: None, // TODO(eliza): put back
+                    poll_times_histogram: task_stats.serialize_histogram(),
                 };
                 watchers.retain(|watch| watch.update(&details));
                 !watchers.is_empty()
