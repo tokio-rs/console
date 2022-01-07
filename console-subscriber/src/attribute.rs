@@ -53,7 +53,7 @@ impl Attributes {
 
         self.attributes
             .entry(key)
-            .and_modify(|attr| update_attribute(attr, &update))
+            .and_modify(|attr| update_attribute(attr, update))
             .or_insert_with(|| update.clone().into());
     }
 }

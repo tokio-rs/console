@@ -468,22 +468,16 @@ impl ConsoleLayer {
             None => return,
         };
 
-        stats.update_attribute(&id, &update);
+        stats.update_attribute(id, &update);
 
-        if let Some(parent) = stats
-            .parent_id
-            .as_ref()
-            .and_then(|parent| ctx.span(&parent))
-        {
+        if let Some(parent) = stats.parent_id.as_ref().and_then(|parent| ctx.span(parent)) {
             let exts = parent.extensions();
             if let Some(stats) = get_stats(&exts) {
                 if stats.inherit_child_attributes {
-                    stats.update_attribute(&id, &update);
+                    stats.update_attribute(id, &update);
                 }
             }
         }
-
-        return;
     }
 }
 
@@ -726,7 +720,7 @@ where
             if let Some(id) = resource_id {
                 self.state_update(&id, event, &ctx, |exts| {
                     exts.get::<Arc<stats::ResourceStats>>()
-                        .map(|arc| <Arc<stats::ResourceStats> as std::ops::Deref>::deref(arc))
+                        .map(<Arc<stats::ResourceStats> as std::ops::Deref>::deref)
                 });
             }
 
@@ -743,8 +737,6 @@ where
                     Some(&async_op.stats)
                 });
             }
-
-            return;
         }
     }
 
