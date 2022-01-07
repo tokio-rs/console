@@ -2,7 +2,7 @@
 //! fields from tracing metadata and producing the parts
 //! needed to construct `Event` instances.
 
-use super::{AttributeUpdate, AttributeUpdateOp, WakeOp};
+use super::{attribute, WakeOp};
 use console_api as proto;
 use proto::resources::resource;
 use tracing_core::{
@@ -162,7 +162,7 @@ pub(crate) struct StateUpdateVisitor {
     meta_id: proto::MetaId,
     field: Option<proto::Field>,
     unit: Option<String>,
-    op: Option<AttributeUpdateOp>,
+    op: Option<attribute::UpdateOp>,
 }
 
 impl ResourceVisitor {
@@ -456,8 +456,8 @@ impl StateUpdateVisitor {
         }
     }
 
-    pub(crate) fn result(self) -> Option<AttributeUpdate> {
-        Some(AttributeUpdate {
+    pub(crate) fn result(self) -> Option<attribute::Update> {
+        Some(attribute::Update {
             field: self.field?,
             op: self.op,
             unit: self.unit,
@@ -517,9 +517,9 @@ impl Visit for StateUpdateVisitor {
     fn record_str(&mut self, field: &field::Field, value: &str) {
         if field.name().ends_with(Self::STATE_OP_SUFFIX) {
             match value {
-                Self::OP_ADD => self.op = Some(AttributeUpdateOp::Add),
-                Self::OP_SUB => self.op = Some(AttributeUpdateOp::Sub),
-                Self::OP_OVERRIDE => self.op = Some(AttributeUpdateOp::Override),
+                Self::OP_ADD => self.op = Some(attribute::UpdateOp::Add),
+                Self::OP_SUB => self.op = Some(attribute::UpdateOp::Sub),
+                Self::OP_OVERRIDE => self.op = Some(attribute::UpdateOp::Override),
                 _ => {}
             };
         } else if field.name().ends_with(Self::STATE_UNIT_SUFFIX) {

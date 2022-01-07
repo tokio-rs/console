@@ -15,14 +15,14 @@ use std::{
 use thread_local::ThreadLocal;
 use tokio::sync::{mpsc, oneshot};
 use tracing_core::{
-    dispatcher::{self, Dispatch},
+    dispatcher::Dispatch,
     span::{self, Id},
     subscriber::{self, NoSubscriber, Subscriber},
     Metadata,
 };
 use tracing_subscriber::{
     layer::Context,
-    registry::{LookupSpan, SpanRef},
+    registry::{Extensions, LookupSpan, SpanRef},
     Layer,
 };
 
@@ -192,7 +192,6 @@ enum Event {
         kind: resource::Kind,
         location: Option<proto::Location>,
         is_internal: bool,
-        inherit_child_attrs: bool,
         stats: Arc<stats::ResourceStats>,
     },
     PollOp {
@@ -203,41 +202,15 @@ enum Event {
         task_id: span::Id,
         is_ready: bool,
     },
-    StateUpdate {
-        update_id: span::Id,
-        update_type: UpdateType,
-        update: AttributeUpdate,
-    },
     AsyncResourceOp {
         id: span::Id,
         parent_id: Option<span::Id>,
         resource_id: span::Id,
         metadata: &'static Metadata<'static>,
         source: String,
-        inherit_child_attrs: bool,
 
         stats: Arc<stats::AsyncOpStats>,
     },
-}
-
-#[derive(Debug, Clone)]
-enum UpdateType {
-    Resource,
-    AsyncOp,
-}
-
-#[derive(Debug, Clone)]
-struct AttributeUpdate {
-    field: proto::Field,
-    op: Option<AttributeUpdateOp>,
-    unit: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-enum AttributeUpdateOp {
-    Add,
-    Override,
-    Sub,
 }
 
 #[derive(Clone, Debug, Copy, Serialize)]
@@ -476,6 +449,56 @@ impl ConsoleLayer {
             recorder.record(event());
         }
     }
+
+    fn state_update<S>(
+        &self,
+        id: &Id,
+        event: &tracing::Event<'_>,
+        ctx: &Context<'_, S>,
+        get_stats: impl for<'a> Fn(&'a Extensions) -> Option<&'a stats::ResourceStats>,
+    ) where
+        S: Subscriber + for<'a> LookupSpan<'a>,
+    {
+        let meta_id = event.metadata().into();
+        let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
+        event.record(&mut state_update_visitor);
+
+        let update = match state_update_visitor.result() {
+            Some(update) => update,
+            None => return,
+        };
+
+        let span = match ctx.span(id) {
+            Some(span) => span,
+            // XXX(eliza): no span exists for a resource ID, we should maybe
+            // record an error here...
+            None => return,
+        };
+
+        let exts = span.extensions();
+        let stats = match get_stats(&exts) {
+            Some(stats) => stats,
+            // XXX(eliza): a resource span was not a resource??? this is a bug
+            None => return,
+        };
+
+        stats.update_attribute(&id, &update);
+
+        if let Some(parent) = stats
+            .parent_id
+            .as_ref()
+            .and_then(|parent| ctx.span(&parent))
+        {
+            let exts = parent.extensions();
+            if let Some(stats) = get_stats(&exts) {
+                if stats.inherit_child_attributes {
+                    stats.update_attribute(&id, &update);
+                }
+            }
+        }
+
+        return;
+    }
 }
 
 impl<S> Layer<S> for ConsoleLayer
@@ -567,7 +590,11 @@ where
                     self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
                 });
                 if let Some(stats) = self.send_stats(&self.shared.dropped_resources, move || {
-                    let stats = Arc::new(stats::ResourceStats::new(at));
+                    let stats = Arc::new(stats::ResourceStats::new(
+                        at,
+                        inherit_child_attrs,
+                        parent_id.clone(),
+                    ));
                     let event = Event::Resource {
                         id: id.clone(),
                         parent_id,
@@ -576,7 +603,6 @@ where
                         kind,
                         location,
                         is_internal,
-                        inherit_child_attrs,
                         stats: stats.clone(),
                     };
                     (event, stats)
@@ -603,14 +629,17 @@ where
                 if let Some(resource_id) = resource_id {
                     if let Some(stats) =
                         self.send_stats(&self.shared.dropped_async_ops, move || {
-                            let stats = Arc::new(stats::AsyncOpStats::new(at));
+                            let stats = Arc::new(stats::AsyncOpStats::new(
+                                at,
+                                inherit_child_attrs,
+                                parent_id.clone(),
+                            ));
                             let event = Event::AsyncResourceOp {
                                 id: id.clone(),
                                 parent_id,
                                 resource_id,
                                 metadata,
                                 source,
-                                inherit_child_attrs,
                                 stats: stats.clone(),
                             };
                             (event, stats)
@@ -697,50 +726,31 @@ where
             // TODO(eliza)
         }
 
-        // if self.resource_state_update_callsites.contains(metadata) {
-        //     // state update event should have a resource span parent
-        //     let resource_id = self.current_spans.get().and_then(|stack| {
-        //         self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
-        //     });
+        if self.resource_state_update_callsites.contains(metadata) {
+            // state update event should have a resource span parent
+            let resource_id = self.current_spans.get().and_then(|stack| {
+                self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
+            });
+            if let Some(id) = resource_id {
+                self.state_update(&id, event, &ctx, |exts| exts.get::<stats::ResourceStats>());
+            }
 
-        //     if let Some(resource_id) = resource_id {
-        //         let meta_id = event.metadata().into();
-        //         let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
-        //         event.record(&mut state_update_visitor);
-        //         if let Some(update) = state_update_visitor.result() {
-        //             self.send(
-        //                 &self.shared.dropped_resources,
-        //                 Event::StateUpdate {
-        //                     update_id: resource_id,
-        //                     update_type: UpdateType::Resource,
-        //                     update,
-        //                 },
-        //             );
-        //         }
-        //     }
-        //     return;
-        // }
+            return;
+        }
 
-        // if self.async_op_state_update_callsites.contains(metadata) {
-        //     let async_op_id = self.current_spans.get().and_then(|stack| {
-        //         self.first_entered(&stack.borrow(), |id| self.is_id_async_op(id, &ctx))
-        //     });
-        //     if let Some(async_op_id) = async_op_id {
-        //         let meta_id = event.metadata().into();
-        //         let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
-        //         event.record(&mut state_update_visitor);
-        //         if let Some(update) = state_update_visitor.result() {
-        //             self.send(
-        //                 &self.shared.dropped_async_ops,
-        //                 Event::StateUpdate {
-        //                     update_id: async_op_id,
-        //                     update_type: UpdateType::AsyncOp,
-        //                     update,
-        //                 },
-        //             );
-        //         }
-        //     }
-        // }
+        if self.async_op_state_update_callsites.contains(metadata) {
+            let async_op_id = self.current_spans.get().and_then(|stack| {
+                self.first_entered(&stack.borrow(), |id| self.is_id_async_op(id, &ctx))
+            });
+            if let Some(id) = async_op_id {
+                self.state_update(&id, event, &ctx, |exts| {
+                    let async_op = exts.get::<stats::AsyncOpStats>()?;
+                    Some(&async_op.stats)
+                });
+            }
+
+            return;
+        }
     }
 
     fn on_enter(&self, id: &span::Id, cx: Context<'_, S>) {

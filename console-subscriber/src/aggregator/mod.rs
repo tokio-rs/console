@@ -1,18 +1,14 @@
-use super::{AttributeUpdate, AttributeUpdateOp, Command, Event, Shared, Watch};
+use super::{Command, Event, Shared, Watch};
 use crate::{
-    record::Recorder,
     stats::{self, Unsent},
     ToProto, WatchRequest,
 };
 use console_api as proto;
 use proto::resources::resource;
-use proto::Attribute;
 use tokio::sync::{mpsc, Notify};
 
 use futures::FutureExt;
 use std::{
-    collections::hash_map::{Entry, HashMap},
-    convert::TryInto,
     sync::{
         atomic::{AtomicBool, Ordering::*},
         Arc,
@@ -113,7 +109,6 @@ struct Resource {
     kind: resource::Kind,
     location: Option<proto::Location>,
     is_internal: bool,
-    inherit_child_attrs: bool,
 }
 
 /// Represents static data for tasks
@@ -132,7 +127,6 @@ struct AsyncOp {
     resource_id: Id,
     metadata: &'static Metadata<'static>,
     source: String,
-    inherit_child_attrs: bool,
 }
 
 impl Aggregator {
@@ -450,7 +444,6 @@ impl Aggregator {
                 concrete_type,
                 location,
                 is_internal,
-                inherit_child_attrs,
                 stats,
             } => {
                 self.resources.insert(
@@ -464,7 +457,6 @@ impl Aggregator {
                         concrete_type,
                         location,
                         is_internal,
-                        inherit_child_attrs,
                     },
                 );
 
@@ -497,83 +489,12 @@ impl Aggregator {
                 // self.new_poll_ops.push(poll_op);
             }
 
-            Event::StateUpdate {
-                update_id,
-                update_type,
-                update,
-                ..
-            } => {
-                // let update_id = self.ids.id_for(update_id);
-                //         let mut to_update = vec![(update_id, update_type.clone())];
-
-                //         fn update_entry(e: Entry<'_, FieldKey, Attribute>, upd: &AttributeUpdate) {
-                //             e.and_modify(|attr| update_attribute(attr, upd))
-                //                 .or_insert_with(|| upd.clone().into());
-                //         }
-
-                //         match update_type {
-                //             UpdateType::Resource => {
-                //                 if let Some(parent) = self
-                //                     .resources
-                //                     .get(&update_id)
-                //                     .and_then(|r| self.resources.get(r.parent_id.as_ref()?))
-                //                     .filter(|parent| parent.inherit_child_attrs)
-                //                 {
-                //                     to_update.push((parent.id, UpdateType::Resource));
-                //                 }
-                //             }
-                //             UpdateType::AsyncOp => {
-                //                 if let Some(parent) = self
-                //                     .async_ops
-                //                     .get(&update_id)
-                //                     .and_then(|r| self.async_ops.get(r.parent_id.as_ref()?))
-                //                     .filter(|parent| parent.inherit_child_attrs)
-                //                 {
-                //                     to_update.push((parent.id, UpdateType::AsyncOp));
-                //                 }
-                //             }
-                //         }
-
-                //         for (update_id, update_type) in to_update {
-                //             let field_name = match update.field.name.as_ref() {
-                //                 Some(name) => name.clone(),
-                //                 None => {
-                //                     tracing::warn!(?update.field, "field missing name, skipping...");
-                //                     return;
-                //                 }
-                //             };
-
-                //             let upd_key = FieldKey {
-                //                 update_id,
-                //                 field_name,
-                //             };
-
-                //             match update_type {
-                //                 UpdateType::Resource => {
-                //                     let mut stats = self.resource_stats.update(&update_id);
-                //                     let entry = stats.as_mut().map(|s| s.attributes.entry(upd_key));
-                //                     if let Some(entry) = entry {
-                //                         update_entry(entry, &update);
-                //                     }
-                //                 }
-                //                 UpdateType::AsyncOp => {
-                //                     let mut stats = self.async_op_stats.update(&update_id);
-                //                     let entry = stats.as_mut().map(|s| s.attributes.entry(upd_key));
-                //                     if let Some(entry) = entry {
-                //                         update_entry(entry, &update);
-                //                     }
-                //                 }
-                //             };
-                //         }
-            }
-
             Event::AsyncResourceOp {
                 id,
                 source,
                 resource_id,
                 metadata,
                 parent_id,
-                inherit_child_attrs,
                 stats,
             } => {
                 self.async_ops.insert(
@@ -585,7 +506,6 @@ impl Aggregator {
                         metadata,
                         source,
                         parent_id,
-                        inherit_child_attrs,
                     },
                 );
 
@@ -702,62 +622,5 @@ impl Unsent for AsyncOp {
 
     fn is_unsent(&self) -> bool {
         self.is_dirty.load(Acquire)
-    }
-}
-
-impl From<AttributeUpdate> for Attribute {
-    fn from(upd: AttributeUpdate) -> Self {
-        Attribute {
-            field: Some(upd.field),
-            unit: upd.unit,
-        }
-    }
-}
-
-fn update_attribute(attribute: &mut Attribute, update: &AttributeUpdate) {
-    use proto::field::Value::*;
-    let attribute_val = attribute.field.as_mut().and_then(|a| a.value.as_mut());
-    let update_val = update.field.value.clone();
-    let update_name = update.field.name.clone();
-    match (attribute_val, update_val) {
-        (Some(BoolVal(v)), Some(BoolVal(upd))) => *v = upd,
-
-        (Some(StrVal(v)), Some(StrVal(upd))) => *v = upd,
-
-        (Some(DebugVal(v)), Some(DebugVal(upd))) => *v = upd,
-
-        (Some(U64Val(v)), Some(U64Val(upd))) => match update.op {
-            Some(AttributeUpdateOp::Add) => *v = v.saturating_add(upd),
-
-            Some(AttributeUpdateOp::Sub) => *v = v.saturating_sub(upd),
-
-            Some(AttributeUpdateOp::Override) => *v = upd,
-
-            None => tracing::warn!(
-                "numeric attribute update {:?} needs to have an op field",
-                update_name
-            ),
-        },
-
-        (Some(I64Val(v)), Some(I64Val(upd))) => match update.op {
-            Some(AttributeUpdateOp::Add) => *v = v.saturating_add(upd),
-
-            Some(AttributeUpdateOp::Sub) => *v = v.saturating_sub(upd),
-
-            Some(AttributeUpdateOp::Override) => *v = upd,
-
-            None => tracing::warn!(
-                "numeric attribute update {:?} needs to have an op field",
-                update_name
-            ),
-        },
-
-        (val, update) => {
-            tracing::warn!(
-                "attribute {:?} cannot be updated by update {:?}",
-                val,
-                update
-            );
-        }
     }
 }

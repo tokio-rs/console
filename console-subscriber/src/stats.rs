@@ -1,19 +1,15 @@
-use crate::{
-    attribute,
-    sync::{Mutex, MutexGuard},
-    ToProto,
-};
+use crate::{attribute, sync::Mutex, ToProto};
 use hdrhistogram::{
     serialization::{Serializer, V2Serializer},
     Histogram,
 };
 use std::cmp;
-use std::collections::HashMap;
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering::*},
     Arc,
 };
 use std::time::{Duration, SystemTime};
+use tracing::span::Id;
 
 use console_api as proto;
 
@@ -102,7 +98,7 @@ struct TaskTimestamps {
 #[derive(Debug)]
 pub(crate) struct AsyncOpStats {
     task_id: AtomicUsize,
-    stats: ResourceStats,
+    pub(crate) stats: ResourceStats,
     poll_stats: PollStats,
 }
 
@@ -113,6 +109,8 @@ pub(crate) struct ResourceStats {
     created_at: SystemTime,
     dropped_at: Mutex<Option<SystemTime>>,
     attributes: Mutex<attribute::Attributes>,
+    pub(crate) inherit_child_attributes: bool,
+    pub(crate) parent_id: Option<Id>,
 }
 
 #[derive(Debug, Default)]
@@ -281,10 +279,14 @@ impl DroppedAt for TaskStats {
 // === impl AsyncOpStats ===
 
 impl AsyncOpStats {
-    pub(crate) fn new(created_at: SystemTime) -> Self {
+    pub(crate) fn new(
+        created_at: SystemTime,
+        inherit_child_attributes: bool,
+        parent_id: Option<Id>,
+    ) -> Self {
         Self {
             task_id: AtomicUsize::new(0),
-            stats: ResourceStats::new(created_at),
+            stats: ResourceStats::new(created_at, inherit_child_attributes, parent_id),
             poll_stats: PollStats::default(),
         }
     }
@@ -358,14 +360,25 @@ impl ToProto for AsyncOpStats {
 // === impl ResourceStats ===
 
 impl ResourceStats {
-    pub(crate) fn new(created_at: SystemTime) -> Self {
+    pub(crate) fn new(
+        created_at: SystemTime,
+        inherit_child_attributes: bool,
+        parent_id: Option<Id>,
+    ) -> Self {
         Self {
             is_dirty: AtomicBool::new(true),
             is_dropped: AtomicBool::new(false),
             created_at,
             dropped_at: Mutex::new(None),
             attributes: Default::default(),
+            inherit_child_attributes,
+            parent_id,
         }
+    }
+
+    pub(crate) fn update_attribute(&self, id: &Id, update: &attribute::Update) {
+        self.attributes.lock().update(id, update);
+        self.make_dirty();
     }
 
     #[inline]
