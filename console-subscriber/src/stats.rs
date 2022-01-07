@@ -202,10 +202,6 @@ impl TaskStats {
         self.make_dirty();
     }
 
-    pub(crate) fn since_last_poll(&self, now: SystemTime) -> Option<Duration> {
-        self.poll_stats.since_last_poll(now)
-    }
-
     pub(crate) fn drop_task(&self, dropped_at: SystemTime) {
         if self.is_dropped.swap(true, AcqRel) {
             // The task was already dropped.
@@ -304,6 +300,7 @@ impl AsyncOpStats {
         self.task_id.store(id.into_u64(), Release);
         self.make_dirty();
     }
+
     pub(crate) fn drop_async_op(&self, dropped_at: SystemTime) {
         self.stats.drop_resource(dropped_at)
     }
@@ -316,10 +313,6 @@ impl AsyncOpStats {
     pub(crate) fn end_poll(&self, at: SystemTime) {
         self.poll_stats.end_poll(at);
         self.make_dirty();
-    }
-
-    pub(crate) fn since_last_poll(&self, now: SystemTime) -> Option<Duration> {
-        self.poll_stats.since_last_poll(now)
     }
 
     #[inline]
@@ -482,13 +475,6 @@ impl PollStats {
                 timestamps.busy_time += elapsed;
             }
         }
-    }
-
-    fn since_last_poll(&self, timestamp: SystemTime) -> Option<Duration> {
-        self.timestamps
-            .lock()
-            .last_poll_started
-            .map(|lps| timestamp.duration_since(lps).unwrap())
     }
 }
 

@@ -15,9 +15,8 @@ use std::{
 use thread_local::ThreadLocal;
 use tokio::sync::{mpsc, oneshot};
 use tracing_core::{
-    dispatcher::Dispatch,
     span::{self, Id},
-    subscriber::{self, NoSubscriber, Subscriber},
+    subscriber::{self, Subscriber},
     Metadata,
 };
 use tracing_subscriber::{
@@ -108,9 +107,6 @@ pub struct ConsoleLayer {
     ///
     /// TODO: Take some time to determine more reasonable numbers
     async_op_state_update_callsites: Callsites<32>,
-
-    /// Used for unsetting the default dispatcher inside of span callbacks.
-    no_dispatch: Dispatch,
 
     /// A sink to record all events to a file.
     recorder: Option<Recorder>,
@@ -293,7 +289,6 @@ impl ConsoleLayer {
             poll_op_callsites: Callsites::default(),
             resource_state_update_callsites: Callsites::default(),
             async_op_state_update_callsites: Callsites::default(),
-            no_dispatch: Dispatch::new(NoSubscriber::default()),
             recorder,
         };
         (layer, server)
@@ -378,15 +373,6 @@ impl ConsoleLayer {
     {
         cx.span(id)
             .map(|span| self.is_async_op(span.metadata()))
-            .unwrap_or(false)
-    }
-
-    fn is_id_tracked<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
-    where
-        S: Subscriber + for<'a> LookupSpan<'a>,
-    {
-        cx.span(id)
-            .map(|span| span.extensions().get::<Tracked>().is_some())
             .unwrap_or(false)
     }
 
