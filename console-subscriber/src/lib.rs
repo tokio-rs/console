@@ -34,7 +34,10 @@ use aggregator::Aggregator;
 pub use builder::Builder;
 use callsites::Callsites;
 use stack::SpanStack;
-use visitors::{AsyncOpVisitor, ResourceVisitor, ResourceVisitorResult, TaskVisitor, WakerVisitor};
+use visitors::{
+    AsyncOpVisitor, ResourceVisitor, ResourceVisitorResult, StateAttributeVisitor, TaskVisitor,
+    WakerVisitor,
+};
 
 pub use builder::{init, spawn};
 
@@ -324,6 +327,36 @@ impl ConsoleLayer {
         };
         (layer, server)
     }
+
+    fn send_attribute_updates(
+        &self,
+        update_id: &span::Id,
+        update_meta: &'static Metadata<'static>,
+        updates: Vec<AttributeUpdate>,
+    ) {
+        let update_type = if self.async_op_state_update_callsites.contains(update_meta) {
+            UpdateType::AsyncOp
+        } else {
+            UpdateType::Resource
+        };
+
+        let dropped = if self.async_op_state_update_callsites.contains(update_meta) {
+            &self.shared.dropped_async_ops
+        } else {
+            &self.shared.dropped_resources
+        };
+
+        for update in updates.into_iter() {
+            self.send(
+                dropped,
+                Event::StateUpdate {
+                    update_id: update_id.clone(),
+                    update_type: update_type.clone(),
+                    update,
+                },
+            );
+        }
+    }
 }
 
 impl ConsoleLayer {
@@ -539,7 +572,7 @@ where
                 let parent_id = self.current_spans.get().and_then(|stack| {
                     self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
                 });
-                self.send(
+                let sent = self.send(
                     &self.shared.dropped_resources,
                     Event::Resource {
                         id: id.clone(),
@@ -552,7 +585,15 @@ where
                         is_internal,
                         inherit_child_attrs,
                     },
-                )
+                );
+
+                if sent {
+                    let mut attribute_visitor = StateAttributeVisitor::new(metadata.into());
+                    attrs.record(&mut attribute_visitor);
+                    self.send_attribute_updates(id, metadata, attribute_visitor.updates)
+                }
+
+                sent
             } else {
                 // else unknown resource span format
                 false
@@ -571,7 +612,7 @@ where
                 });
 
                 if let Some(resource_id) = resource_id {
-                    self.send(
+                    let sent = self.send(
                         &self.shared.dropped_async_ops,
                         Event::AsyncResourceOp {
                             id: id.clone(),
@@ -582,7 +623,15 @@ where
                             source,
                             inherit_child_attrs,
                         },
-                    )
+                    );
+
+                    if sent {
+                        let mut attribute_visitor = StateAttributeVisitor::new(metadata.into());
+                        attrs.record(&mut attribute_visitor);
+                        self.send_attribute_updates(id, metadata, attribute_visitor.updates)
+                    }
+
+                    sent
                 } else {
                     false
                 }
@@ -712,6 +761,19 @@ where
                     );
                 }
             }
+        }
+    }
+
+    fn on_record(&self, id: &span::Id, values: &span::Record<'_>, cx: Context<'_, S>) {
+        if !self.is_id_tracked(id, &cx) {
+            return;
+        }
+
+        if let Some(span) = cx.span(id) {
+            let metadata = span.metadata();
+            let mut attribute_visitor = StateAttributeVisitor::new(metadata.into());
+            values.record(&mut attribute_visitor);
+            self.send_attribute_updates(id, metadata, attribute_visitor.updates)
         }
     }
 

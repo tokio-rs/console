@@ -533,3 +533,111 @@ impl Visit for StateUpdateVisitor {
         }
     }
 }
+
+pub(crate) struct StateAttributeVisitor {
+    meta_id: proto::MetaId,
+    pub(crate) updates: Vec<AttributeUpdate>,
+}
+
+/// Used to extract the data needed to construct
+/// an Event::StateUpdate from the the metadata of
+/// a span. A span field that represents a state update
+/// has the form of `state.name.unit.delta` where
+/// the `delta` suffix is optional and indicates that
+/// this update represents a positive or negative change
+/// in the value of the attribute.
+///
+/// State updates can be emitted during the
+/// creation of a span or the recording of a field's
+/// value:
+///
+/// tracing::trace_span!(
+///     "runtime.resource",
+///     concrete_type = "Sleep",
+///     kind = "timer",
+///     state.duration.ms = duration,
+/// );
+///
+/// resource_span.record("state.duration.ms", &duration);
+impl StateAttributeVisitor {
+    const STATE_PREFIX: &'static str = "state.";
+    const DELTA: &'static str = "delta";
+
+    pub(crate) fn new(meta_id: proto::MetaId) -> Self {
+        Self {
+            meta_id,
+            updates: Vec::default(),
+        }
+    }
+
+    fn extract(&self, field: &field::Field) -> Option<(AttributeUpdate, bool)> {
+        if field.name().starts_with(Self::STATE_PREFIX) {
+            let mut parts = field.name().split('.');
+            parts.next();
+            if let Some(name) = parts.next() {
+                let unit = parts.next().filter(|u| *u != Self::DELTA);
+                let is_delta = field.name().contains(Self::DELTA);
+                let field = proto::Field {
+                    name: Some(name.into()),
+                    value: None,
+                    metadata_id: Some(self.meta_id.clone()),
+                };
+
+                let upd = AttributeUpdate {
+                    field,
+                    op: Some(AttributeUpdateOp::Override),
+                    unit: unit.map(String::from),
+                };
+                return Some((upd, is_delta));
+            }
+        }
+        None
+    }
+}
+
+impl Visit for StateAttributeVisitor {
+    fn record_debug(&mut self, field: &field::Field, value: &dyn std::fmt::Debug) {
+        if let Some((mut upd, _)) = self.extract(field) {
+            upd.field.value = Some(value.into());
+            self.updates.push(upd);
+        }
+    }
+
+    fn record_i64(&mut self, field: &field::Field, value: i64) {
+        if let Some((mut upd, is_delta)) = self.extract(field) {
+            upd.field.value = Some(value.into());
+            if is_delta {
+                if value < 0 {
+                    upd.op = Some(AttributeUpdateOp::Sub)
+                } else {
+                    upd.op = Some(AttributeUpdateOp::Add)
+                }
+            }
+            self.updates.push(upd);
+        }
+    }
+
+    fn record_u64(&mut self, field: &field::Field, value: u64) {
+        if let Some((mut upd, is_delta)) = self.extract(field) {
+            upd.field.value = Some(value.into());
+            if is_delta {
+                upd.op = Some(AttributeUpdateOp::Add)
+            }
+            self.updates.push(upd);
+        }
+    }
+
+    fn record_bool(&mut self, field: &field::Field, value: bool) {
+        if let Some((mut upd, _)) = self.extract(field) {
+            upd.field.value = Some(value.into());
+            self.updates.push(upd);
+        }
+    }
+
+    fn record_str(&mut self, field: &field::Field, value: &str) {
+        if let Some((mut upd, _)) = self.extract(field) {
+            upd.field.value = Some(value.into());
+            self.updates.push(upd);
+        }
+    }
+}
