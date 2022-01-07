@@ -5,7 +5,7 @@ use hdrhistogram::{
 };
 use std::cmp;
 use std::sync::{
-    atomic::{AtomicBool, AtomicUsize, Ordering::*},
+    atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering::*},
     Arc,
 };
 use std::time::{Duration, SystemTime};
@@ -97,7 +97,7 @@ struct TaskTimestamps {
 
 #[derive(Debug)]
 pub(crate) struct AsyncOpStats {
-    task_id: AtomicUsize,
+    task_id: AtomicU64,
     pub(crate) stats: ResourceStats,
     poll_stats: PollStats,
 }
@@ -285,7 +285,7 @@ impl AsyncOpStats {
         parent_id: Option<Id>,
     ) -> Self {
         Self {
-            task_id: AtomicUsize::new(0),
+            task_id: AtomicU64::new(0),
             stats: ResourceStats::new(created_at, inherit_child_attributes, parent_id),
             poll_stats: PollStats::default(),
         }
@@ -300,6 +300,10 @@ impl AsyncOpStats {
         }
     }
 
+    pub(crate) fn set_task_id(&self, id: &tracing::span::Id) {
+        self.task_id.store(id.into_u64(), Release);
+        self.make_dirty();
+    }
     pub(crate) fn drop_async_op(&self, dropped_at: SystemTime) {
         self.stats.drop_resource(dropped_at)
     }

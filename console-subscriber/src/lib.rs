@@ -688,42 +688,48 @@ where
         }
 
         if self.poll_op_callsites.contains(metadata) {
-            // let resource_id = self.current_spans.get().and_then(|stack| {
-            //     self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
-            // });
-            // // poll op event should have a resource span parent
-            // if let Some(resource_id) = resource_id {
-            //     let mut poll_op_visitor = PollOpVisitor::default();
-            //     event.record(&mut poll_op_visitor);
-            //     if let Some((op_name, is_ready)) = poll_op_visitor.result() {
-            //         let task_and_async_op_ids = self.current_spans.get().and_then(|stack| {
-            //             let stack = stack.borrow();
-            //             let task_id =
-            //                 self.first_entered(&stack, |id| self.is_id_spawned(id, &ctx))?;
-            //             let async_op_id =
-            //                 self.first_entered(&stack, |id| self.is_id_async_op(id, &ctx))?;
-            //             Some((task_id, async_op_id))
-            //         });
+            let resource_id = self.current_spans.get().and_then(|stack| {
+                self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
+            });
+            // poll op event should have a resource span parent
+            if let Some(resource_id) = resource_id {
+                let mut poll_op_visitor = PollOpVisitor::default();
+                event.record(&mut poll_op_visitor);
+                if let Some((op_name, is_ready)) = poll_op_visitor.result() {
+                    let task_and_async_op_ids = self.current_spans.get().and_then(|stack| {
+                        let stack = stack.borrow();
+                        let task_id =
+                            self.first_entered(&stack, |id| self.is_id_spawned(id, &ctx))?;
+                        let async_op_id =
+                            self.first_entered(&stack, |id| self.is_id_async_op(id, &ctx))?;
+                        Some((task_id, async_op_id))
+                    });
+                    // poll op event should be emitted in the context of an async op and task spans
+                    if let Some((task_id, async_op_id)) = task_and_async_op_ids {
+                        if let Some(span) = ctx.span(&async_op_id) {
+                            let exts = span.extensions();
+                            if let Some(stats) = exts.get::<Arc<stats::AsyncOpStats>>() {
+                                stats.set_task_id(&task_id);
+                            }
+                        }
 
-            //         // poll op event should be emitted in the context of an async op and task spans
-            //         if let Some((task_id, async_op_id)) = task_and_async_op_ids {
-            //             self.send(
-            //                 &self.shared.dropped_async_ops,
-            //                 Event::PollOp {
-            //                     metadata,
-            //                     op_name,
-            //                     resource_id,
-            //                     async_op_id,
-            //                     task_id,
-            //                     is_ready,
-            //                 },
-            //             );
-            //         }
-            //     }
-            // }
-            // return;
+                        self.send_stats(&self.shared.dropped_async_ops, || {
+                            let event = Event::PollOp {
+                                metadata,
+                                op_name,
+                                resource_id,
+                                async_op_id,
+                                task_id,
+                                is_ready,
+                            };
+                            (event, ())
+                        });
 
-            // TODO(eliza)
+                        // TODO: JSON recorder doesn't care about poll ops.
+                    }
+                }
+            }
+            return;
         }
 
         if self.resource_state_update_callsites.contains(metadata) {

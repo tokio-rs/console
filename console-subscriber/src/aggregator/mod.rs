@@ -469,22 +469,17 @@ impl Aggregator {
                 task_id,
                 is_ready,
             } => {
-                // TODO(eliza): put back
+                let poll_op = proto::resources::PollOp {
+                    metadata: Some(metadata.into()),
+                    resource_id: Some(resource_id.into()),
+                    name: op_name,
+                    task_id: Some(task_id.into()),
+                    async_op_id: Some(async_op_id.into()),
+                    is_ready,
+                };
 
-                // let mut async_op_stats = self.async_op_stats.update_or_default(async_op_id.clone());
-                // async_op_stats.task_id.get_or_insert(task_id.clone());
-
-                // let poll_op = proto::resources::PollOp {
-                //     metadata: Some(metadata.into()),
-                //     resource_id: Some(resource_id.into()),
-                //     name: op_name,
-                //     task_id: Some(task_id.into()),
-                //     async_op_id: Some(async_op_id.into()),
-                //     is_ready,
-                // };
-
-                // self.all_poll_ops.push(poll_op.clone());
-                // self.new_poll_ops.push(poll_op);
+                self.all_poll_ops.push(poll_op.clone());
+                self.new_poll_ops.push(poll_op);
             }
 
             Event::AsyncResourceOp {
