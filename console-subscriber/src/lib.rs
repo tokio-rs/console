@@ -732,7 +732,10 @@ where
                 self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
             });
             if let Some(id) = resource_id {
-                self.state_update(&id, event, &ctx, |exts| exts.get::<stats::ResourceStats>());
+                self.state_update(&id, event, &ctx, |exts| {
+                    exts.get::<Arc<stats::ResourceStats>>()
+                        .map(|arc| <Arc<stats::ResourceStats> as std::ops::Deref>::deref(arc))
+                });
             }
 
             return;
@@ -744,7 +747,7 @@ where
             });
             if let Some(id) = async_op_id {
                 self.state_update(&id, event, &ctx, |exts| {
-                    let async_op = exts.get::<stats::AsyncOpStats>()?;
+                    let async_op = exts.get::<Arc<stats::AsyncOpStats>>()?;
                     Some(&async_op.stats)
                 });
             }
@@ -759,6 +762,8 @@ where
             at: Option<SystemTime>,
         ) -> Option<SystemTime> {
             let exts = span.extensions();
+            // if the span we are entering is a task or async op, record the
+            // poll stats.
             if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
                 let at = at.unwrap_or_else(SystemTime::now);
                 stats.start_poll(at);
@@ -767,6 +772,11 @@ where
                 let at = at.unwrap_or_else(SystemTime::now);
                 stats.start_poll(at);
                 Some(at)
+            // otherwise, is the span a resource? in that case, we also want
+            // to enter it, although we don't care about recording poll
+            // stats.
+            } else if exts.get::<Arc<stats::ResourceStats>>().is_some() {
+                Some(at.unwrap_or_else(SystemTime::now))
             } else {
                 None
             }
