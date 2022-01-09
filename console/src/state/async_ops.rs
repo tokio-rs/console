@@ -119,6 +119,9 @@ impl AsyncOpsState {
         self.async_ops.values().map(Rc::downgrade)
     }
 
+    // Clippy warns us that having too many arguments is bad style. In this case, however
+    // it does not make much sense to group any of them.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn update_async_ops(
         &mut self,
         styles: &view::Styles,
