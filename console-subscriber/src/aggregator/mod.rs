@@ -423,7 +423,7 @@ impl Aggregator {
                     id.clone(),
                     Task {
                         id: id.clone(),
-                        is_dirty: AtomicBool::new(false),
+                        is_dirty: AtomicBool::new(true),
                         metadata,
                         fields,
                         location,
@@ -448,7 +448,7 @@ impl Aggregator {
                     id.clone(),
                     Resource {
                         id: id.clone(),
-                        is_dirty: AtomicBool::new(false),
+                        is_dirty: AtomicBool::new(true),
                         parent_id,
                         kind,
                         metadata,
@@ -494,7 +494,7 @@ impl Aggregator {
                     id.clone(),
                     AsyncOp {
                         id: id.clone(),
-                        is_dirty: AtomicBool::new(false),
+                        is_dirty: AtomicBool::new(true),
                         resource_id,
                         metadata,
                         source,
