@@ -119,6 +119,9 @@ impl AsyncOpsState {
         self.async_ops.values().map(Rc::downgrade)
     }
 
+    // Clippy warns us that having too many arguments is bad style. In this case, however
+    // it does not make much sense to group any of them.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn update_async_ops(
         &mut self,
         styles: &view::Styles,
@@ -126,6 +129,7 @@ impl AsyncOpsState {
         metas: &HashMap<u64, Metadata>,
         update: proto::async_ops::AsyncOpUpdate,
         resource_ids: &mut Ids,
+        task_ids: &mut Ids,
         visibility: Visibility,
     ) {
         let mut stats_update = update.stats_update;
@@ -155,8 +159,13 @@ impl AsyncOpsState {
             };
 
             let span_id = async_op.id?.id;
-            let stats =
-                AsyncOpStats::from_proto(stats_update.remove(&span_id)?, meta, styles, strings);
+            let stats = AsyncOpStats::from_proto(
+                stats_update.remove(&span_id)?,
+                meta,
+                styles,
+                strings,
+                task_ids,
+            );
 
             let num = self.ids.id_for(span_id);
             let resource_id = resource_ids.id_for(async_op.resource_id?.id);
@@ -187,7 +196,8 @@ impl AsyncOpsState {
             if let Some(async_op) = self.async_ops.get_mut(&num) {
                 let mut async_op = async_op.borrow_mut();
                 if let Some(meta) = metas.get(&async_op.meta_id) {
-                    async_op.stats = AsyncOpStats::from_proto(stats, meta, styles, strings);
+                    async_op.stats =
+                        AsyncOpStats::from_proto(stats, meta, styles, strings, task_ids);
                 }
             }
         }
@@ -275,6 +285,7 @@ impl AsyncOpStats {
         meta: &Metadata,
         styles: &view::Styles,
         strings: &mut intern::Strings,
+        task_ids: &mut Ids,
     ) -> Self {
         let mut pb = pb;
 
@@ -304,7 +315,7 @@ impl AsyncOpStats {
         let busy = poll_stats.busy_time.map(pb_duration).unwrap_or_default();
         let idle = total.map(|total| total - busy);
         let formatted_attributes = Attribute::make_formatted(styles, &mut attributes);
-        let task_id = pb.task_id.map(|id| id.id);
+        let task_id = pb.task_id.map(|id| task_ids.id_for(id.id));
         let task_id_str = strings.string(
             task_id
                 .as_ref()

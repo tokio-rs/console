@@ -166,6 +166,7 @@ impl State {
                 &self.metas,
                 async_ops_update,
                 &mut self.resources_state.ids,
+                &mut self.tasks_state.ids,
                 visibility,
             )
         }
