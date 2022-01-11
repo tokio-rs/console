@@ -26,6 +26,9 @@ pub(crate) trait Unsent {
     /// current update. If this returns `true`, it will be included, so it
     /// becomes no longer dirty.
     fn take_unsent(&self) -> bool;
+
+    /// Returns `true` if this type has unsent updates, without changing the
+    /// flag.
     fn is_unsent(&self) -> bool;
 }
 
@@ -37,28 +40,7 @@ pub(crate) trait DroppedAt {
     fn dropped_at(&self) -> Option<SystemTime>;
 }
 
-impl<T: DroppedAt> DroppedAt for Arc<T> {
-    fn dropped_at(&self) -> Option<SystemTime> {
-        T::dropped_at(self)
-    }
-}
-
-impl<T: Unsent> Unsent for Arc<T> {
-    fn take_unsent(&self) -> bool {
-        T::take_unsent(self)
-    }
-
-    fn is_unsent(&self) -> bool {
-        T::is_unsent(self)
-    }
-}
-
-impl<T: ToProto> ToProto for Arc<T> {
-    type Output = T::Output;
-    fn to_proto(&self) -> T::Output {
-        T::to_proto(self)
-    }
-}
+/// Stats associated with a task.
 #[derive(Debug)]
 pub(crate) struct TaskStats {
     is_dirty: AtomicBool,
@@ -73,22 +55,31 @@ pub(crate) struct TaskStats {
     waker_drops: AtomicUsize,
     self_wakes: AtomicUsize,
 
+    /// Poll durations and other stats.
     poll_stats: PollStats,
 }
 
-#[derive(Debug, Default)]
-struct TaskTimestamps {
-    dropped_at: Option<SystemTime>,
-    last_wake: Option<SystemTime>,
-}
-
+/// Stats associated with an async operation.
+///
+/// This shares all of the same fields as [`ResourceStats]`, with the addition
+/// of [`PollStats`] tracking when the async operation is polled, and the task
+/// ID of the last task to poll the async op.
 #[derive(Debug)]
 pub(crate) struct AsyncOpStats {
+    /// The task ID of the last task to poll this async op.
+    ///
+    /// This is set every time the async op is polled, in case a future is
+    /// passed between tasks.
     task_id: AtomicU64,
+
+    /// Fields shared with `ResourceStats`.
     pub(crate) stats: ResourceStats,
+
+    /// Poll durations and other stats.
     poll_stats: PollStats,
 }
 
+/// Stats associated with a resource.
 #[derive(Debug)]
 pub(crate) struct ResourceStats {
     is_dirty: AtomicBool,
@@ -98,6 +89,12 @@ pub(crate) struct ResourceStats {
     attributes: Mutex<attribute::Attributes>,
     pub(crate) inherit_child_attributes: bool,
     pub(crate) parent_id: Option<Id>,
+}
+
+#[derive(Debug, Default)]
+struct TaskTimestamps {
+    dropped_at: Option<SystemTime>,
+    last_wake: Option<SystemTime>,
 }
 
 #[derive(Debug, Default)]
@@ -477,5 +474,30 @@ impl ToProto for PollStats {
             last_poll_ended: timestamps.last_poll_ended.map(Into::into),
             busy_time: Some(timestamps.busy_time.into()),
         }
+    }
+}
+
+// === impl Arc ===
+
+impl<T: DroppedAt> DroppedAt for Arc<T> {
+    fn dropped_at(&self) -> Option<SystemTime> {
+        T::dropped_at(self)
+    }
+}
+
+impl<T: Unsent> Unsent for Arc<T> {
+    fn take_unsent(&self) -> bool {
+        T::take_unsent(self)
+    }
+
+    fn is_unsent(&self) -> bool {
+        T::is_unsent(self)
+    }
+}
+
+impl<T: ToProto> ToProto for Arc<T> {
+    type Output = T::Output;
+    fn to_proto(&self) -> T::Output {
+        T::to_proto(self)
     }
 }
