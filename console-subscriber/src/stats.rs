@@ -59,19 +59,6 @@ impl<T: ToProto> ToProto for Arc<T> {
         T::to_proto(self)
     }
 }
-
-// pub(crate) trait Stats: ToProto {
-//     fn dropped_at(&self) -> Option<SystemTime>;
-
-//     fn to_proto_if_unsent(&self) -> Option<<Self as ToProto>::Output> {
-//         if self.take_unsent() {
-//             Some(self.to_proto)
-//         } else {
-//             None
-//         }
-//     }
-// }
-
 #[derive(Debug)]
 pub(crate) struct TaskStats {
     is_dirty: AtomicBool,
