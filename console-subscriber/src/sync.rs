@@ -2,7 +2,7 @@
 #![allow(dead_code, unused_imports)]
 
 #[cfg(feature = "parking_lot")]
-pub(crate) use parking_lot_crate::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+pub(crate) use parking_lot_crate::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 #[cfg(not(feature = "parking_lot"))]
 pub(crate) use self::std_impl::*;
@@ -10,7 +10,22 @@ pub(crate) use self::std_impl::*;
 #[cfg(not(feature = "parking_lot"))]
 mod std_impl {
     use std::sync::{self, PoisonError, TryLockError};
-    pub use std::sync::{RwLockReadGuard, RwLockWriteGuard};
+    pub use std::sync::{MutexGuard, RwLockReadGuard, RwLockWriteGuard};
+
+    #[derive(Debug, Default)]
+    pub(crate) struct Mutex<T: ?Sized>(sync::Mutex<T>);
+
+    impl<T> Mutex<T> {
+        pub(crate) fn new(data: T) -> Self {
+            Self(sync::Mutex::new(data))
+        }
+    }
+
+    impl<T: ?Sized> Mutex<T> {
+        pub(crate) fn lock(&self) -> MutexGuard<'_, T> {
+            self.0.lock().unwrap_or_else(PoisonError::into_inner)
+        }
+    }
 
     #[derive(Debug, Default)]
     pub(crate) struct RwLock<T: ?Sized>(sync::RwLock<T>);

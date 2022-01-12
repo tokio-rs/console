@@ -15,24 +15,30 @@ use std::{
 use thread_local::ThreadLocal;
 use tokio::sync::{mpsc, oneshot};
 use tracing_core::{
-    dispatcher::{self, Dispatch},
     span::{self, Id},
-    subscriber::{self, NoSubscriber, Subscriber},
+    subscriber::{self, Subscriber},
     Metadata,
 };
-use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
+use tracing_subscriber::{
+    layer::Context,
+    registry::{Extensions, LookupSpan, SpanRef},
+    Layer,
+};
 
 mod aggregator;
+mod attribute;
 mod builder;
 mod callsites;
 mod record;
 mod stack;
+mod stats;
 pub(crate) mod sync;
 mod visitors;
 
 use aggregator::Aggregator;
 pub use builder::Builder;
 use callsites::Callsites;
+use record::Recorder;
 use stack::SpanStack;
 use visitors::{AsyncOpVisitor, ResourceVisitor, ResourceVisitorResult, TaskVisitor, WakerVisitor};
 
@@ -102,8 +108,8 @@ pub struct ConsoleLayer {
     /// TODO: Take some time to determine more reasonable numbers
     async_op_state_update_callsites: Callsites<32>,
 
-    /// Used for unsetting the default dispatcher inside of span callbacks.
-    no_dispatch: Dispatch,
+    /// A sink to record all events to a file.
+    recorder: Option<Recorder>,
 }
 
 /// A gRPC [`Server`] that implements the [`tokio-console` wire format][wire].
@@ -122,6 +128,11 @@ pub struct Server {
     addr: SocketAddr,
     aggregator: Option<Aggregator>,
     client_buffer: usize,
+}
+
+pub(crate) trait ToProto {
+    type Output;
+    fn to_proto(&self) -> Self::Output;
 }
 
 /// State shared between the `ConsoleLayer` and the `Aggregator` task.
@@ -165,39 +176,19 @@ enum Event {
     Spawn {
         id: span::Id,
         metadata: &'static Metadata<'static>,
-        at: SystemTime,
+        stats: Arc<stats::TaskStats>,
         fields: Vec<proto::Field>,
         location: Option<proto::Location>,
-    },
-    Enter {
-        id: span::Id,
-        parent_id: Option<span::Id>,
-        at: SystemTime,
-    },
-    Exit {
-        id: span::Id,
-        parent_id: Option<span::Id>,
-        at: SystemTime,
-    },
-    Close {
-        id: span::Id,
-        at: SystemTime,
-    },
-    Waker {
-        id: span::Id,
-        op: WakeOp,
-        at: SystemTime,
     },
     Resource {
         id: span::Id,
         parent_id: Option<span::Id>,
         metadata: &'static Metadata<'static>,
-        at: SystemTime,
         concrete_type: String,
         kind: resource::Kind,
         location: Option<proto::Location>,
         is_internal: bool,
-        inherit_child_attrs: bool,
+        stats: Arc<stats::ResourceStats>,
     },
     PollOp {
         metadata: &'static Metadata<'static>,
@@ -207,40 +198,15 @@ enum Event {
         task_id: span::Id,
         is_ready: bool,
     },
-    StateUpdate {
-        update_id: span::Id,
-        update_type: UpdateType,
-        update: AttributeUpdate,
-    },
     AsyncResourceOp {
         id: span::Id,
         parent_id: Option<span::Id>,
         resource_id: span::Id,
         metadata: &'static Metadata<'static>,
-        at: SystemTime,
         source: String,
-        inherit_child_attrs: bool,
+
+        stats: Arc<stats::AsyncOpStats>,
     },
-}
-
-#[derive(Debug, Clone)]
-enum UpdateType {
-    Resource,
-    AsyncOp,
-}
-
-#[derive(Debug, Clone)]
-struct AttributeUpdate {
-    field: proto::Field,
-    op: Option<AttributeUpdateOp>,
-    unit: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-enum AttributeUpdateOp {
-    Add,
-    Override,
-    Sub,
 }
 
 #[derive(Clone, Debug, Copy, Serialize)]
@@ -300,7 +266,10 @@ impl ConsoleLayer {
         // Conservatively, start to trigger a flush when half the channel is full.
         // This tries to reduce the chance of losing events to a full channel.
         let flush_under_capacity = config.event_buffer_capacity / 2;
-
+        let recorder = config
+            .recording_path
+            .as_ref()
+            .map(|path| Recorder::new(path).expect("creating recorder"));
         let server = Server {
             aggregator: Some(aggregator),
             addr: config.server_addr,
@@ -320,7 +289,7 @@ impl ConsoleLayer {
             poll_op_callsites: Callsites::default(),
             resource_state_update_callsites: Callsites::default(),
             async_op_state_update_callsites: Callsites::default(),
-            no_dispatch: Dispatch::new(NoSubscriber::default()),
+            recorder,
         };
         (layer, server)
     }
@@ -407,15 +376,6 @@ impl ConsoleLayer {
             .unwrap_or(false)
     }
 
-    fn is_id_tracked<S>(&self, id: &span::Id, cx: &Context<'_, S>) -> bool
-    where
-        S: Subscriber + for<'a> LookupSpan<'a>,
-    {
-        cx.span(id)
-            .map(|span| span.extensions().get::<Tracked>().is_some())
-            .unwrap_or(false)
-    }
-
     fn first_entered<P>(&self, stack: &SpanStack, p: P) -> Option<span::Id>
     where
         P: Fn(&span::Id) -> bool,
@@ -429,19 +389,28 @@ impl ConsoleLayer {
             .cloned()
     }
 
-    fn send(&self, dropped: &AtomicUsize, event: Event) -> bool {
+    fn send_metadata(&self, dropped: &AtomicUsize, event: Event) -> bool {
+        self.send_stats(dropped, move || (event, ())).is_some()
+    }
+
+    fn send_stats<S>(
+        &self,
+        dropped: &AtomicUsize,
+        mk_event: impl FnOnce() -> (Event, S),
+    ) -> Option<S> {
         use mpsc::error::TrySendError;
 
         // Return whether or not we actually sent the event.
         let sent = match self.tx.try_reserve() {
             Ok(permit) => {
+                let (event, stats) = mk_event();
                 permit.send(event);
-                true
+                Some(stats)
             }
             Err(TrySendError::Closed(_)) => {
                 // we should warn here eventually, but nop for now because we
                 // can't trigger tracing events...
-                false
+                None
             }
             Err(TrySendError::Full(_)) => {
                 // this shouldn't happen, since we trigger a flush when
@@ -449,7 +418,7 @@ impl ConsoleLayer {
                 // time is very high, maybe the aggregator task hasn't been
                 // polled yet. so... eek?!
                 dropped.fetch_add(1, Ordering::Release);
-                false
+                None
             }
         };
 
@@ -459,6 +428,56 @@ impl ConsoleLayer {
         }
 
         sent
+    }
+
+    fn record(&self, event: impl FnOnce() -> record::Event) {
+        if let Some(ref recorder) = self.recorder {
+            recorder.record(event());
+        }
+    }
+
+    fn state_update<S>(
+        &self,
+        id: &Id,
+        event: &tracing::Event<'_>,
+        ctx: &Context<'_, S>,
+        get_stats: impl for<'a> Fn(&'a Extensions) -> Option<&'a stats::ResourceStats>,
+    ) where
+        S: Subscriber + for<'a> LookupSpan<'a>,
+    {
+        let meta_id = event.metadata().into();
+        let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
+        event.record(&mut state_update_visitor);
+
+        let update = match state_update_visitor.result() {
+            Some(update) => update,
+            None => return,
+        };
+
+        let span = match ctx.span(id) {
+            Some(span) => span,
+            // XXX(eliza): no span exists for a resource ID, we should maybe
+            // record an error here...
+            None => return,
+        };
+
+        let exts = span.extensions();
+        let stats = match get_stats(&exts) {
+            Some(stats) => stats,
+            // XXX(eliza): a resource span was not a resource??? this is a bug
+            None => return,
+        };
+
+        stats.update_attribute(id, &update);
+
+        if let Some(parent) = stats.parent_id.as_ref().and_then(|parent| ctx.span(parent)) {
+            let exts = parent.extensions();
+            if let Some(stats) = get_stats(&exts) {
+                if stats.inherit_child_attributes {
+                    stats.update_attribute(id, &update);
+                }
+            }
+        }
     }
 }
 
@@ -503,28 +522,40 @@ where
             (_, _) => &self.shared.dropped_tasks,
         };
 
-        self.send(dropped, Event::Metadata(meta));
+        self.send_metadata(dropped, Event::Metadata(meta));
         subscriber::Interest::always()
     }
 
     fn on_new_span(&self, attrs: &span::Attributes<'_>, id: &span::Id, ctx: Context<'_, S>) {
         let metadata = attrs.metadata();
-        let sent = if self.is_spawn(metadata) {
+        if self.is_spawn(metadata) {
             let at = SystemTime::now();
             let mut task_visitor = TaskVisitor::new(metadata.into());
             attrs.record(&mut task_visitor);
             let (fields, location) = task_visitor.result();
-            self.send(
-                &self.shared.dropped_tasks,
-                Event::Spawn {
+            self.record(|| record::Event::Spawn {
+                id: id.into_u64(),
+                at,
+                fields: record::SerializeFields(fields.clone()),
+            });
+            if let Some(stats) = self.send_stats(&self.shared.dropped_tasks, move || {
+                let stats = Arc::new(stats::TaskStats::new(at));
+                let event = Event::Spawn {
                     id: id.clone(),
-                    at,
+                    stats: stats.clone(),
                     metadata,
                     fields,
                     location,
-                },
-            )
-        } else if self.is_resource(metadata) {
+                };
+                (event, stats)
+            }) {
+                ctx.span(id).expect("if `on_new_span` was called, the span must exist; this is a `tracing` bug!").extensions_mut().insert(stats);
+            }
+            return;
+        }
+
+        if self.is_resource(metadata) {
+            let at = SystemTime::now();
             let mut resource_visitor = ResourceVisitor::default();
             attrs.record(&mut resource_visitor);
             if let Some(result) = resource_visitor.result() {
@@ -535,33 +566,38 @@ where
                     is_internal,
                     inherit_child_attrs,
                 } = result;
-                let at = SystemTime::now();
                 let parent_id = self.current_spans.get().and_then(|stack| {
                     self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
                 });
-                self.send(
-                    &self.shared.dropped_resources,
-                    Event::Resource {
+                if let Some(stats) = self.send_stats(&self.shared.dropped_resources, move || {
+                    let stats = Arc::new(stats::ResourceStats::new(
+                        at,
+                        inherit_child_attrs,
+                        parent_id.clone(),
+                    ));
+                    let event = Event::Resource {
                         id: id.clone(),
                         parent_id,
                         metadata,
-                        at,
                         concrete_type,
                         kind,
                         location,
                         is_internal,
-                        inherit_child_attrs,
-                    },
-                )
-            } else {
-                // else unknown resource span format
-                false
+                        stats: stats.clone(),
+                    };
+                    (event, stats)
+                }) {
+                    ctx.span(id).expect("if `on_new_span` was called, the span must exist; this is a `tracing` bug!").extensions_mut().insert(stats);
+                }
             }
-        } else if self.is_async_op(metadata) {
+            return;
+        }
+
+        if self.is_async_op(metadata) {
+            let at = SystemTime::now();
             let mut async_op_visitor = AsyncOpVisitor::default();
             attrs.record(&mut async_op_visitor);
             if let Some((source, inherit_child_attrs)) = async_op_visitor.result() {
-                let at = SystemTime::now();
                 let resource_id = self.current_spans.get().and_then(|stack| {
                     self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
                 });
@@ -571,40 +607,27 @@ where
                 });
 
                 if let Some(resource_id) = resource_id {
-                    self.send(
-                        &self.shared.dropped_async_ops,
-                        Event::AsyncResourceOp {
-                            id: id.clone(),
-                            parent_id,
-                            resource_id,
-                            at,
-                            metadata,
-                            source,
-                            inherit_child_attrs,
-                        },
-                    )
-                } else {
-                    false
+                    if let Some(stats) =
+                        self.send_stats(&self.shared.dropped_async_ops, move || {
+                            let stats = Arc::new(stats::AsyncOpStats::new(
+                                at,
+                                inherit_child_attrs,
+                                parent_id.clone(),
+                            ));
+                            let event = Event::AsyncResourceOp {
+                                id: id.clone(),
+                                parent_id,
+                                resource_id,
+                                metadata,
+                                source,
+                                stats: stats.clone(),
+                            };
+                            (event, stats)
+                        })
+                    {
+                        ctx.span(id).expect("if `on_new_span` was called, the span must exist; this is a `tracing` bug!").extensions_mut().insert(stats);
+                    }
                 }
-            } else {
-                // else async op span needs to have a source field
-                false
-            }
-        } else {
-            false
-        };
-
-        // If we were able to record the span, add a marker extension indicating
-        // that it's tracked by the console.
-        if sent {
-            if let Some(span) = ctx.span(id) {
-                span.extensions_mut().insert(Tracked {});
-            } else {
-                debug_assert!(
-                    false,
-                    "span should exist if `on_new_span` was called for its ID ({:?})",
-                    id
-                );
             }
         }
     }
@@ -615,20 +638,32 @@ where
             let at = SystemTime::now();
             let mut visitor = WakerVisitor::default();
             event.record(&mut visitor);
+            // XXX (eliza): ew...
             if let Some((id, mut op)) = visitor.result() {
-                if op.is_wake() {
-                    // Are we currently inside the task's span? If so, the task
-                    // has woken itself.
-                    let self_wake = self
-                        .current_spans
-                        .get()
-                        .map(|spans| spans.borrow().iter().any(|span| span == &id))
-                        .unwrap_or(false);
-                    op = op.self_wake(self_wake);
+                if let Some(span) = ctx.span(&id) {
+                    let exts = span.extensions();
+                    if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
+                        if op.is_wake() {
+                            // Are we currently inside the task's span? If so, the task
+                            // has woken itself.
+
+                            let self_wake = self
+                                .current_spans
+                                .get()
+                                .map(|spans| spans.borrow().iter().any(|span| span == &id))
+                                .unwrap_or(false);
+                            op = op.self_wake(self_wake);
+                        }
+
+                        stats.record_wake_op(op, at);
+                        self.record(|| record::Event::Waker {
+                            id: id.into_u64(),
+                            at,
+                            op,
+                        });
+                    }
                 }
-                self.send(&self.shared.dropped_tasks, Event::Waker { id, op, at });
             }
-            // else unknown waker event... what to do? can't trace it from here...
             return;
         }
 
@@ -649,20 +684,28 @@ where
                             self.first_entered(&stack, |id| self.is_id_async_op(id, &ctx))?;
                         Some((task_id, async_op_id))
                     });
-
                     // poll op event should be emitted in the context of an async op and task spans
                     if let Some((task_id, async_op_id)) = task_and_async_op_ids {
-                        self.send(
-                            &self.shared.dropped_async_ops,
-                            Event::PollOp {
+                        if let Some(span) = ctx.span(&async_op_id) {
+                            let exts = span.extensions();
+                            if let Some(stats) = exts.get::<Arc<stats::AsyncOpStats>>() {
+                                stats.set_task_id(&task_id);
+                            }
+                        }
+
+                        self.send_stats(&self.shared.dropped_async_ops, || {
+                            let event = Event::PollOp {
                                 metadata,
                                 op_name,
                                 resource_id,
                                 async_op_id,
                                 task_id,
                                 is_ready,
-                            },
-                        );
+                            };
+                            (event, ())
+                        });
+
+                        // TODO: JSON recorder doesn't care about poll ops.
                     }
                 }
             }
@@ -674,22 +717,13 @@ where
             let resource_id = self.current_spans.get().and_then(|stack| {
                 self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
             });
-
-            if let Some(resource_id) = resource_id {
-                let meta_id = event.metadata().into();
-                let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
-                event.record(&mut state_update_visitor);
-                if let Some(update) = state_update_visitor.result() {
-                    self.send(
-                        &self.shared.dropped_resources,
-                        Event::StateUpdate {
-                            update_id: resource_id,
-                            update_type: UpdateType::Resource,
-                            update,
-                        },
-                    );
-                }
+            if let Some(id) = resource_id {
+                self.state_update(&id, event, &ctx, |exts| {
+                    exts.get::<Arc<stats::ResourceStats>>()
+                        .map(<Arc<stats::ResourceStats> as std::ops::Deref>::deref)
+                });
             }
+
             return;
         }
 
@@ -697,89 +731,116 @@ where
             let async_op_id = self.current_spans.get().and_then(|stack| {
                 self.first_entered(&stack.borrow(), |id| self.is_id_async_op(id, &ctx))
             });
-            if let Some(async_op_id) = async_op_id {
-                let meta_id = event.metadata().into();
-                let mut state_update_visitor = StateUpdateVisitor::new(meta_id);
-                event.record(&mut state_update_visitor);
-                if let Some(update) = state_update_visitor.result() {
-                    self.send(
-                        &self.shared.dropped_async_ops,
-                        Event::StateUpdate {
-                            update_id: async_op_id,
-                            update_type: UpdateType::AsyncOp,
-                            update,
-                        },
-                    );
-                }
+            if let Some(id) = async_op_id {
+                self.state_update(&id, event, &ctx, |exts| {
+                    let async_op = exts.get::<Arc<stats::AsyncOpStats>>()?;
+                    Some(&async_op.stats)
+                });
             }
         }
     }
 
     fn on_enter(&self, id: &span::Id, cx: Context<'_, S>) {
-        if !self.is_id_tracked(id, &cx) {
-            return;
+        fn update<S: Subscriber + for<'a> LookupSpan<'a>>(
+            span: &SpanRef<S>,
+            at: Option<SystemTime>,
+        ) -> Option<SystemTime> {
+            let exts = span.extensions();
+            // if the span we are entering is a task or async op, record the
+            // poll stats.
+            if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
+                let at = at.unwrap_or_else(SystemTime::now);
+                stats.start_poll(at);
+                Some(at)
+            } else if let Some(stats) = exts.get::<Arc<stats::AsyncOpStats>>() {
+                let at = at.unwrap_or_else(SystemTime::now);
+                stats.start_poll(at);
+                Some(at)
+            // otherwise, is the span a resource? in that case, we also want
+            // to enter it, although we don't care about recording poll
+            // stats.
+            } else if exts.get::<Arc<stats::ResourceStats>>().is_some() {
+                Some(at.unwrap_or_else(SystemTime::now))
+            } else {
+                None
+            }
         }
-        let _default = dispatcher::set_default(&self.no_dispatch);
-        let parent_id = cx.span(id).and_then(|s| s.parent().map(|p| p.id()));
-        let sent = self.send(
-            &self.shared.dropped_tasks,
-            Event::Enter {
-                at: SystemTime::now(),
-                id: id.clone(),
-                parent_id,
-            },
-        );
 
-        // if we were able to record the send successfully, track entering the
-        // span. if not, ignore the enter, to avoid inconsistent data.
-        if sent {
-            self.current_spans
-                .get_or_default()
-                .borrow_mut()
-                .push(id.clone());
+        if let Some(span) = cx.span(id) {
+            if let Some(now) = update(&span, None) {
+                if let Some(parent) = span.parent() {
+                    update(&parent, Some(now));
+                }
+                self.current_spans
+                    .get_or_default()
+                    .borrow_mut()
+                    .push(id.clone());
+
+                self.record(|| record::Event::Enter {
+                    id: id.into_u64(),
+                    at: now,
+                });
+            }
         }
     }
 
     fn on_exit(&self, id: &span::Id, cx: Context<'_, S>) {
-        if !self.is_id_tracked(id, &cx) {
-            return;
-        }
-
-        let _default = dispatcher::set_default(&self.no_dispatch);
-        if let Some(spans) = self.current_spans.get() {
-            if !spans.borrow_mut().pop(id) {
-                // we did not actually pop the span --- entering it may not have
-                // been successfully recorded. in this case, ignore the exit,
-                // since the aggregator was never informed of the entry.
-                return;
+        fn update<S: Subscriber + for<'a> LookupSpan<'a>>(
+            span: &SpanRef<S>,
+            at: Option<SystemTime>,
+        ) -> Option<SystemTime> {
+            let exts = span.extensions();
+            // if the span we are entering is a task or async op, record the
+            // poll stats.
+            if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
+                let at = at.unwrap_or_else(SystemTime::now);
+                stats.end_poll(at);
+                Some(at)
+            } else if let Some(stats) = exts.get::<Arc<stats::AsyncOpStats>>() {
+                let at = at.unwrap_or_else(SystemTime::now);
+                stats.end_poll(at);
+                Some(at)
+                // otherwise, is the span a resource? in that case, we also want
+                // to enter it, although we don't care about recording poll
+                // stats.
+            } else if exts.get::<Arc<stats::ResourceStats>>().is_some() {
+                Some(at.unwrap_or_else(SystemTime::now))
+            } else {
+                None
             }
         }
 
-        let parent_id = cx.span(id).and_then(|s| s.parent().map(|p| p.id()));
+        if let Some(span) = cx.span(id) {
+            if let Some(now) = update(&span, None) {
+                if let Some(parent) = span.parent() {
+                    update(&parent, Some(now));
+                }
+                self.current_spans.get_or_default().borrow_mut().pop(id);
 
-        self.send(
-            &self.shared.dropped_tasks,
-            Event::Exit {
-                id: id.clone(),
-                parent_id,
-                at: SystemTime::now(),
-            },
-        );
+                self.record(|| record::Event::Exit {
+                    id: id.into_u64(),
+                    at: now,
+                });
+            }
+        }
     }
 
     fn on_close(&self, id: span::Id, cx: Context<'_, S>) {
-        if !self.is_id_tracked(&id, &cx) {
-            return;
+        if let Some(span) = cx.span(&id) {
+            let now = SystemTime::now();
+            let exts = span.extensions();
+            if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
+                stats.drop_task(now);
+            } else if let Some(stats) = exts.get::<Arc<stats::AsyncOpStats>>() {
+                stats.drop_async_op(now);
+            } else if let Some(stats) = exts.get::<Arc<stats::ResourceStats>>() {
+                stats.drop_resource(now);
+            }
+            self.record(|| record::Event::Close {
+                id: id.into_u64(),
+                at: now,
+            });
         }
-
-        let _default = dispatcher::set_default(&self.no_dispatch);
-        self.send(
-            &self.shared.dropped_tasks,
-            Event::Close {
-                at: SystemTime::now(),
-                id,
-            },
-        );
     }
 }
 

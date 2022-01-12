@@ -40,12 +40,15 @@ tracing = "0.1.26"
 tracing-subscriber = { version = "0.3.0", default-features = false, features = ["fmt", "registry"] }
 futures = { version = "0.3", default-features = false }
 hdrhistogram = { version = "7.3.0", default-features = false, features = ["serialization"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
 # The parking_lot dependency is renamed, because we want our `parking_lot`
 # feature to also enable `tracing-subscriber`'s parking_lot feature flag.
 parking_lot_crate = { package = "parking_lot", version = "0.11", optional = true }
 humantime = "2.1.0"
+
+# Required for recording:
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+crossbeam-channel = "0.5"
 
 [dev-dependencies]
 tokio = { version = "^1.7", features = ["full", "rt-multi-thread"] }
