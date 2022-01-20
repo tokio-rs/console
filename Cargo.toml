@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "console",
+    "tokio-console",
     "console-subscriber",
     "console-api"
 ]

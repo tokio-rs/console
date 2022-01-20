@@ -1,8 +1,4 @@
-{ lib
-, protobuf
-, rustPlatform
-, nix-gitignore
-}:
+{ lib, protobuf, rustPlatform, nix-gitignore }:
 let
   inherit (nix-gitignore) gitignoreFilterPure withGitignoreFile;
   # Workaround for the builtins.filterSource issue mentioned in
@@ -12,7 +8,8 @@ let
   # builtins.filterSource in favor of builtins.path.
   gitignoreSource = patterns: path:
     builtins.path {
-      filter = gitignoreFilterPure (_: _: true) (withGitignoreFile patterns path) path;
+      filter =
+        gitignoreFilterPure (_: _: true) (withGitignoreFile patterns path) path;
       path = path;
       name = "src";
     };
@@ -33,21 +30,16 @@ let
 
   src = gitignoreSource extraIgnores ../.;
 
-  cargoTOML = lib.importTOML "${src}/console/Cargo.toml";
-in
-rustPlatform.buildRustPackage rec {
+  cargoTOML = lib.importTOML "${src}/tokio-console/Cargo.toml";
+in rustPlatform.buildRustPackage rec {
   pname = cargoTOML.package.name;
   version = cargoTOML.package.version;
 
-  nativeBuildInputs = [
-    protobuf
-  ];
+  nativeBuildInputs = [ protobuf ];
 
   inherit src;
 
-  cargoLock = {
-    lockFile = "${src}/Cargo.lock";
-  };
+  cargoLock = { lockFile = "${src}/Cargo.lock"; };
 
   meta = {
     inherit (cargoTOML.package) description homepage license;
