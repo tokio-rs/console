@@ -1,4 +1,4 @@
-use crate::{attribute, sync::Mutex, ToProto};
+use crate::{attribute, attribute_new, sync::Mutex, ToProto};
 use hdrhistogram::{
     serialization::{Serializer, V2Serializer},
     Histogram,
@@ -87,6 +87,7 @@ pub(crate) struct ResourceStats {
     created_at: SystemTime,
     dropped_at: Mutex<Option<SystemTime>>,
     attributes: Mutex<attribute::Attributes>,
+    attributes_new: attribute_new::Attributes,
     pub(crate) inherit_child_attributes: bool,
     pub(crate) parent_id: Option<Id>,
 }
@@ -263,10 +264,16 @@ impl AsyncOpStats {
         created_at: SystemTime,
         inherit_child_attributes: bool,
         parent_id: Option<Id>,
+        attributes_new: attribute_new::Attributes,
     ) -> Self {
         Self {
             task_id: AtomicU64::new(0),
-            stats: ResourceStats::new(created_at, inherit_child_attributes, parent_id),
+            stats: ResourceStats::new(
+                created_at,
+                inherit_child_attributes,
+                parent_id,
+                attributes_new,
+            ),
             poll_stats: PollStats::default(),
         }
     }
@@ -327,13 +334,19 @@ impl ToProto for AsyncOpStats {
     type Output = proto::async_ops::Stats;
 
     fn to_proto(&self) -> Self::Output {
-        let attributes = self.stats.attributes.lock().values().cloned().collect();
+        let attributes = self.stats.attributes.lock();
+        let attributes_new = self
+            .stats
+            .attributes_new
+            .values()
+            .filter_map(ToProto::to_proto);
+        let attributes = attributes.values().cloned().chain(attributes_new);
         proto::async_ops::Stats {
             poll_stats: Some(self.poll_stats.to_proto()),
             created_at: Some(self.stats.created_at.into()),
             dropped_at: self.stats.dropped_at.lock().map(Into::into),
             task_id: self.task_id().map(Into::into),
-            attributes,
+            attributes: attributes.collect(),
         }
     }
 }
@@ -345,6 +358,7 @@ impl ResourceStats {
         created_at: SystemTime,
         inherit_child_attributes: bool,
         parent_id: Option<Id>,
+        attributes_new: attribute_new::Attributes,
     ) -> Self {
         Self {
             is_dirty: AtomicBool::new(true),
@@ -352,6 +366,7 @@ impl ResourceStats {
             created_at,
             dropped_at: Mutex::new(None),
             attributes: Default::default(),
+            attributes_new,
             inherit_child_attributes,
             parent_id,
         }
@@ -359,6 +374,11 @@ impl ResourceStats {
 
     pub(crate) fn update_attribute(&self, id: &Id, update: &attribute::Update) {
         self.attributes.lock().update(id, update);
+        self.make_dirty();
+    }
+
+    pub(crate) fn update_attribute_new(&self, update: &attribute_new::Update) {
+        self.attributes_new.update(update);
         self.make_dirty();
     }
 
@@ -412,11 +432,13 @@ impl ToProto for ResourceStats {
     type Output = proto::resources::Stats;
 
     fn to_proto(&self) -> Self::Output {
-        let attributes = self.attributes.lock().values().cloned().collect();
+        let attributes = self.attributes.lock();
+        let attributes_new = self.attributes_new.values().filter_map(ToProto::to_proto);
+        let attributes = attributes.values().cloned().chain(attributes_new);
         proto::resources::Stats {
             created_at: Some(self.created_at.into()),
             dropped_at: self.dropped_at.lock().map(Into::into),
-            attributes,
+            attributes: attributes.collect(),
         }
     }
 }

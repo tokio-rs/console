@@ -27,6 +27,7 @@ use tracing_subscriber::{
 
 mod aggregator;
 mod attribute;
+mod attribute_new;
 mod builder;
 mod callsites;
 mod record;
@@ -40,7 +41,10 @@ pub use builder::Builder;
 use callsites::Callsites;
 use record::Recorder;
 use stack::SpanStack;
-use visitors::{AsyncOpVisitor, ResourceVisitor, ResourceVisitorResult, TaskVisitor, WakerVisitor};
+use visitors::{
+    AsyncOpVisitor, NewStateUpdateVisitor, ResourceVisitor, ResourceVisitorResult, TaskVisitor,
+    WakerVisitor,
+};
 
 pub use builder::{init, spawn};
 
@@ -479,6 +483,55 @@ impl ConsoleLayer {
             }
         }
     }
+
+    fn record_updates<S>(
+        &self,
+        span: SpanRef<'_, S>,
+        updates: Vec<attribute_new::Update>,
+        ctx: &Context<'_, S>,
+    ) where
+        S: Subscriber + for<'a> LookupSpan<'a>,
+    {
+        if self.is_resource(span.metadata()) {
+            self.state_update_new(span, updates, ctx, |exts| {
+                exts.get::<Arc<stats::ResourceStats>>()
+                    .map(<Arc<stats::ResourceStats> as std::ops::Deref>::deref)
+            })
+        } else if self.is_async_op(span.metadata()) {
+            self.state_update_new(span, updates, ctx, |exts| {
+                let async_op = exts.get::<Arc<stats::AsyncOpStats>>()?;
+                Some(&async_op.stats)
+            })
+        }
+    }
+
+    fn state_update_new<S>(
+        &self,
+        span: SpanRef<'_, S>,
+        updates: Vec<attribute_new::Update>,
+        ctx: &Context<'_, S>,
+        get_stats: impl for<'a> Fn(&'a Extensions) -> Option<&'a stats::ResourceStats>,
+    ) where
+        S: Subscriber + for<'a> LookupSpan<'a>,
+    {
+        let exts = span.extensions();
+        let stats = match get_stats(&exts) {
+            Some(stats) => stats,
+            None => return,
+        };
+
+        for upd in updates.iter() {
+            stats.update_attribute_new(upd);
+            if let Some(parent) = stats.parent_id.as_ref().and_then(|parent| ctx.span(parent)) {
+                let exts = parent.extensions();
+                if let Some(stats) = get_stats(&exts) {
+                    if stats.inherit_child_attributes {
+                        stats.update_attribute_new(upd);
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl<S> Layer<S> for ConsoleLayer
@@ -570,10 +623,12 @@ where
                     self.first_entered(&stack.borrow(), |id| self.is_id_resource(id, &ctx))
                 });
                 if let Some(stats) = self.send_stats(&self.shared.dropped_resources, move || {
+                    let meta_id = metadata.into();
                     let stats = Arc::new(stats::ResourceStats::new(
                         at,
                         inherit_child_attrs,
                         parent_id.clone(),
+                        attribute_new::Attributes::new(meta_id, attrs.fields()),
                     ));
                     let event = Event::Resource {
                         id: id.clone(),
@@ -587,7 +642,13 @@ where
                     };
                     (event, stats)
                 }) {
-                    ctx.span(id).expect("if `on_new_span` was called, the span must exist; this is a `tracing` bug!").extensions_mut().insert(stats);
+                    let span = ctx.span(id).expect("if `on_new_span` was called, the span must exist; this is a `tracing` bug!");
+                    span.extensions_mut().insert(stats);
+
+                    // now record initial attrs
+                    let mut attr_visitor = NewStateUpdateVisitor::default();
+                    attrs.record(&mut attr_visitor);
+                    self.record_updates(span, attr_visitor.updates, &ctx)
                 }
             }
             return;
@@ -609,10 +670,12 @@ where
                 if let Some(resource_id) = resource_id {
                     if let Some(stats) =
                         self.send_stats(&self.shared.dropped_async_ops, move || {
+                            let meta_id = metadata.into();
                             let stats = Arc::new(stats::AsyncOpStats::new(
                                 at,
                                 inherit_child_attrs,
                                 parent_id.clone(),
+                                attribute_new::Attributes::new(meta_id, attrs.fields()),
                             ));
                             let event = Event::AsyncResourceOp {
                                 id: id.clone(),
@@ -625,7 +688,13 @@ where
                             (event, stats)
                         })
                     {
-                        ctx.span(id).expect("if `on_new_span` was called, the span must exist; this is a `tracing` bug!").extensions_mut().insert(stats);
+                        let span = ctx.span(id).expect("if `on_new_span` was called, the span must exist; this is a `tracing` bug!");
+                        span.extensions_mut().insert(stats);
+
+                        // now record initial attrs
+                        let mut attr_visitor = NewStateUpdateVisitor::default();
+                        attrs.record(&mut attr_visitor);
+                        self.record_updates(span, attr_visitor.updates, &ctx)
                     }
                 }
             }
@@ -840,6 +909,14 @@ where
                 id: id.into_u64(),
                 at: now,
             });
+        }
+    }
+
+    fn on_record(&self, id: &span::Id, values: &span::Record<'_>, cx: Context<'_, S>) {
+        if let Some(span) = cx.span(id) {
+            let mut attr_visitor = NewStateUpdateVisitor::default();
+            values.record(&mut attr_visitor);
+            self.record_updates(span, attr_visitor.updates, &cx)
         }
     }
 }
