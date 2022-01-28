@@ -52,7 +52,7 @@ impl TaskView {
         let details_ref = self.details.borrow();
         let details = details_ref
             .as_ref()
-            .filter(|details| details.task_id() == task.id());
+            .filter(|details| details.span_id() == task.span_id());
 
         let warnings: Vec<_> = task
             .warnings()
