@@ -215,7 +215,7 @@ impl State {
     pub(crate) fn update_task_details(&mut self, update: proto::tasks::TaskDetails) {
         if let Some(id) = update.task_id {
             let details = Details {
-                task_id: id.id,
+                span_id: id.id,
                 poll_times_histogram: update.poll_times_histogram.and_then(|data| {
                     hdrhistogram::serialization::Deserializer::new()
                         .deserialize(&mut Cursor::new(&data))

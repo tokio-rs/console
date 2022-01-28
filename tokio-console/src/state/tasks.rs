@@ -26,7 +26,7 @@ pub(crate) struct TasksState {
 
 #[derive(Debug, Default)]
 pub(crate) struct Details {
-    pub(crate) task_id: u64,
+    pub(crate) span_id: u64,
     pub(crate) poll_times_histogram: Option<Histogram<u64>>,
 }
 
@@ -223,8 +223,8 @@ impl TasksState {
 }
 
 impl Details {
-    pub(crate) fn task_id(&self) -> u64 {
-        self.task_id
+    pub(crate) fn span_id(&self) -> u64 {
+        self.span_id
     }
 
     pub(crate) fn poll_times_histogram(&self) -> Option<&Histogram<u64>> {
