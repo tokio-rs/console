@@ -17,9 +17,20 @@ impl From<tracing_core::Level> for metadata::Level {
 
 impl From<tracing_core::metadata::Kind> for metadata::Kind {
     fn from(kind: tracing_core::metadata::Kind) -> Self {
-        match kind {
-            tracing_core::metadata::Kind::SPAN => metadata::Kind::Span,
-            tracing_core::metadata::Kind::EVENT => metadata::Kind::Event,
+        // /!\ Note that this is intentionally *not* an exhaustive match. the
+        // `metadata::Kind` struct in `tracing_core` is not intended to be
+        // exhaustively matched, but compiler changes made past versions of it
+        // capable of being matched exhaustively, which was never intended.
+        //
+        // Therefore, we cannot write a match with both variants without a
+        // wildcard arm. However, on versions of `tracing_core` where the
+        // compiler believes the type to be exhaustive, a wildcard arm will
+        // result in a warning. Thus, we must write this rather tortured-looking
+        // `if` statement, to get non-exhaustive matching behavior.
+        if kind == tracing_core::metadata::Kind::SPAN {
+            metadata::Kind::Span
+        } else {
+            metadata::Kind::Event
         }
     }
 }
