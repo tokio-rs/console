@@ -1,3 +1,12 @@
+<a name="0.1.2"></a>
+## 0.1.2 (2022-02-04)
+
+#### Bug Fixes
+
+
+* fix accidental exhaustive matching on `metadata::Kind` (#271)
+  ([d9aafaa0](d9aafaa0), closes [#270](270))
+
 <a name="0.1.1"></a>
 ## 0.1.1 (2022-01-18)
 
