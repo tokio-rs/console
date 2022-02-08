@@ -36,6 +36,9 @@ pub struct Builder {
 
     /// If and where to save a recording of the events.
     pub(super) recording_path: Option<PathBuf>,
+
+    /// The filter environment variable to use for `tracing` events.
+    pub(super) filter_env_variable: String,
 }
 
 impl Default for Builder {
@@ -47,6 +50,7 @@ impl Default for Builder {
             retention: ConsoleLayer::DEFAULT_RETENTION,
             server_addr: SocketAddr::new(Server::DEFAULT_IP, Server::DEFAULT_PORT),
             recording_path: None,
+            filter_env_variable: "RUST_LOG".to_string(),
         }
     }
 }
@@ -141,6 +145,16 @@ impl Builder {
     pub fn recording_path(self, path: impl Into<PathBuf>) -> Self {
         Self {
             recording_path: Some(path.into()),
+            ..self
+        }
+    }
+
+    /// Sets the filter environment variable for tracing events.
+    ///
+    /// By default, this is `RUST_LOG`.
+    pub fn filter_env_variable(self, filter_env_variable: impl Into<String>) -> Self {
+        Self {
+            filter_env_variable: filter_env_variable.into(),
             ..self
         }
     }
@@ -241,12 +255,15 @@ impl Builder {
     ///
     /// [`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/filter/struct.Targets.html
     pub fn init(self) {
-        let fmt_filter = std::env::var("RUST_LOG")
+        let fmt_filter = std::env::var(&self.filter_env_variable)
             .ok()
-            .and_then(|rust_log| match rust_log.parse::<Targets>() {
+            .and_then(|log_filter| match log_filter.parse::<Targets>() {
                 Ok(targets) => Some(targets),
                 Err(e) => {
-                    eprintln!("failed to parse `RUST_LOG={:?}`: {}", rust_log, e);
+                    eprintln!(
+                        "failed to parse filter environment variable `{}={:?}`: {}",
+                        &self.filter_env_variable, log_filter, e
+                    );
                     None
                 }
             })

@@ -249,6 +249,7 @@ impl ConsoleLayer {
             cfg!(tokio_unstable),
             "task tracing requires Tokio to be built with RUSTFLAGS=\"--cfg tokio_unstable\"!"
         );
+
         tracing::debug!(
             config.event_buffer_capacity,
             config.client_buffer_capacity,
@@ -256,6 +257,7 @@ impl ConsoleLayer {
             ?config.retention,
             ?config.server_addr,
             ?config.recording_path,
+            ?config.filter_env_variable,
             "configured console subscriber"
         );
 
