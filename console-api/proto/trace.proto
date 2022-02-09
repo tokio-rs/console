@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rs.tokio.console.trace;
 
-import "google/protobuf/timestamp/timestamp.proto";
+import "google/protobuf/timestamp.proto";
 import "common.proto";
 
 // Allows observers to stream trace events for a given `WatchRequest` filter.
