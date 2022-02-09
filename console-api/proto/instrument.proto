@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rs.tokio.console.instrument;
 
-import "google/protobuf/timestamp/timestamp.proto";
+import "google/protobuf/timestamp.proto";
 import "common.proto";
 import "tasks.proto";
 import "resources.proto";
