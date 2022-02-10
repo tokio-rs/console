@@ -2,7 +2,7 @@
 //! fields from tracing metadata and producing the parts
 //! needed to construct `Event` instances.
 
-use super::{attribute, WakeOp};
+use super::{attribute, attribute_new, WakeOp};
 use console_api as proto;
 use proto::resources::resource;
 use tracing_core::{
@@ -530,6 +530,73 @@ impl Visit for StateUpdateVisitor {
                 value: Some(value.into()),
                 metadata_id: Some(self.meta_id.clone()),
             });
+        }
+    }
+}
+
+/// Used to extract the fields needed to construct
+/// state updates on resources and async ops. The fields
+/// need to specified on the corresponding span and can have
+/// one of two forms:
+///
+/// state.field - expressed an overrifing update to the field
+/// state.field.delta - expresses a change in the field's value (for numeric types)
+///
+/// Optionally the field can have a unit suffix that will be displayed by the console
+#[derive(Default)]
+pub(crate) struct NewStateUpdateVisitor {
+    pub(crate) updates: Vec<attribute_new::Update>,
+}
+
+impl NewStateUpdateVisitor {
+    const STATE_PREFIX: &'static str = "state.";
+    const DELTA: &'static str = "delta";
+
+    fn extract(&self, field: &field::Field) -> Option<(proto::field::Name, bool)> {
+        if field.name().starts_with(Self::STATE_PREFIX) {
+            let mut parts = field.name().split('.');
+            parts.next();
+            if let Some(name) = parts.next() {
+                return Some((name.into(), field.name().contains(Self::DELTA)));
+            }
+        }
+        None
+    }
+}
+
+impl Visit for NewStateUpdateVisitor {
+    fn record_debug(&mut self, field: &field::Field, value: &dyn std::fmt::Debug) {
+        if let Some((name, is_delta)) = self.extract(field) {
+            self.updates
+                .push(attribute_new::Update::new(name, value.into(), is_delta));
+        }
+    }
+
+    fn record_i64(&mut self, field: &field::Field, value: i64) {
+        if let Some((name, is_delta)) = self.extract(field) {
+            self.updates
+                .push(attribute_new::Update::new(name, value.into(), is_delta));
+        }
+    }
+
+    fn record_u64(&mut self, field: &field::Field, value: u64) {
+        if let Some((name, is_delta)) = self.extract(field) {
+            self.updates
+                .push(attribute_new::Update::new(name, value.into(), is_delta));
+        }
+    }
+
+    fn record_bool(&mut self, field: &field::Field, value: bool) {
+        if let Some((name, is_delta)) = self.extract(field) {
+            self.updates
+                .push(attribute_new::Update::new(name, value.into(), is_delta));
+        }
+    }
+
+    fn record_str(&mut self, field: &field::Field, value: &str) {
+        if let Some((name, is_delta)) = self.extract(field) {
+            self.updates
+                .push(attribute_new::Update::new(name, value.into(), is_delta));
         }
     }
 }
