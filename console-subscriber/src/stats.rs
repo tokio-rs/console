@@ -1,11 +1,12 @@
 use crate::{attribute, sync::Mutex, ToProto};
+use crossbeam_utils::atomic::AtomicCell;
 use hdrhistogram::{
     serialization::{Serializer, V2Serializer},
     Histogram,
 };
 use std::cmp;
 use std::sync::{
-    atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering::*},
+    atomic::{AtomicBool, AtomicUsize, Ordering::*},
     Arc,
 };
 use std::time::{Duration, SystemTime};
@@ -70,7 +71,7 @@ pub(crate) struct AsyncOpStats {
     ///
     /// This is set every time the async op is polled, in case a future is
     /// passed between tasks.
-    task_id: AtomicU64,
+    task_id: AtomicCell<u64>,
 
     /// Fields shared with `ResourceStats`.
     pub(crate) stats: ResourceStats,
@@ -265,14 +266,14 @@ impl AsyncOpStats {
         parent_id: Option<Id>,
     ) -> Self {
         Self {
-            task_id: AtomicU64::new(0),
+            task_id: AtomicCell::new(0),
             stats: ResourceStats::new(created_at, inherit_child_attributes, parent_id),
             poll_stats: PollStats::default(),
         }
     }
 
     pub(crate) fn task_id(&self) -> Option<u64> {
-        let id = self.task_id.load(Acquire);
+        let id = self.task_id.load();
         if id > 0 {
             Some(id as u64)
         } else {
@@ -281,7 +282,7 @@ impl AsyncOpStats {
     }
 
     pub(crate) fn set_task_id(&self, id: &tracing::span::Id) {
-        self.task_id.store(id.into_u64(), Release);
+        self.task_id.store(id.into_u64());
         self.make_dirty();
     }
 
