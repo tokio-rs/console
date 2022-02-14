@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 package rs.tokio.console.common;
-import "google/protobuf/timestamp/timestamp.proto";
+import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
 
 // Unique identifier for each task.
