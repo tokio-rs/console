@@ -56,11 +56,11 @@ impl<T: Unsent> IdData<T> {
         match include {
             Include::UpdatedOnly => self
                 .since_last_update()
-                .map(|(id, d)| (id.into_u64(), d.to_proto(&base_time)))
+                .map(|(id, d)| (id.into_u64(), d.to_proto(base_time)))
                 .collect(),
             Include::All => self
                 .all()
-                .map(|(id, d)| (id.into_u64(), d.to_proto(&base_time)))
+                .map(|(id, d)| (id.into_u64(), d.to_proto(base_time)))
                 .collect(),
         }
     }
