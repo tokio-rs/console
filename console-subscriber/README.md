@@ -128,9 +128,9 @@ tracing_subscriber::registry()
 [`tracing`]: https://crates.io/crates/tracing
 [`tracing-subscriber`]: https://crates.io/crates/tracing-subscriber
 [`Layer`]:https://docs.rs/tracing-subscriber/0.3/tracing_subscriber/layer/index.html
-[default]: https://docs.rs/tracing/latest/0.1/dispatcher/index.html#setting-the-default-subscriber
-[env]: https://docs.rs/console-subscriber/0.1/console-subscriber/struct.builder#method.with_default_env
-[builder]: https://docs.rs/console-subscriber/0.1/console-subscriber/struct.builder
+[default]: https://docs.rs/tracing/latest/tracing/#in-executables
+[env]: https://docs.rs/console-subscriber/latest/console_subscriber/struct.Builder.html#method.with_default_env
+[builder]: https://docs.rs/console-subscriber/latest/console_subscriber/struct.Builder.html
 [`tokio-console`]: https://github.com/tokio-rs/console
 [Tokio]: https://tokio.rs
 

@@ -287,7 +287,7 @@ impl Builder {
     /// additional [`Layer`]s to be added.
     ///
     /// [subscriber]: https://docs.rs/tracing/latest/tracing/subscriber/trait.Subscriber.html
-    /// [filter]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.Targets.html
+    /// [filter]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/targets/struct.Targets.html
     /// [`Layer`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html
     /// [`Server`]: crate::Server
     ///
@@ -461,7 +461,7 @@ pub fn init() {
 /// # use tracing_subscriber::prelude::*;
 /// # tracing_subscriber::registry().with(layer).init(); // to suppress must_use warnings
 /// ```
-/// [filter]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.Targets.html
+/// [filter]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/targets/struct.Targets.html
 /// [`Layer`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html
 /// [`Server`]: crate::Server
 ///

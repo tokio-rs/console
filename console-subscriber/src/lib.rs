@@ -10,7 +10,7 @@ use std::{
         atomic::{AtomicUsize, Ordering},
         Arc,
     },
-    time::{Duration, SystemTime},
+    time::{Duration, Instant},
 };
 use thread_local::ThreadLocal;
 use tokio::sync::{mpsc, oneshot};
@@ -110,6 +110,10 @@ pub struct ConsoleLayer {
 
     /// A sink to record all events to a file.
     recorder: Option<Recorder>,
+
+    /// Used to anchor monotonic timestamps to a base `SystemTime`, to produce a
+    /// timestamp that can be sent over the wire or recorded to JSON.
+    base_time: stats::TimeAnchor,
 }
 
 /// A gRPC [`Server`] that implements the [`tokio-console` wire format][wire].
@@ -132,7 +136,7 @@ pub struct Server {
 
 pub(crate) trait ToProto {
     type Output;
-    fn to_proto(&self) -> Self::Output;
+    fn to_proto(&self, base_time: &stats::TimeAnchor) -> Self::Output;
 }
 
 /// State shared between the `ConsoleLayer` and the `Aggregator` task.
@@ -249,7 +253,8 @@ impl ConsoleLayer {
             cfg!(tokio_unstable),
             "task tracing requires Tokio to be built with RUSTFLAGS=\"--cfg tokio_unstable\"!"
         );
-
+      
+        let base_time = stats::TimeAnchor::new();
         tracing::debug!(
             config.event_buffer_capacity,
             config.client_buffer_capacity,
@@ -258,13 +263,14 @@ impl ConsoleLayer {
             ?config.server_addr,
             ?config.recording_path,
             ?config.filter_env_variable,
+            ?base_time,
             "configured console subscriber"
         );
 
         let (tx, events) = mpsc::channel(config.event_buffer_capacity);
         let (subscribe, rpcs) = mpsc::channel(256);
         let shared = Arc::new(Shared::default());
-        let aggregator = Aggregator::new(events, rpcs, &config, shared.clone());
+        let aggregator = Aggregator::new(events, rpcs, &config, shared.clone(), base_time.clone());
         // Conservatively, start to trigger a flush when half the channel is full.
         // This tries to reduce the chance of losing events to a full channel.
         let flush_under_capacity = config.event_buffer_capacity / 2;
@@ -292,6 +298,7 @@ impl ConsoleLayer {
             resource_state_update_callsites: Callsites::default(),
             async_op_state_update_callsites: Callsites::default(),
             recorder,
+            base_time,
         };
         (layer, server)
     }
@@ -531,13 +538,13 @@ where
     fn on_new_span(&self, attrs: &span::Attributes<'_>, id: &span::Id, ctx: Context<'_, S>) {
         let metadata = attrs.metadata();
         if self.is_spawn(metadata) {
-            let at = SystemTime::now();
+            let at = Instant::now();
             let mut task_visitor = TaskVisitor::new(metadata.into());
             attrs.record(&mut task_visitor);
             let (fields, location) = task_visitor.result();
             self.record(|| record::Event::Spawn {
                 id: id.into_u64(),
-                at,
+                at: self.base_time.to_system_time(at),
                 fields: record::SerializeFields(fields.clone()),
             });
             if let Some(stats) = self.send_stats(&self.shared.dropped_tasks, move || {
@@ -557,7 +564,7 @@ where
         }
 
         if self.is_resource(metadata) {
-            let at = SystemTime::now();
+            let at = Instant::now();
             let mut resource_visitor = ResourceVisitor::default();
             attrs.record(&mut resource_visitor);
             if let Some(result) = resource_visitor.result() {
@@ -596,7 +603,7 @@ where
         }
 
         if self.is_async_op(metadata) {
-            let at = SystemTime::now();
+            let at = Instant::now();
             let mut async_op_visitor = AsyncOpVisitor::default();
             attrs.record(&mut async_op_visitor);
             if let Some((source, inherit_child_attrs)) = async_op_visitor.result() {
@@ -637,7 +644,7 @@ where
     fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
         let metadata = event.metadata();
         if self.waker_callsites.contains(metadata) {
-            let at = SystemTime::now();
+            let at = Instant::now();
             let mut visitor = WakerVisitor::default();
             event.record(&mut visitor);
             // XXX (eliza): ew...
@@ -660,7 +667,7 @@ where
                         stats.record_wake_op(op, at);
                         self.record(|| record::Event::Waker {
                             id: id.into_u64(),
-                            at,
+                            at: self.base_time.to_system_time(at),
                             op,
                         });
                     }
@@ -745,24 +752,24 @@ where
     fn on_enter(&self, id: &span::Id, cx: Context<'_, S>) {
         fn update<S: Subscriber + for<'a> LookupSpan<'a>>(
             span: &SpanRef<S>,
-            at: Option<SystemTime>,
-        ) -> Option<SystemTime> {
+            at: Option<Instant>,
+        ) -> Option<Instant> {
             let exts = span.extensions();
             // if the span we are entering is a task or async op, record the
             // poll stats.
             if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
-                let at = at.unwrap_or_else(SystemTime::now);
+                let at = at.unwrap_or_else(Instant::now);
                 stats.start_poll(at);
                 Some(at)
             } else if let Some(stats) = exts.get::<Arc<stats::AsyncOpStats>>() {
-                let at = at.unwrap_or_else(SystemTime::now);
+                let at = at.unwrap_or_else(Instant::now);
                 stats.start_poll(at);
                 Some(at)
             // otherwise, is the span a resource? in that case, we also want
             // to enter it, although we don't care about recording poll
             // stats.
             } else if exts.get::<Arc<stats::ResourceStats>>().is_some() {
-                Some(at.unwrap_or_else(SystemTime::now))
+                Some(at.unwrap_or_else(Instant::now))
             } else {
                 None
             }
@@ -780,7 +787,7 @@ where
 
                 self.record(|| record::Event::Enter {
                     id: id.into_u64(),
-                    at: now,
+                    at: self.base_time.to_system_time(now),
                 });
             }
         }
@@ -789,24 +796,24 @@ where
     fn on_exit(&self, id: &span::Id, cx: Context<'_, S>) {
         fn update<S: Subscriber + for<'a> LookupSpan<'a>>(
             span: &SpanRef<S>,
-            at: Option<SystemTime>,
-        ) -> Option<SystemTime> {
+            at: Option<Instant>,
+        ) -> Option<Instant> {
             let exts = span.extensions();
             // if the span we are entering is a task or async op, record the
             // poll stats.
             if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
-                let at = at.unwrap_or_else(SystemTime::now);
+                let at = at.unwrap_or_else(Instant::now);
                 stats.end_poll(at);
                 Some(at)
             } else if let Some(stats) = exts.get::<Arc<stats::AsyncOpStats>>() {
-                let at = at.unwrap_or_else(SystemTime::now);
+                let at = at.unwrap_or_else(Instant::now);
                 stats.end_poll(at);
                 Some(at)
                 // otherwise, is the span a resource? in that case, we also want
                 // to enter it, although we don't care about recording poll
                 // stats.
             } else if exts.get::<Arc<stats::ResourceStats>>().is_some() {
-                Some(at.unwrap_or_else(SystemTime::now))
+                Some(at.unwrap_or_else(Instant::now))
             } else {
                 None
             }
@@ -821,7 +828,7 @@ where
 
                 self.record(|| record::Event::Exit {
                     id: id.into_u64(),
-                    at: now,
+                    at: self.base_time.to_system_time(now),
                 });
             }
         }
@@ -829,7 +836,7 @@ where
 
     fn on_close(&self, id: span::Id, cx: Context<'_, S>) {
         if let Some(span) = cx.span(&id) {
-            let now = SystemTime::now();
+            let now = Instant::now();
             let exts = span.extensions();
             if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
                 stats.drop_task(now);
@@ -840,7 +847,7 @@ where
             }
             self.record(|| record::Event::Close {
                 id: id.into_u64(),
-                at: now,
+                at: self.base_time.to_system_time(now),
             });
         }
     }
