@@ -440,26 +440,45 @@ impl PollStats {
     }
 
     fn end_poll(&self, at: SystemTime) {
-        if self.current_polls.fetch_sub(1, AcqRel) == 1 {
-            // We are ending the last current poll
-            let mut timestamps = self.timestamps.lock();
-            let last_poll_started = timestamps.last_poll_started;
-            debug_assert!(last_poll_started.is_some(), "must have started a poll before ending a poll; this is a `console-subscriber` bug!");
-            timestamps.last_poll_ended = Some(at);
-            let elapsed = last_poll_started.and_then(|started| at.duration_since(started).ok());
-            debug_assert!(elapsed.is_some(), "the current poll must have started before it ended; this is a `console-subscriber` bug!");
-            if let Some(elapsed) = elapsed {
-                // if we have a poll time histogram, add the timestamp
-                if let Some(ref mut histogram) = timestamps.histogram {
-                    let elapsed_ns = elapsed.as_nanos().try_into().unwrap_or(u64::MAX);
-                    histogram
-                        .record(elapsed_ns)
-                        .expect("failed to record histogram for some kind of reason");
-                }
-
-                timestamps.busy_time += elapsed;
-            }
+        // Are we ending the last current poll?
+        if self.current_polls.fetch_sub(1, AcqRel) > 1 {
+            return;
         }
+
+        let mut timestamps = self.timestamps.lock();
+        let started = match timestamps.last_poll_started {
+            Some(last_poll) => last_poll,
+            None => {
+                eprintln!(
+                    "a poll ended, but start timestamp was recorded. \
+                        this is probably a `console-subscriber` bug"
+                );
+                return;
+            }
+        };
+
+        timestamps.last_poll_ended = Some(at);
+        let elapsed = match started.duration_since(at) {
+            Ok(elapsed) => elapsed,
+            Err(error) => {
+                eprintln!(
+                    "possible clock skew detected: a poll's end timestamp \
+                    was {:?} before its start timestamp",
+                    error.duration(),
+                );
+                return;
+            }
+        };
+
+        // if we have a poll time histogram, add the timestamp
+        if let Some(ref mut histogram) = timestamps.histogram {
+            let elapsed_ns = elapsed.as_nanos().try_into().unwrap_or(u64::MAX);
+            histogram
+                .record(elapsed_ns)
+                .expect("failed to record histogram for some kind of reason");
+        }
+
+        timestamps.busy_time += elapsed;
     }
 }
 
