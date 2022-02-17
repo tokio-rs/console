@@ -1,7 +1,7 @@
 use super::{shrink::ShrinkMap, Id, ToProto};
-use crate::stats::{DroppedAt, Unsent};
+use crate::stats::{DroppedAt, TimeAnchor, Unsent};
 use std::collections::HashMap;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 
 pub(crate) struct IdData<T> {
     data: ShrinkMap<Id, T>,
@@ -45,18 +45,22 @@ impl<T: Unsent> IdData<T> {
         self.data.get(id)
     }
 
-    pub(crate) fn as_proto(&mut self, include: Include) -> HashMap<u64, T::Output>
+    pub(crate) fn as_proto(
+        &mut self,
+        include: Include,
+        base_time: &TimeAnchor,
+    ) -> HashMap<u64, T::Output>
     where
         T: ToProto,
     {
         match include {
             Include::UpdatedOnly => self
                 .since_last_update()
-                .map(|(id, d)| (id.into_u64(), d.to_proto()))
+                .map(|(id, d)| (id.into_u64(), d.to_proto(base_time)))
                 .collect(),
             Include::All => self
                 .all()
-                .map(|(id, d)| (id.into_u64(), d.to_proto()))
+                .map(|(id, d)| (id.into_u64(), d.to_proto(base_time)))
                 .collect(),
         }
     }
@@ -64,7 +68,7 @@ impl<T: Unsent> IdData<T> {
     pub(crate) fn drop_closed<R: DroppedAt + Unsent>(
         &mut self,
         stats: &mut IdData<R>,
-        now: SystemTime,
+        now: Instant,
         retention: Duration,
         has_watchers: bool,
     ) {
@@ -80,7 +84,7 @@ impl<T: Unsent> IdData<T> {
 
         stats.data.retain_and_shrink(|id, stats| {
             if let Some(dropped_at) = stats.dropped_at() {
-                let dropped_for = now.duration_since(dropped_at).unwrap_or_default();
+                let dropped_for = now.checked_duration_since(dropped_at).unwrap_or_default();
                 let dirty = stats.is_unsent();
                 let should_drop =
                         // if there are any clients watching, retain all dirty tasks regardless of age

@@ -45,6 +45,7 @@ hdrhistogram = { version = "7.3.0", default-features = false, features = ["seria
 # feature to also enable `tracing-subscriber`'s parking_lot feature flag.
 parking_lot_crate = { package = "parking_lot", version = "0.11", optional = true }
 humantime = "2.1.0"
+prost-types = "0.9.0"
 
 # Required for recording:
 serde = { version = "1", features = ["derive"] }
