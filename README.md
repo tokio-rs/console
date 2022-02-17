@@ -252,4 +252,4 @@ cargo run --example $name
 [build]: https://tokio-console.netlify.app/console_subscriber/fn.build.html
 [init]: https://tokio-console.netlify.app/console_subscriber/fn.init.html
 [`EnvFilter`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
-[`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.Targets.html
+[`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/targets/struct.Targets.html

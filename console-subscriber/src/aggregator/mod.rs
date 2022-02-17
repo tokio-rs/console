@@ -13,7 +13,7 @@ use std::{
         atomic::{AtomicBool, Ordering::*},
         Arc,
     },
-    time::{Duration, SystemTime},
+    time::{Duration, Instant},
 };
 use tracing_core::{span::Id, Metadata};
 
@@ -86,6 +86,10 @@ pub(crate) struct Aggregator {
 
     /// The time "state" of the aggregator, such as paused or live.
     temporality: Temporality,
+
+    /// Used to anchor monotonic timestamps to a base `SystemTime`, to produce a
+    /// timestamp that can be sent over the wire.
+    base_time: stats::TimeAnchor,
 }
 
 #[derive(Debug, Default)]
@@ -135,6 +139,7 @@ impl Aggregator {
         rpcs: mpsc::Receiver<Command>,
         builder: &crate::Builder,
         shared: Arc<crate::Shared>,
+        base_time: stats::TimeAnchor,
     ) -> Self {
         Self {
             shared,
@@ -155,6 +160,7 @@ impl Aggregator {
             all_poll_ops: Default::default(),
             new_poll_ops: Default::default(),
             temporality: Temporality::Live,
+            base_time,
         }
     }
 
@@ -241,7 +247,7 @@ impl Aggregator {
     fn cleanup_closed(&mut self) {
         // drop all closed have that has completed *and* whose final data has already
         // been sent off.
-        let now = SystemTime::now();
+        let now = Instant::now();
         let has_watchers = !self.watchers.is_empty();
         self.tasks
             .drop_closed(&mut self.task_stats, now, self.retention, has_watchers);
@@ -254,45 +260,54 @@ impl Aggregator {
     /// Add the task subscription to the watchers after sending the first update
     fn add_instrument_subscription(&mut self, subscription: Watch<proto::instrument::Update>) {
         tracing::debug!("new instrument subscription");
-        let now = SystemTime::now();
-        // Send the initial state --- if this fails, the subscription is already dead
+
+        let task_update = Some(self.task_update(Include::All));
+        let resource_update = Some(self.resource_update(Include::All));
+        let async_op_update = Some(self.async_op_update(Include::All));
+        let now = Instant::now();
+
         let update = &proto::instrument::Update {
-            task_update: Some(proto::tasks::TaskUpdate {
-                new_tasks: self
-                    .tasks
-                    .all()
-                    .map(|(_, value)| value.to_proto())
-                    .collect(),
-                stats_update: self.task_stats.as_proto(Include::All),
-                dropped_events: self.shared.dropped_tasks.swap(0, AcqRel) as u64,
-            }),
-            resource_update: Some(proto::resources::ResourceUpdate {
-                new_resources: self
-                    .resources
-                    .all()
-                    .map(|(_, value)| value.to_proto())
-                    .collect(),
-                stats_update: self.resource_stats.as_proto(Include::All),
-                new_poll_ops: (*self.all_poll_ops).clone(),
-                dropped_events: self.shared.dropped_resources.swap(0, AcqRel) as u64,
-            }),
-            async_op_update: Some(proto::async_ops::AsyncOpUpdate {
-                new_async_ops: self
-                    .async_ops
-                    .all()
-                    .map(|(_, value)| value.to_proto())
-                    .collect(),
-                stats_update: self.async_op_stats.as_proto(Include::All),
-                dropped_events: self.shared.dropped_async_ops.swap(0, AcqRel) as u64,
-            }),
-            now: Some(now.into()),
+            task_update,
+            resource_update,
+            async_op_update,
+            now: Some(self.base_time.to_timestamp(now)),
             new_metadata: Some(proto::RegisterMetadata {
                 metadata: (*self.all_metadata).clone(),
             }),
         };
 
+        // Send the initial state --- if this fails, the subscription is already dead
         if subscription.update(update) {
             self.watchers.push(subscription)
+        }
+    }
+
+    fn task_update(&mut self, include: Include) -> proto::tasks::TaskUpdate {
+        proto::tasks::TaskUpdate {
+            new_tasks: self.tasks.as_proto_list(include, &self.base_time),
+            stats_update: self.task_stats.as_proto(include, &self.base_time),
+            dropped_events: self.shared.dropped_tasks.swap(0, AcqRel) as u64,
+        }
+    }
+
+    fn resource_update(&mut self, include: Include) -> proto::resources::ResourceUpdate {
+        let new_poll_ops = match include {
+            Include::All => (*self.all_poll_ops).clone(),
+            Include::UpdatedOnly => std::mem::take(&mut self.new_poll_ops),
+        };
+        proto::resources::ResourceUpdate {
+            new_resources: self.resources.as_proto_list(include, &self.base_time),
+            stats_update: self.resource_stats.as_proto(include, &self.base_time),
+            new_poll_ops,
+            dropped_events: self.shared.dropped_resources.swap(0, AcqRel) as u64,
+        }
+    }
+
+    fn async_op_update(&mut self, include: Include) -> proto::async_ops::AsyncOpUpdate {
+        proto::async_ops::AsyncOpUpdate {
+            new_async_ops: self.async_ops.as_proto_list(include, &self.base_time),
+            stats_update: self.async_op_stats.as_proto(include, &self.base_time),
+            dropped_events: self.shared.dropped_async_ops.swap(0, AcqRel) as u64,
         }
     }
 
@@ -311,13 +326,13 @@ impl Aggregator {
         if let Some(stats) = self.task_stats.get(&id) {
             let (tx, rx) = mpsc::channel(buffer);
             let subscription = Watch(tx);
-            let now = SystemTime::now();
+            let now = Some(self.base_time.to_timestamp(Instant::now()));
             // Send back the stream receiver.
             // Then send the initial state --- if this fails, the subscription is already dead.
             if stream_sender.send(rx).is_ok()
                 && subscription.update(&proto::tasks::TaskDetails {
                     task_id: Some(id.clone().into()),
-                    now: Some(now.into()),
+                    now,
                     poll_times_histogram: stats.serialize_histogram(),
                 })
             {
@@ -342,44 +357,16 @@ impl Aggregator {
         } else {
             None
         };
+        let task_update = Some(self.task_update(Include::UpdatedOnly));
+        let resource_update = Some(self.resource_update(Include::UpdatedOnly));
+        let async_op_update = Some(self.async_op_update(Include::UpdatedOnly));
 
-        let new_poll_ops = std::mem::take(&mut self.new_poll_ops);
-
-        let now = SystemTime::now();
         let update = proto::instrument::Update {
-            now: Some(now.into()),
+            now: Some(self.base_time.to_timestamp(Instant::now())),
             new_metadata,
-            task_update: Some(proto::tasks::TaskUpdate {
-                new_tasks: self
-                    .tasks
-                    .since_last_update()
-                    .map(|(_, value)| value.to_proto())
-                    .collect(),
-                stats_update: self.task_stats.as_proto(Include::UpdatedOnly),
-
-                dropped_events: self.shared.dropped_tasks.swap(0, AcqRel) as u64,
-            }),
-            resource_update: Some(proto::resources::ResourceUpdate {
-                new_resources: self
-                    .resources
-                    .since_last_update()
-                    .map(|(_, value)| value.to_proto())
-                    .collect(),
-                stats_update: self.resource_stats.as_proto(Include::UpdatedOnly),
-                new_poll_ops,
-
-                dropped_events: self.shared.dropped_resources.swap(0, AcqRel) as u64,
-            }),
-            async_op_update: Some(proto::async_ops::AsyncOpUpdate {
-                new_async_ops: self
-                    .async_ops
-                    .since_last_update()
-                    .map(|(_, value)| value.to_proto())
-                    .collect(),
-                stats_update: self.async_op_stats.as_proto(Include::UpdatedOnly),
-
-                dropped_events: self.shared.dropped_async_ops.swap(0, AcqRel) as u64,
-            }),
+            task_update,
+            resource_update,
+            async_op_update,
         };
 
         self.watchers
@@ -392,7 +379,7 @@ impl Aggregator {
             if let Some(task_stats) = stats.get(id) {
                 let details = proto::tasks::TaskDetails {
                     task_id: Some(id.clone().into()),
-                    now: Some(now.into()),
+                    now: Some(self.base_time.to_timestamp(Instant::now())),
                     poll_times_histogram: task_stats.serialize_histogram(),
                 };
                 watchers.retain(|watch| watch.update(&details));
@@ -545,7 +532,7 @@ impl<T: Clone> Watch<T> {
 impl ToProto for Task {
     type Output = proto::tasks::Task;
 
-    fn to_proto(&self) -> Self::Output {
+    fn to_proto(&self, _: &stats::TimeAnchor) -> Self::Output {
         proto::tasks::Task {
             id: Some(self.id.clone().into()),
             // TODO: more kinds of tasks...
@@ -571,7 +558,7 @@ impl Unsent for Task {
 impl ToProto for Resource {
     type Output = proto::resources::Resource;
 
-    fn to_proto(&self) -> Self::Output {
+    fn to_proto(&self, _: &stats::TimeAnchor) -> Self::Output {
         proto::resources::Resource {
             id: Some(self.id.clone().into()),
             parent_resource_id: self.parent_id.clone().map(Into::into),
@@ -597,7 +584,7 @@ impl Unsent for Resource {
 impl ToProto for AsyncOp {
     type Output = proto::async_ops::AsyncOp;
 
-    fn to_proto(&self) -> Self::Output {
+    fn to_proto(&self, _: &stats::TimeAnchor) -> Self::Output {
         proto::async_ops::AsyncOp {
             id: Some(self.id.clone().into()),
             metadata: Some(self.metadata.into()),
