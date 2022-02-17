@@ -260,11 +260,12 @@ impl Aggregator {
     /// Add the task subscription to the watchers after sending the first update
     fn add_instrument_subscription(&mut self, subscription: Watch<proto::instrument::Update>) {
         tracing::debug!("new instrument subscription");
-        let now = Instant::now();
 
         let task_update = Some(self.task_update(Include::All));
         let resource_update = Some(self.resource_update(Include::All));
         let async_op_update = Some(self.async_op_update(Include::All));
+        let now = Instant::now();
+
         let update = &proto::instrument::Update {
             task_update,
             resource_update,
@@ -356,13 +357,12 @@ impl Aggregator {
         } else {
             None
         };
-        let now = Instant::now();
         let task_update = Some(self.task_update(Include::UpdatedOnly));
         let resource_update = Some(self.resource_update(Include::UpdatedOnly));
         let async_op_update = Some(self.async_op_update(Include::UpdatedOnly));
 
         let update = proto::instrument::Update {
-            now: Some(self.base_time.to_timestamp(now)),
+            now: Some(self.base_time.to_timestamp(Instant::now())),
             new_metadata,
             task_update,
             resource_update,
@@ -379,7 +379,7 @@ impl Aggregator {
             if let Some(task_stats) = stats.get(id) {
                 let details = proto::tasks::TaskDetails {
                     task_id: Some(id.clone().into()),
-                    now: Some(self.base_time.to_timestamp(now)),
+                    now: Some(self.base_time.to_timestamp(Instant::now())),
                     poll_times_histogram: task_stats.serialize_histogram(),
                 };
                 watchers.retain(|watch| watch.update(&details));
