@@ -104,11 +104,15 @@ notes:
   ```shell
   $ RUSTFLAGS="--cfg tokio_unstable" cargo build
   ```
-  or add the following to your `.cargo/config` file:
+  or add the following to your `.cargo/config.toml` file:
   ```toml
   [build]
   rustflags = ["--cfg", "tokio_unstable"]
   ```
+
+  For more information on the appropriate location of your `.cargo/config.toml` file,
+  especially when using workspaces, see the
+  [console-subscriber readme](console-subscriber/README.md#enabling-tokio-instrumentation).
 * the `tokio` and `runtime` [`tracing` targets] must be enabled at the [`TRACE`
   level].
 
