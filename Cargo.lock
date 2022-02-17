@@ -227,6 +227,7 @@ dependencies = [
  "hdrhistogram",
  "humantime",
  "parking_lot",
+ "prost-types",
  "serde",
  "serde_json",
  "thread_local",
