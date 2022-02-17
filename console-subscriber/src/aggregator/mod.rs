@@ -13,7 +13,7 @@ use std::{
         atomic::{AtomicBool, Ordering::*},
         Arc,
     },
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, Instant},
 };
 use tracing_core::{span::Id, Metadata};
 
@@ -317,13 +317,13 @@ impl Aggregator {
         if let Some(stats) = self.task_stats.get(&id) {
             let (tx, rx) = mpsc::channel(buffer);
             let subscription = Watch(tx);
-            let now = SystemTime::now();
+            let now = Some(self.base_time.to_timestamp(Instant::now()));
             // Send back the stream receiver.
             // Then send the initial state --- if this fails, the subscription is already dead.
             if stream_sender.send(rx).is_ok()
                 && subscription.update(&proto::tasks::TaskDetails {
                     task_id: Some(id.clone().into()),
-                    now: Some(now.into()),
+                    now,
                     poll_times_histogram: stats.serialize_histogram(),
                 })
             {
