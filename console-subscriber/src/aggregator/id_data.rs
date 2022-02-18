@@ -7,6 +7,7 @@ pub(crate) struct IdData<T> {
     data: ShrinkMap<Id, T>,
 }
 
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum Include {
     All,
     UpdatedOnly,
@@ -43,6 +44,23 @@ impl<T: Unsent> IdData<T> {
 
     pub(crate) fn get(&self, id: &Id) -> Option<&T> {
         self.data.get(id)
+    }
+
+    pub(crate) fn as_proto_list(
+        &mut self,
+        include: Include,
+        base_time: &TimeAnchor,
+    ) -> Vec<T::Output>
+    where
+        T: ToProto,
+    {
+        match include {
+            Include::UpdatedOnly => self
+                .since_last_update()
+                .map(|(_, d)| d.to_proto(base_time))
+                .collect(),
+            Include::All => self.all().map(|(_, d)| d.to_proto(base_time)).collect(),
+        }
     }
 
     pub(crate) fn as_proto(

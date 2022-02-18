@@ -71,11 +71,23 @@ runtime][Tokio] is considered *experimental*. In order to use
   ```shell
   $ RUSTFLAGS="--cfg tokio_unstable" cargo build
   ```
-  or, by adding the following to the `.cargo/config` file in a Cargo workspace:
+  or, by adding the following to the `.cargo/config.toml` file in a Cargo workspace:
   ```toml
   [build]
   rustflags = ["--cfg", "tokio_unstable"]
   ```
+  If you're using a workspace, you should put the `.cargo/config.toml` file in the root of your workspace.
+  Otherwise, put the `.cargo/config.toml` file in the root directory of your crate.
+  
+  Putting `.cargo/config.toml` files below the workspace or crate root directory may lead to tools like
+  Rust-Analyzer or VSCode not using your `.cargo/config.toml` since they invoke cargo from
+  the workspace or crate root and cargo only looks for the `.cargo` directory in the current & parent directories.
+  Cargo ignores configurations in child directories.
+  More information about where cargo looks for configuration files can be found
+  [here](https://doc.rust-lang.org/cargo/reference/config.html).
+
+  Missing this configuration file during compilation will cause tokio-console to not work, and alternating
+  between building with and without this configuration file included will cause full rebuilds of your project.
 ### Adding the Console Subscriber
 
 If the runtime emits compatible `tracing` events, enabling the console is as
