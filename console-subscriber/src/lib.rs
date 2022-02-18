@@ -253,7 +253,7 @@ impl ConsoleLayer {
             cfg!(tokio_unstable),
             "task tracing requires Tokio to be built with RUSTFLAGS=\"--cfg tokio_unstable\"!"
         );
-      
+
         let base_time = stats::TimeAnchor::new();
         tracing::debug!(
             config.event_buffer_capacity,
