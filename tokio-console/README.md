@@ -44,9 +44,30 @@ application that provides an interactive debugging interface.
 [subscriber]: https://crates.io/crates/console-subscriber
 ## Getting Started
 
-To use the console CLI to debug an asynchronous application, the application
-must first be instrumented to record `tokio-console` telemetry. The easiest way
-to do this is [using the `console-subscriber` crate][subscriber].
+To use the console to monitor and debug a program, it must be instrumented to
+emit the data the console consumes. Then, the `tokio-console` CLI application
+can be used to connect to the application and monitor its operation.
+### Instrumenting the Application
+
+Before the console can connect to an application, it must first be instrumented
+to record `tokio-console` telemetry. The easiest way  to do this is [using the
+`console-subscriber` crate][subscriber].
+
+`console-subscriber` requires that the application's async runtime (or runtimes)
+emit [`tracing`] data in a format that the console can record. For programs that
+use the [Tokio] runtime, this means that:
+
+- Tokio's [unstable features][unstable] must be enabled. See [the `console-subscriber`
+  documentation][unstable] for details.
+- A [compatible Tokio version][versions] must be used. Tokio v1.0 or greater is required
+  to use the console, and some features are only available in later versions.
+  See [the `console-subscriber` documentation][versions] for details.
+ 
+[`tracing`]: https://crates.io/crates/tracing
+[unstable]: https://docs.rs/console-subscriber/0.1/console_subscriber/#enabling-tokio-instrumentation
+[versions]: https://docs.rs/console-subscriber/0.1/console_subscriber/#required-tokio-versions
+
+### Using the Console
 
 Once the application is instrumented, install the console CLI using
 
