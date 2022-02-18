@@ -38,7 +38,7 @@ pub struct Builder {
     pub(super) recording_path: Option<PathBuf>,
 
     /// The filter environment variable to use for `tracing` events.
-    pub(super) filter_env_variable: String,
+    pub(super) filter_env_var: String,
 }
 
 impl Default for Builder {
@@ -50,7 +50,7 @@ impl Default for Builder {
             retention: ConsoleLayer::DEFAULT_RETENTION,
             server_addr: SocketAddr::new(Server::DEFAULT_IP, Server::DEFAULT_PORT),
             recording_path: None,
-            filter_env_variable: "RUST_LOG".to_string(),
+            filter_env_var: "RUST_LOG".to_string(),
         }
     }
 }
@@ -169,9 +169,9 @@ impl Builder {
     ///
     /// [`fmt::Layer`]: https://docs.rs/tracing-subscriber/0.3/tracing_subscriber/fmt/index.html
     /// [here]: https://docs.rs/tracing-subscriber/0.3/tracing_subscriber/filter/targets/struct.Targets.html
-    pub fn filter_env_variable(self, filter_env_variable: impl Into<String>) -> Self {
+    pub fn filter_env_var(self, filter_env_var: impl Into<String>) -> Self {
         Self {
-            filter_env_variable: filter_env_variable.into(),
+            filter_env_var: filter_env_var.into(),
             ..self
         }
     }
@@ -223,7 +223,9 @@ impl Builder {
     /// consumed by the console, the default [`Subscriber`][sub] initialized by this
     /// function also includes a [`tracing_subscriber::fmt`] layer, which logs
     /// tracing spans and events to stdout. Which spans and events are logged will
-    /// be determined by the `RUST_LOG` environment variable.
+    /// be determined by an environment variable, which defaults to `RUST_LOG`.
+    /// The [`Builder::filter_env_var`] method can be used to override the
+    /// environment variable used to configure the log filter.
     ///
     /// **Note**: this function sets the [default `tracing` subscriber][default]
     /// for your application. If you need to add additional layers to a subscriber,
@@ -272,14 +274,14 @@ impl Builder {
     ///
     /// [`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/filter/struct.Targets.html
     pub fn init(self) {
-        let fmt_filter = std::env::var(&self.filter_env_variable)
+        let fmt_filter = std::env::var(&self.filter_env_var)
             .ok()
             .and_then(|log_filter| match log_filter.parse::<Targets>() {
                 Ok(targets) => Some(targets),
                 Err(e) => {
                     eprintln!(
                         "failed to parse filter environment variable `{}={:?}`: {}",
-                        &self.filter_env_variable, log_filter, e
+                        &self.filter_env_var, log_filter, e
                     );
                     None
                 }
