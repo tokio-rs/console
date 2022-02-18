@@ -87,7 +87,43 @@ runtime][Tokio] is considered *experimental*. In order to use
   [here](https://doc.rust-lang.org/cargo/reference/config.html).
 
   Missing this configuration file during compilation will cause tokio-console to not work, and alternating
-  between building with and without this configuration file included will cause full rebuilds of your project.
+  between building with and without this configuration file included will cause
+  full rebuilds of your project.
+  
+#### Required Tokio Versions
+
+Because instrumentation for different aspects of the runtime is being added to
+Tokio over time, the latest Tokio release is generally *recommended* to access all of
+the console's functionality. However, it should generally be compatible with
+earlier Tokio versions, although some information may not be available. A
+minimum version of [Tokio v1.0.0] or later is required to use the console's
+task instrumentation. 
+
+Other instrumentation is added in later Tokio releases:
+
+* [Tokio v1.7.0] or later is required to record task waker instrumentation (such
+  as waker counts, clones, drops, et cetera).
+
+* [Tokio v1.12.0] or later is required to record tasks created by the
+  [`Runtime::block_on`] and [`Handle::block_on`] methods.
+
+* [Tokio v1.13.0] or later is required to track [`tokio::time`] resources, such
+  as `sleep` and `Interval`.
+
+* [Tokio v1.15.0] or later is required to track [`tokio::sync`] resources, such
+  as `Mutex`es, `RwLock`s, `Semaphore`s, `oneshot` channels, `mpsc` channels, et
+  cetera. 
+     
+[Tokio v1.0.0]:
+[Tokio v1.7.0]: https://github.com/tokio-rs/tokio/releases/tag/tokio-1.7.0
+[Tokio v1.12.0]:https://github.com/tokio-rs/tokio/releases/tag/tokio-1.12.0
+[`Runtime::block_on`]: https://docs.rs/tokio/1/tokio/runtime/struct.Runtime.html#method.block_on
+[`Handle::block_on`]: https://docs.rs/tokio/1/tokio/runtime/struct.Handle.html#method.block_on
+[Tokio v1.13.0]: https://github.com/tokio-rs/tokio/releases/tag/tokio-1.13.0
+[`tokio::time`]: https://docs.rs/tokio/1/tokio/time/index.html
+[Tokio v1.15.0]: https://github.com/tokio-rs/tokio/releases/tag/tokio-1.13.0
+[`tokio::sync`]: https://docs.rs/tokio/1/tokio/sync/index.html
+
 ### Adding the Console Subscriber
 
 If the runtime emits compatible `tracing` events, enabling the console is as
