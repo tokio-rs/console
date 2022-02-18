@@ -149,9 +149,26 @@ impl Builder {
         }
     }
 
-    /// Sets the filter environment variable for tracing events.
+    /// Sets the environment variable used to configure which `tracing` events
+    /// are logged to stdout.
     ///
-    /// By default, this is `RUST_LOG`.
+    /// The [`Builder::init`] method configures the default `tracing`
+    /// subscriber. In addition to a [`ConsoleLayer`], the subscriber
+    /// constructed by `init` includes a [`fmt::Layer`] for logging events to
+    /// stdout. What `tracing` events that layer will log is determined by the
+    /// value of an environment variable; this method configures which
+    /// environment variable is read to determine the log filter.
+    ///
+    /// This environment variable does not effect what spans and events are
+    /// recorded by the [`ConsoleLayer`]. Therefore, this method will have no
+    /// effect if the builder is used with [`Builder::spawn`] or
+    /// [`Builder::build`].
+    ///
+    /// The default environment variable is `RUST_LOG`. See [here] for details
+    /// on the syntax for configuring the filter.
+    ///
+    /// [`fmt::Layer`]: https://docs.rs/tracing-subscriber/0.3/tracing_subscriber/fmt/index.html
+    /// [here]: https://docs.rs/tracing-subscriber/0.3/tracing_subscriber/filter/targets/struct.Targets.html
     pub fn filter_env_variable(self, filter_env_variable: impl Into<String>) -> Self {
         Self {
             filter_env_variable: filter_env_variable.into(),
