@@ -262,6 +262,7 @@ impl ConsoleLayer {
             ?config.retention,
             ?config.server_addr,
             ?config.recording_path,
+            ?config.filter_env_var,
             ?base_time,
             "configured console subscriber"
         );

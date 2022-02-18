@@ -36,6 +36,9 @@ pub struct Builder {
 
     /// If and where to save a recording of the events.
     pub(super) recording_path: Option<PathBuf>,
+
+    /// The filter environment variable to use for `tracing` events.
+    pub(super) filter_env_var: String,
 }
 
 impl Default for Builder {
@@ -47,6 +50,7 @@ impl Default for Builder {
             retention: ConsoleLayer::DEFAULT_RETENTION,
             server_addr: SocketAddr::new(Server::DEFAULT_IP, Server::DEFAULT_PORT),
             recording_path: None,
+            filter_env_var: "RUST_LOG".to_string(),
         }
     }
 }
@@ -145,6 +149,33 @@ impl Builder {
         }
     }
 
+    /// Sets the environment variable used to configure which `tracing` events
+    /// are logged to stdout.
+    ///
+    /// The [`Builder::init`] method configures the default `tracing`
+    /// subscriber. In addition to a [`ConsoleLayer`], the subscriber
+    /// constructed by `init` includes a [`fmt::Layer`] for logging events to
+    /// stdout. What `tracing` events that layer will log is determined by the
+    /// value of an environment variable; this method configures which
+    /// environment variable is read to determine the log filter.
+    ///
+    /// This environment variable does not effect what spans and events are
+    /// recorded by the [`ConsoleLayer`]. Therefore, this method will have no
+    /// effect if the builder is used with [`Builder::spawn`] or
+    /// [`Builder::build`].
+    ///
+    /// The default environment variable is `RUST_LOG`. See [here] for details
+    /// on the syntax for configuring the filter.
+    ///
+    /// [`fmt::Layer`]: https://docs.rs/tracing-subscriber/0.3/tracing_subscriber/fmt/index.html
+    /// [here]: https://docs.rs/tracing-subscriber/0.3/tracing_subscriber/filter/targets/struct.Targets.html
+    pub fn filter_env_var(self, filter_env_var: impl Into<String>) -> Self {
+        Self {
+            filter_env_var: filter_env_var.into(),
+            ..self
+        }
+    }
+
     /// Completes the builder, returning a [`ConsoleLayer`] and [`Server`] task.
     pub fn build(self) -> (ConsoleLayer, Server) {
         ConsoleLayer::build(self)
@@ -192,7 +223,9 @@ impl Builder {
     /// consumed by the console, the default [`Subscriber`][sub] initialized by this
     /// function also includes a [`tracing_subscriber::fmt`] layer, which logs
     /// tracing spans and events to stdout. Which spans and events are logged will
-    /// be determined by the `RUST_LOG` environment variable.
+    /// be determined by an environment variable, which defaults to `RUST_LOG`.
+    /// The [`Builder::filter_env_var`] method can be used to override the
+    /// environment variable used to configure the log filter.
     ///
     /// **Note**: this function sets the [default `tracing` subscriber][default]
     /// for your application. If you need to add additional layers to a subscriber,
@@ -241,12 +274,15 @@ impl Builder {
     ///
     /// [`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/filter/struct.Targets.html
     pub fn init(self) {
-        let fmt_filter = std::env::var("RUST_LOG")
+        let fmt_filter = std::env::var(&self.filter_env_var)
             .ok()
-            .and_then(|rust_log| match rust_log.parse::<Targets>() {
+            .and_then(|log_filter| match log_filter.parse::<Targets>() {
                 Ok(targets) => Some(targets),
                 Err(e) => {
-                    eprintln!("failed to parse `RUST_LOG={:?}`: {}", rust_log, e);
+                    eprintln!(
+                        "failed to parse filter environment variable `{}={:?}`: {}",
+                        &self.filter_env_var, log_filter, e
+                    );
                     None
                 }
             })
