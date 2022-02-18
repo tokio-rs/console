@@ -114,7 +114,7 @@ Other instrumentation is added in later Tokio releases:
   as `Mutex`es, `RwLock`s, `Semaphore`s, `oneshot` channels, `mpsc` channels, et
   cetera. 
      
-[Tokio v1.0.0]:
+[Tokio v1.0.0]: https://github.com/tokio-rs/tokio/releases/tag/tokio-1.0.0
 [Tokio v1.7.0]: https://github.com/tokio-rs/tokio/releases/tag/tokio-1.7.0
 [Tokio v1.12.0]:https://github.com/tokio-rs/tokio/releases/tag/tokio-1.12.0
 [`Runtime::block_on`]: https://docs.rs/tokio/1/tokio/runtime/struct.Runtime.html#method.block_on
