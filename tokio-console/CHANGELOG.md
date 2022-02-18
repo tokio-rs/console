@@ -1,3 +1,13 @@
+<a name="0.1.2"></a>
+## 0.1.2 (2022-02-18)
+
+
+#### Bug Fixes
+
+*  console-api dependencies to require 0.1.2 (#274) ([b95f683f](b95f683f), closes [#270](270))
+*  missing histogram in task details (#296) ([884f4eca](884f4eca), closes [#296](296))
+
+  
 <a name="0.1.1"></a>
 ## 0.1.1 (2022-01-18)
 
