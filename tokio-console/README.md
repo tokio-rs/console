@@ -64,7 +64,7 @@ use the [Tokio] runtime, this means that:
   See [the `console-subscriber` documentation][versions] for details.
  
 [`tracing`]: https://crates.io/crates/tracing
-[unstable features]: https://docs.rs/console-subscriber/0.1/console_subscriber/#enabling-tokio-instrumentation
+[unstable]: https://docs.rs/console-subscriber/0.1/console_subscriber/#enabling-tokio-instrumentation
 [versions]: https://docs.rs/console-subscriber/0.1/console_subscriber/#required-tokio-versions
 
 ### Using the Console
