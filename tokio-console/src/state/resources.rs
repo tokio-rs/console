@@ -246,7 +246,7 @@ impl ResourcesState {
                 .stats
                 .dropped_at
                 .map(|d| {
-                    let dropped_for = now.duration_since(d).unwrap();
+                    let dropped_for = now.duration_since(d).unwrap_or_default();
                     retain_for > dropped_for
                 })
                 .unwrap_or(true)
@@ -296,9 +296,11 @@ impl Resource {
     }
 
     pub(crate) fn total(&self, since: SystemTime) -> Duration {
-        self.stats
-            .total
-            .unwrap_or_else(|| since.duration_since(self.stats.created_at).unwrap())
+        self.stats.total.unwrap_or_else(|| {
+            since
+                .duration_since(self.stats.created_at)
+                .unwrap_or_default()
+        })
     }
 
     pub(crate) fn dropped(&self) -> bool {
@@ -338,7 +340,7 @@ impl ResourceStats {
             .try_into()
             .unwrap();
         let dropped_at: Option<SystemTime> = pb.dropped_at.map(|v| v.try_into().unwrap());
-        let total = dropped_at.map(|d| d.duration_since(created_at).unwrap());
+        let total = dropped_at.map(|d| d.duration_since(created_at).unwrap_or_default());
 
         Self {
             created_at,

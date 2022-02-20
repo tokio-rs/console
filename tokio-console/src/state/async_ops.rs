@@ -211,7 +211,7 @@ impl AsyncOpsState {
                 .stats
                 .dropped_at
                 .map(|d| {
-                    let dropped_for = now.duration_since(d).unwrap();
+                    let dropped_for = now.duration_since(d).unwrap_or_default();
                     retain_for > dropped_for
                 })
                 .unwrap_or(true)
@@ -245,25 +245,29 @@ impl AsyncOp {
     }
 
     pub(crate) fn total(&self, since: SystemTime) -> Duration {
-        self.stats
-            .total
-            .unwrap_or_else(|| since.duration_since(self.stats.created_at).unwrap())
+        self.stats.total.unwrap_or_else(|| {
+            since
+                .duration_since(self.stats.created_at)
+                .unwrap_or_default()
+        })
     }
 
     pub(crate) fn busy(&self, since: SystemTime) -> Duration {
         if let (Some(last_poll_started), None) =
             (self.stats.last_poll_started, self.stats.last_poll_ended)
         {
-            let current_time_in_poll = since.duration_since(last_poll_started).unwrap();
+            let current_time_in_poll = since.duration_since(last_poll_started).unwrap_or_default();
             return self.stats.busy + current_time_in_poll;
         }
         self.stats.busy
     }
 
     pub(crate) fn idle(&self, since: SystemTime) -> Duration {
-        self.stats
-            .idle
-            .unwrap_or_else(|| self.total(since) - self.busy(since))
+        self.stats.idle.unwrap_or_else(|| {
+            self.total(since)
+                .checked_sub(self.busy(since))
+                .unwrap_or_default()
+        })
     }
 
     pub(crate) fn total_polls(&self) -> u64 {
@@ -309,11 +313,11 @@ impl AsyncOpStats {
             .unwrap();
 
         let dropped_at: Option<SystemTime> = pb.dropped_at.map(|v| v.try_into().unwrap());
-        let total = dropped_at.map(|d| d.duration_since(created_at).unwrap());
+        let total = dropped_at.map(|d| d.duration_since(created_at).unwrap_or_default());
 
         let poll_stats = pb.poll_stats.expect("task should have poll stats");
         let busy = poll_stats.busy_time.map(pb_duration).unwrap_or_default();
-        let idle = total.map(|total| total - busy);
+        let idle = total.map(|total| total.checked_sub(busy).unwrap_or_default());
         let formatted_attributes = Attribute::make_formatted(styles, &mut attributes);
         let task_id = pb.task_id.map(|id| task_ids.id_for(id.id));
         let task_id_str = strings.string(
