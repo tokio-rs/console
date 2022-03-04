@@ -1274,7 +1274,7 @@ dependencies = [
 
 [[package]]
 name = "tokio-console"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "atty",
  "clap",
