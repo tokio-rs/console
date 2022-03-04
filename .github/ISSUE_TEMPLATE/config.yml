@@ -1,0 +1,4 @@
+contact_links:
+- name: 🙋🏾 Question
+  url: https://github.com/tokio-rs/console/discussions/new
+  about: Please use the discussions tab for questions about using the console.
