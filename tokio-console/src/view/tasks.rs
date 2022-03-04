@@ -163,9 +163,9 @@ impl TableList for TasksTable {
         let header = Row::new(Self::HEADER.iter().enumerate().map(|(idx, &value)| {
             if idx == table_list_state.selected_column {
                 let suffix = if table_list_state.sort_descending {
-                    "▵"
+                    styles.if_utf8("▵", "+")
                 } else {
-                    "▿"
+                    styles.if_utf8("▿", "-")
                 };
                 Cell::from(format!("{}{}", value, suffix)).style(selected_style)
             } else {
