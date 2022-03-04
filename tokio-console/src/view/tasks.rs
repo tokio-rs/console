@@ -37,7 +37,7 @@ impl TableList for TasksTable {
         state: &mut State,
         _: Self::Context,
     ) {
-        let state_len: u16 = Self::HEADER[2].len() as u16;
+        let mut state_len: u16 = Self::HEADER[2].len() as u16;
         let now = if let Some(now) = state.last_updated_at() {
             now
         } else {
@@ -72,6 +72,18 @@ impl TableList for TasksTable {
 
         let mut num_idle = 0;
         let mut num_running = 0;
+
+        match table_list_state.sort_by {
+            SortBy::Warns => warn_width.update_len(warn_width.len() + 1),
+            SortBy::Tid => id_width.update_len(id_width.len() + 1),
+            SortBy::State => state_len += 1,
+            SortBy::Name => name_width.update_len(name_width.len() + 1),
+            SortBy::Polls => polls_width.update_len(polls_width.len() + 1),
+            SortBy::Target => target_width.update_len(target_width.len() + 1),
+            SortBy::Location => location_width.update_len(location_width.len() + 1),
+            SortBy::Total | SortBy::Busy | SortBy::Idle => (),
+        };
+
         let rows = {
             let id_width = &mut id_width;
             let target_width = &mut target_width;
@@ -149,11 +161,15 @@ impl TableList for TasksTable {
         let header_style = header_style.add_modifier(style::Modifier::BOLD);
 
         let header = Row::new(Self::HEADER.iter().enumerate().map(|(idx, &value)| {
-            let cell = Cell::from(value);
             if idx == table_list_state.selected_column {
-                cell.style(selected_style)
+                let suffix = if table_list_state.sort_descending {
+                    "▵"
+                } else {
+                    "▿"
+                };
+                Cell::from(format!("{}{}", value, suffix)).style(selected_style)
             } else {
-                cell
+                Cell::from(value)
             }
         }))
         .height(1)
