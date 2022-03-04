@@ -101,7 +101,7 @@ impl TableList for ResourcesTable {
                         Cell::from(target_width.update_str(resource.target()).to_owned()),
                         Cell::from(type_width.update_str(resource.concrete_type()).to_owned()),
                         Cell::from(resource.type_visibility().render(styles)),
-                        Cell::from(location_width.update_str(resource.location().to_owned())),
+                        Cell::from(location_width.update_str(resource.location()).to_owned()),
                         Cell::from(Spans::from(
                             resource
                                 .formatted_attributes()
