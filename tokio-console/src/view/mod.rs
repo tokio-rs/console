@@ -228,8 +228,4 @@ impl Width {
     pub(crate) fn chars(&self) -> u16 {
         self.curr
     }
-
-    pub(crate) fn len(&self) -> usize {
-        self.curr as usize
-    }
 }
