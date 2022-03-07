@@ -245,11 +245,10 @@ impl AsyncOp {
     }
 
     pub(crate) fn total(&self, since: SystemTime) -> Duration {
-        self.stats.total.unwrap_or_else(|| {
-            since
-                .duration_since(self.stats.created_at)
-                .unwrap_or_default()
-        })
+        self.stats
+            .total
+            .or_else(|| since.duration_since(self.stats.created_at).ok())
+            .unwrap_or_default()
     }
 
     pub(crate) fn busy(&self, since: SystemTime) -> Duration {
@@ -263,11 +262,10 @@ impl AsyncOp {
     }
 
     pub(crate) fn idle(&self, since: SystemTime) -> Duration {
-        self.stats.idle.unwrap_or_else(|| {
-            self.total(since)
-                .checked_sub(self.busy(since))
-                .unwrap_or_default()
-        })
+        self.stats
+            .idle
+            .or_else(|| self.total(since).checked_sub(self.busy(since)))
+            .unwrap_or_default()
     }
 
     pub(crate) fn total_polls(&self) -> u64 {
