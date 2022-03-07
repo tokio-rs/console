@@ -51,7 +51,45 @@ impl Styles {
             // disable colors in error reports
             builder = builder.theme(Theme::new());
         }
-        builder.install()
+
+        // We're going to wrap the panic hook in some extra code of our own, so
+        // we can't use `HookBuilder::install` --- instead, split it into an
+        // error hook and a panic hook.
+        let (panic_hook, error_hook) = builder.into_hooks();
+
+        // Set the panic hook.
+        std::panic::set_hook(Box::new(move |panic_info| {
+            // First, try to log the panic. This way, even if the more
+            // user-friendly panic message isn't displayed correctly, the panic
+            // will still be recorded somewhere.
+            if let Some(location) = panic_info.location() {
+                // If the panic has a source location, record it as structured fields.
+                tracing::error!(
+                    message = %panic_info,
+                    panic.file = location.file(),
+                    panic.line = location.line(),
+                    panic.column = location.column(),
+                );
+            } else {
+                // Otherwise, just log the whole thing.
+                tracing::error!(message = %panic_info);
+            }
+
+            // After logging the panic, use the `color_eyre` panic hook to print
+            // a nice, user-friendly panic message.
+
+            // Leave crossterm before printing panic messages; otherwise, they
+            // may not be displayed and the app will just crash to a blank
+            // screen, which isn't great.
+            let _ = crate::term::exit_crossterm();
+            // Print the panic message.
+            eprintln!("{}", panic_hook.panic_report(panic_info));
+        }));
+
+        // Set the error hook.
+        error_hook.install()?;
+
+        Ok(())
     }
 
     pub fn if_utf8<'a>(&self, utf8: &'a str, ascii: &'a str) -> &'a str {
