@@ -116,13 +116,13 @@ impl TableList for TasksTable {
                             width = id_width.chars() as usize
                         ))),
                         Cell::from(task.state().render(styles)),
-                        Cell::from(name_width.update_str(task.name().unwrap_or("").to_string())),
+                        Cell::from(name_width.update_str(task.name().unwrap_or("")).to_string()),
                         dur_cell(task.total(now)),
                         dur_cell(task.busy(now)),
                         dur_cell(task.idle(now)),
                         Cell::from(polls_width.update_str(task.total_polls().to_string())),
                         Cell::from(target_width.update_str(task.target()).to_owned()),
-                        Cell::from(location_width.update_str(task.location().to_owned())),
+                        Cell::from(location_width.update_str(task.location()).to_owned()),
                         Cell::from(Spans::from(
                             task.formatted_fields()
                                 .iter()
