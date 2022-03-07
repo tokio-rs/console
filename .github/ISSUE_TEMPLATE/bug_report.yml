@@ -1,0 +1,85 @@
+name: "🐛 Bug Report"
+description: "Report a bug encountered while using the console."
+labels: ["S-bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report! Please fill out this
+        form as completely as possible.
+
+        Please search to see if an issue already exists for the bug you
+        encountered. Also, please see [the `CONTRIBUTING.md` file][1] for
+        details on how to submit a bug report.
+
+        [1]: https://github.com/tokio-rs/console/blob/main/CONTRIBUTING.md#submitting-a-bug-report
+
+  - type: dropdown
+    id: crates
+    attributes:
+      label: What crate(s) in this repo are involved in the problem?
+      multiple: true
+      options:
+        - tokio-console
+        - console-subscriber
+        - console-api
+
+  - type: textarea
+    attributes:
+      label: What is the issue?
+      description: |
+        A clear and concise description of what the console is doing
+        wrong, and what you would expect it to do.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: How can the bug be reproduced?
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Logs, error output, etc
+      description: |
+        If the output is long, please create a [gist](https://gist.github.com/)
+        and paste the link here.
+
+  - type: textarea
+    attributes:
+      label: Versions
+      description: |
+        The versions of any crates involved in the problem. You can
+        use `cargo tree | grep console-` to list the versions of console crates
+        your program depends on, and you can use `tokio-console -V` to print the
+        installed version of the `tokio-console` CLI.
+      placeholder: |
+        ```text
+        $ cargo tree | grep console-
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Possible solution
+      description: If you have suggestions on a fix for the bug.
+
+  - type: textarea
+    attributes:
+      label: Additional context
+      description: |
+        Add any other context about the problem here. Or a
+        screenshot if applicable.
+
+  - type: dropdown
+    attributes:
+      label: Would you like to work on fixing this bug?
+      description: We are more than happy to help you through the process.
+      options:
+        - "yes"
+        - "no"
+        - "maybe"
+    validations:
+      required: true
