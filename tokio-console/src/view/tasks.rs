@@ -19,25 +19,39 @@ use tui::{
 #[derive(Debug, Default)]
 pub(crate) struct TasksTable {}
 
-impl TableList for TasksTable {
+impl TableList<11> for TasksTable {
     type Row = Task;
     type Sort = SortBy;
     type Context = ();
 
-    const HEADER: &'static [&'static str] = &[
+    const HEADER: &'static [&'static str; 11] = &[
         "Warn", "ID", "State", "Name", "Total", "Busy", "Idle", "Polls", "Target", "Location",
         "Fields",
     ];
 
+    const WIDTHS: &'static [usize; 11] = &[
+        Self::HEADER[0].len() + 1,
+        Self::HEADER[1].len() + 1,
+        Self::HEADER[2].len() + 1,
+        Self::HEADER[3].len() + 1,
+        Self::HEADER[4].len() + 1,
+        Self::HEADER[5].len() + 1,
+        Self::HEADER[6].len() + 1,
+        Self::HEADER[7].len() + 1,
+        Self::HEADER[8].len() + 1,
+        Self::HEADER[9].len() + 1,
+        Self::HEADER[10].len() + 1,
+    ];
+
     fn render<B: tui::backend::Backend>(
-        table_list_state: &mut TableListState<Self>,
+        table_list_state: &mut TableListState<Self, 11>,
         styles: &view::Styles,
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
         state: &mut State,
         _: Self::Context,
     ) {
-        let state_len: u16 = Self::HEADER[2].len() as u16;
+        let state_len: u16 = Self::WIDTHS[2] as u16;
         let now = if let Some(now) = state.last_updated_at() {
             now
         } else {
@@ -63,15 +77,16 @@ impl TableList for TasksTable {
         };
 
         // Start out wide enough to display the column headers...
-        let mut warn_width = view::Width::new(Self::HEADER[0].len() as u16);
-        let mut id_width = view::Width::new(Self::HEADER[1].len() as u16);
-        let mut name_width = view::Width::new(Self::HEADER[3].len() as u16);
-        let mut polls_width = view::Width::new(Self::HEADER[7].len() as u16);
-        let mut target_width = view::Width::new(Self::HEADER[8].len() as u16);
-        let mut location_width = view::Width::new(Self::HEADER[9].len() as u16);
+        let mut warn_width = view::Width::new(Self::WIDTHS[0] as u16);
+        let mut id_width = view::Width::new(Self::WIDTHS[1] as u16);
+        let mut name_width = view::Width::new(Self::WIDTHS[3] as u16);
+        let mut polls_width = view::Width::new(Self::WIDTHS[7] as u16);
+        let mut target_width = view::Width::new(Self::WIDTHS[8] as u16);
+        let mut location_width = view::Width::new(Self::WIDTHS[9] as u16);
 
         let mut num_idle = 0;
         let mut num_running = 0;
+
         let rows = {
             let id_width = &mut id_width;
             let target_width = &mut target_width;
@@ -138,22 +153,22 @@ impl TableList for TasksTable {
                 })
         };
 
-        let (selected_style, header_style) = if let Some(cyan) = styles.color(Color::Cyan) {
-            (Style::default().fg(cyan), Style::default())
+        let header_style = if styles.color(Color::Cyan).is_some() {
+            Style::default()
         } else {
-            (
-                Style::default().remove_modifier(style::Modifier::REVERSED),
-                Style::default().add_modifier(style::Modifier::REVERSED),
-            )
+            Style::default().add_modifier(style::Modifier::REVERSED)
         };
         let header_style = header_style.add_modifier(style::Modifier::BOLD);
 
         let header = Row::new(Self::HEADER.iter().enumerate().map(|(idx, &value)| {
-            let cell = Cell::from(value);
             if idx == table_list_state.selected_column {
-                cell.style(selected_style)
+                if table_list_state.sort_descending {
+                    Cell::from(styles.ascending(value))
+                } else {
+                    Cell::from(styles.descending(value))
+                }
             } else {
-                cell
+                Cell::from(value)
             }
         }))
         .height(1)

@@ -17,7 +17,7 @@ use tui::{
 
 pub(crate) struct ResourceView {
     resource: Rc<RefCell<Resource>>,
-    async_ops_table: TableListState<AsyncOpsTable>,
+    async_ops_table: TableListState<AsyncOpsTable, 9>,
     initial_render: bool,
 }
 
@@ -25,7 +25,7 @@ impl ResourceView {
     pub(super) fn new(resource: Rc<RefCell<Resource>>) -> Self {
         ResourceView {
             resource,
-            async_ops_table: TableListState::<AsyncOpsTable>::default(),
+            async_ops_table: TableListState::<AsyncOpsTable, 9>::default(),
             initial_render: true,
         }
     }
