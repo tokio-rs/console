@@ -2,8 +2,3 @@ contact_links:
 - name: 🙋🏾 Question
   url: https://github.com/tokio-rs/console/discussions/new
   about: Please use the discussions tab for questions about using the console.
-- name: 🔒 Report a security vulnerability
-  url: https://github.com/tokio-rs/console/security/policy
-  about: |
-    Please review our security policy for more details on reporting a
-    vulnerability.
