@@ -127,7 +127,7 @@ impl Styles {
         )
     }
 
-    pub fn selected<'a>(&self, value: &str) -> Span<'static> {
+    pub fn selected(&self, value: &str) -> Span<'static> {
         let style = if let Some(cyan) = self.color(Color::Cyan) {
             Style::default().fg(cyan)
         } else {
