@@ -25,12 +25,12 @@ pub(crate) struct AsyncOpsTableCtx {
     pub(crate) resource_id: u64,
 }
 
-impl TableList for AsyncOpsTable {
+impl TableList<9> for AsyncOpsTable {
     type Row = AsyncOp;
     type Sort = SortBy;
     type Context = AsyncOpsTableCtx;
 
-    const HEADER: &'static [&'static str] = &[
+    const HEADER: &'static [&'static str; 9] = &[
         "ID",
         "Parent",
         "Task",
@@ -42,8 +42,20 @@ impl TableList for AsyncOpsTable {
         "Attributes",
     ];
 
+    const WIDTHS: &'static [usize; 9] = &[
+        Self::HEADER[0].len() + 1,
+        Self::HEADER[1].len() + 1,
+        Self::HEADER[2].len() + 1,
+        Self::HEADER[3].len() + 1,
+        Self::HEADER[4].len() + 1,
+        Self::HEADER[5].len() + 1,
+        Self::HEADER[6].len() + 1,
+        Self::HEADER[7].len() + 1,
+        Self::HEADER[8].len() + 1,
+    ];
+
     fn render<B: tui::backend::Backend>(
-        table_list_state: &mut TableListState<Self>,
+        table_list_state: &mut TableListState<Self, 9>,
         styles: &view::Styles,
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
@@ -86,11 +98,11 @@ impl TableList for AsyncOpsTable {
             .sort_by
             .sort(now, &mut table_list_state.sorted_items);
 
-        let mut id_width = view::Width::new(Self::HEADER[0].len() as u16);
-        let mut parent_width = view::Width::new(Self::HEADER[1].len() as u16);
-        let mut task_width = view::Width::new(Self::HEADER[2].len() as u16);
-        let mut source_width = view::Width::new(Self::HEADER[3].len() as u16);
-        let mut polls_width = view::Width::new(Self::HEADER[7].len() as u16);
+        let mut id_width = view::Width::new(Self::WIDTHS[0] as u16);
+        let mut parent_width = view::Width::new(Self::WIDTHS[1] as u16);
+        let mut task_width = view::Width::new(Self::WIDTHS[2] as u16);
+        let mut source_width = view::Width::new(Self::WIDTHS[3] as u16);
+        let mut polls_width = view::Width::new(Self::WIDTHS[7] as u16);
 
         let dur_cell = |dur: std::time::Duration| -> Cell<'static> {
             Cell::from(styles.time_units(format!(
@@ -153,22 +165,22 @@ impl TableList for AsyncOpsTable {
                 })
         };
 
-        let (selected_style, header_style) = if let Some(cyan) = styles.color(Color::Cyan) {
-            (Style::default().fg(cyan), Style::default())
+        let header_style = if styles.color(Color::Cyan).is_some() {
+            Style::default()
         } else {
-            (
-                Style::default().remove_modifier(style::Modifier::REVERSED),
-                Style::default().add_modifier(style::Modifier::REVERSED),
-            )
+            Style::default().add_modifier(style::Modifier::REVERSED)
         };
         let header_style = header_style.add_modifier(style::Modifier::BOLD);
 
         let header = Row::new(Self::HEADER.iter().enumerate().map(|(idx, &value)| {
-            let cell = Cell::from(value);
             if idx == table_list_state.selected_column {
-                cell.style(selected_style)
+                if table_list_state.sort_descending {
+                    Cell::from(styles.ascending(value))
+                } else {
+                    Cell::from(styles.descending(value))
+                }
             } else {
-                cell
+                Cell::from(value)
             }
         }))
         .height(1)

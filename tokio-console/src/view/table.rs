@@ -12,15 +12,16 @@ use tui::{
 use std::cell::RefCell;
 use std::rc::Weak;
 
-pub(crate) trait TableList {
+pub(crate) trait TableList<const N: usize> {
     type Row;
     type Sort: SortBy + TryFrom<usize>;
     type Context;
 
-    const HEADER: &'static [&'static str];
+    const HEADER: &'static [&'static str; N];
+    const WIDTHS: &'static [usize; N];
 
     fn render<B: tui::backend::Backend>(
-        state: &mut TableListState<Self>,
+        state: &mut TableListState<Self, N>,
         styles: &view::Styles,
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
@@ -34,7 +35,7 @@ pub(crate) trait SortBy {
     fn as_column(&self) -> usize;
 }
 
-pub(crate) struct TableListState<T: TableList> {
+pub(crate) struct TableListState<T: TableList<N>, const N: usize> {
     pub(crate) sorted_items: Vec<Weak<RefCell<T::Row>>>,
     pub(crate) sort_by: T::Sort,
     pub(crate) selected_column: usize,
@@ -49,7 +50,7 @@ pub(crate) struct Controls {
     pub(crate) height: u16,
 }
 
-impl<T: TableList> TableListState<T> {
+impl<T: TableList<N>, const N: usize> TableListState<T, N> {
     pub(in crate::view) fn len(&self) -> usize {
         self.sorted_items.len()
     }
@@ -181,9 +182,9 @@ impl<T: TableList> TableListState<T> {
     }
 }
 
-impl<T> Default for TableListState<T>
+impl<T, const N: usize> Default for TableListState<T, N>
 where
-    T: TableList,
+    T: TableList<N>,
     T::Sort: Default,
 {
     fn default() -> Self {

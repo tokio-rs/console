@@ -20,12 +20,12 @@ use tui::{
 #[derive(Debug, Default)]
 pub(crate) struct ResourcesTable {}
 
-impl TableList for ResourcesTable {
+impl TableList<9> for ResourcesTable {
     type Row = Resource;
     type Sort = SortBy;
     type Context = ();
 
-    const HEADER: &'static [&'static str] = &[
+    const HEADER: &'static [&'static str; 9] = &[
         "ID",
         "Parent",
         "Kind",
@@ -37,8 +37,20 @@ impl TableList for ResourcesTable {
         "Attributes",
     ];
 
+    const WIDTHS: &'static [usize; 9] = &[
+        Self::HEADER[0].len() + 1,
+        Self::HEADER[1].len() + 1,
+        Self::HEADER[2].len() + 1,
+        Self::HEADER[3].len() + 1,
+        Self::HEADER[4].len() + 1,
+        Self::HEADER[5].len() + 1,
+        Self::HEADER[6].len() + 1,
+        Self::HEADER[7].len() + 1,
+        Self::HEADER[8].len() + 1,
+    ];
+
     fn render<B: tui::backend::Backend>(
-        table_list_state: &mut TableListState<Self>,
+        table_list_state: &mut TableListState<Self, 9>,
         styles: &view::Styles,
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
@@ -59,15 +71,15 @@ impl TableList for ResourcesTable {
             .sort_by
             .sort(now, &mut table_list_state.sorted_items);
 
-        let viz_len: u16 = Self::HEADER[6].len() as u16;
+        let viz_len: u16 = Self::WIDTHS[6] as u16;
 
-        let mut id_width = view::Width::new(Self::HEADER[0].len() as u16);
-        let mut parent_width = view::Width::new(Self::HEADER[1].len() as u16);
+        let mut id_width = view::Width::new(Self::WIDTHS[0] as u16);
+        let mut parent_width = view::Width::new(Self::WIDTHS[1] as u16);
 
-        let mut kind_width = view::Width::new(Self::HEADER[2].len() as u16);
-        let mut target_width = view::Width::new(Self::HEADER[4].len() as u16);
-        let mut type_width = view::Width::new(Self::HEADER[5].len() as u16);
-        let mut location_width = view::Width::new(Self::HEADER[7].len() as u16);
+        let mut kind_width = view::Width::new(Self::WIDTHS[2] as u16);
+        let mut target_width = view::Width::new(Self::WIDTHS[4] as u16);
+        let mut type_width = view::Width::new(Self::WIDTHS[5] as u16);
+        let mut location_width = view::Width::new(Self::WIDTHS[7] as u16);
 
         let rows = {
             let id_width = &mut id_width;
@@ -120,22 +132,22 @@ impl TableList for ResourcesTable {
                 })
         };
 
-        let (selected_style, header_style) = if let Some(cyan) = styles.color(Color::Cyan) {
-            (Style::default().fg(cyan), Style::default())
+        let header_style = if styles.color(Color::Cyan).is_some() {
+            Style::default()
         } else {
-            (
-                Style::default().remove_modifier(style::Modifier::REVERSED),
-                Style::default().add_modifier(style::Modifier::REVERSED),
-            )
+            Style::default().add_modifier(style::Modifier::REVERSED)
         };
         let header_style = header_style.add_modifier(style::Modifier::BOLD);
 
         let header = Row::new(Self::HEADER.iter().enumerate().map(|(idx, &value)| {
-            let cell = Cell::from(value);
             if idx == table_list_state.selected_column {
-                cell.style(selected_style)
+                if table_list_state.sort_descending {
+                    Cell::from(styles.ascending(value))
+                } else {
+                    Cell::from(styles.descending(value))
+                }
             } else {
-                cell
+                Cell::from(value)
             }
         }))
         .height(1)

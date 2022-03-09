@@ -165,6 +165,25 @@ impl Styles {
         )
     }
 
+    pub fn selected(&self, value: &str) -> Span<'static> {
+        let style = if let Some(cyan) = self.color(Color::Cyan) {
+            Style::default().fg(cyan)
+        } else {
+            Style::default().remove_modifier(Modifier::REVERSED)
+        };
+        Span::styled(value.to_string(), style)
+    }
+
+    pub fn ascending(&self, value: &str) -> Span<'static> {
+        let value = format!("{}{}", value, self.if_utf8("▵", "+"));
+        self.selected(&value)
+    }
+
+    pub fn descending(&self, value: &str) -> Span<'static> {
+        let value = format!("{}{}", value, self.if_utf8("▿", "-"));
+        self.selected(&value)
+    }
+
     pub fn color(&self, color: Color) -> Option<Color> {
         use Palette::*;
         match (self.palette, color) {
