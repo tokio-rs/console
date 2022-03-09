@@ -145,7 +145,7 @@ arguments:
 ```shell
 $ tokio-console --help
 
-tokio-console 0.1.0
+tokio-console 0.1.3
 
 USAGE:
     tokio-console [OPTIONS] [TARGET_ADDR]

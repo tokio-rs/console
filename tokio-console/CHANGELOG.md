@@ -1,3 +1,17 @@
+<a name="0.1.3"></a>
+## 0.1.3 (2022-03-09)
+
+
+#### Bug Fixes
+
+*  exit crossterm before printing panic messages (#307) ([43606b9a](43606b9a))
+*  prevent panics if subscriber reports out-of-order times (#295) ([80d7f425](80d7f425))
+
+#### Features
+
+*  add icon representing column sorting state (#301) ([b9e0a226](b9e0a226))
+
+
 <a name="0.1.2"></a>
 ## 0.1.2 (2022-02-18)
 
@@ -7,7 +21,7 @@
 *  console-api dependencies to require 0.1.2 (#274) ([b95f683f](b95f683f), closes [#270](270))
 *  missing histogram in task details (#269) ([884f4eca](884f4eca), closes [#262](262))
 
-  
+
 <a name="0.1.1"></a>
 ## 0.1.1 (2022-01-18)
 
