@@ -73,16 +73,10 @@ pub(crate) struct Aggregator {
     /// Map of AsyncOp IDs to AsyncOp stats.
     async_op_stats: IdData<Arc<stats::AsyncOpStats>>,
 
-    /// *All* PollOp events for AsyncOps on Resources.
-    ///
-    /// This is sent to new clients as part of the initial state.
-    // TODO: drop the poll ops for async ops that have been dropped
-    all_poll_ops: ShrinkVec<proto::resources::PollOp>,
-
-    /// *New* PollOp events that whave occurred since the last update
+    /// `PollOp `events that have occurred since the last update
     ///
     /// This is emptied on every state update.
-    new_poll_ops: Vec<proto::resources::PollOp>,
+    poll_ops: Vec<proto::resources::PollOp>,
 
     /// The time "state" of the aggregator, such as paused or live.
     temporality: Temporality,
@@ -157,8 +151,7 @@ impl Aggregator {
             resource_stats: IdData::default(),
             async_ops: IdData::default(),
             async_op_stats: IdData::default(),
-            all_poll_ops: Default::default(),
-            new_poll_ops: Default::default(),
+            poll_ops: Default::default(),
             temporality: Temporality::Live,
             base_time,
         }
@@ -292,8 +285,8 @@ impl Aggregator {
 
     fn resource_update(&mut self, include: Include) -> proto::resources::ResourceUpdate {
         let new_poll_ops = match include {
-            Include::All => (*self.all_poll_ops).clone(),
-            Include::UpdatedOnly => std::mem::take(&mut self.new_poll_ops),
+            Include::All => self.poll_ops.clone(),
+            Include::UpdatedOnly => std::mem::take(&mut self.poll_ops),
         };
         proto::resources::ResourceUpdate {
             new_resources: self.resources.as_proto_list(include, &self.base_time),
@@ -465,8 +458,7 @@ impl Aggregator {
                     is_ready,
                 };
 
-                self.all_poll_ops.push(poll_op.clone());
-                self.new_poll_ops.push(poll_op);
+                self.poll_ops.push(poll_op);
             }
 
             Event::AsyncResourceOp {
