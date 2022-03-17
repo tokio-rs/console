@@ -1,0 +1,9 @@
+no_colors = false
+lang = "en_us.UTF-8"
+ascii_only = true
+palette = "8"
+
+
+[toggles]
+color_durations = true
+color_terminated = true

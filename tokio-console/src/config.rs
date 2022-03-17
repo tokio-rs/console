@@ -1,5 +1,9 @@
 use crate::view::Palette;
 use clap::{ArgGroup, Parser as Clap, ValueHint};
+use serde::{Deserialize, Serialize};
+use std::env;
+use std::fs;
+use std::path::Path;
 use std::process::Command;
 use std::str::FromStr;
 use std::time::Duration;
@@ -28,7 +32,7 @@ pub struct Config {
     #[clap(long = "log", env = "RUST_LOG", default_value = "off")]
     pub(crate) env_filter: tracing_subscriber::EnvFilter,
 
-    #[clap(flatten)]
+    #[clap(skip)]
     pub(crate) view_options: ViewOptions,
 
     /// How long to continue displaying completed tasks and dropped resources
@@ -66,7 +70,7 @@ pub struct Config {
 #[derive(Debug)]
 struct RetainFor(Option<Duration>);
 
-#[derive(Clap, Debug, Clone)]
+#[derive(Clap, Debug, Clone, Default, Deserialize, Serialize)]
 #[clap(group = ArgGroup::new("colors").conflicts_with("no-colors"))]
 pub struct ViewOptions {
     /// Disable ANSI colors entirely.
@@ -107,7 +111,7 @@ pub struct ViewOptions {
 }
 
 /// Toggles on and off color coding for individual UI elements.
-#[derive(Clap, Debug, Copy, Clone)]
+#[derive(Clap, Debug, Copy, Clone, Deserialize, Serialize)]
 pub struct ColorToggles {
     /// Disable color-coding for duration units.
     #[clap(long = "no-duration-colors", parse(from_flag = std::ops::Not::not), group = "colors")]
@@ -118,9 +122,37 @@ pub struct ColorToggles {
     pub(crate) color_terminated: bool,
 }
 
+impl Default for ColorToggles {
+    fn default() -> Self {
+        Self {
+            color_durations: true,
+            color_terminated: true,
+        }
+    }
+}
+
 // === impl Config ===
 
 impl Config {
+    pub fn from_config() -> color_eyre::Result<Self> {
+        let xdg_config_path = env::var_os("XDG_CONFIG_HOME").map(|mut base| {
+            base.push("/tokio-console/console.toml");
+            base
+        });
+        let xdg_view_opt = xdg_config_path.and_then(ViewOptions::from_config);
+        let current_view_opt = ViewOptions::from_config("console.toml");
+
+        let config = Config::parse();
+
+        match xdg_view_opt.or(current_view_opt) {
+            None => Ok(config),
+            Some(view_opt) => Ok(Self {
+                view_options: view_opt,
+                ..config
+            }),
+        }
+    }
+
     pub fn trace_init(&mut self) -> color_eyre::Result<()> {
         let filter = std::mem::take(&mut self.env_filter);
         use tracing_subscriber::prelude::*;
@@ -166,6 +198,16 @@ impl Config {
 // === impl ViewOptions ===
 
 impl ViewOptions {
+    pub(crate) fn from_config<P>(path: P) -> Option<Self>
+    where
+        P: AsRef<Path> + std::fmt::Debug,
+    {
+        match fs::read_to_string(&path) {
+            Err(_) => None,
+            Ok(conf) => toml::from_str(&conf).ok(),
+        }
+    }
+
     pub fn is_utf8(&self) -> bool {
         self.lang.ends_with("UTF-8") && !self.ascii_only
     }
