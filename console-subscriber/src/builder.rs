@@ -39,6 +39,9 @@ pub struct Builder {
 
     /// The filter environment variable to use for `tracing` events.
     pub(super) filter_env_var: String,
+
+    /// Whether to trace events coming from the subscriber thread
+    self_trace: bool,
 }
 
 impl Default for Builder {
@@ -51,6 +54,7 @@ impl Default for Builder {
             server_addr: SocketAddr::new(Server::DEFAULT_IP, Server::DEFAULT_PORT),
             recording_path: None,
             filter_env_var: "RUST_LOG".to_string(),
+            self_trace: false,
         }
     }
 }
@@ -174,6 +178,13 @@ impl Builder {
             filter_env_var: filter_env_var.into(),
             ..self
         }
+    }
+
+    /// Sets whether we are are tracing events coming from the console subscriber
+    ///
+    /// The default is to drop events coming from the console subscriber thread.
+    pub fn enable_self_trace(self, self_trace: bool) -> Self {
+        Self { self_trace, ..self }
     }
 
     /// Completes the builder, returning a [`ConsoleLayer`] and [`Server`] task.
@@ -368,6 +379,8 @@ impl Builder {
             meta.name().starts_with("runtime.") || meta.target().starts_with("tokio")
         }
 
+        let self_trace = self.self_trace;
+
         let (layer, server) = self.build();
         let filter =
             FilterFn::new(console_filter as for<'r, 's> fn(&'r tracing::Metadata<'s>) -> bool);
@@ -376,6 +389,12 @@ impl Builder {
         thread::Builder::new()
             .name("console_subscriber".into())
             .spawn(move || {
+                let _subscriber_guard;
+                if !self_trace {
+                    _subscriber_guard = tracing::subscriber::set_default(
+                        tracing_core::subscriber::NoSubscriber::default(),
+                    );
+                }
                 let runtime = runtime::Builder::new_current_thread()
                     .enable_io()
                     .enable_time()
