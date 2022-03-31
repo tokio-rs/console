@@ -16,6 +16,7 @@ pub(crate) struct ResourcesState {
     resources: HashMap<u64, Rc<RefCell<Resource>>>,
     pub(crate) ids: Ids,
     new_resources: Vec<ResourceRef>,
+    dropped_events: u64,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -206,6 +207,8 @@ impl ResourcesState {
                 TypeVisibility::Public
             };
 
+            self.dropped_events += update.dropped_events;
+
             let resource = Resource {
                 num,
                 span_id,
@@ -251,6 +254,10 @@ impl ResourcesState {
                 })
                 .unwrap_or(true)
         })
+    }
+
+    pub(crate) fn dropped_events(&self) -> u64 {
+        self.dropped_events
     }
 }
 

@@ -22,6 +22,7 @@ pub(crate) struct TasksState {
     pub(crate) ids: Ids,
     new_tasks: Vec<TaskRef>,
     pub(crate) linters: Vec<Linter<Task>>,
+    dropped_events: u64,
 }
 
 #[derive(Debug, Default)]
@@ -197,6 +198,8 @@ impl TasksState {
                 task.lint(linters);
             }
         }
+
+        self.dropped_events += update.dropped_events;
     }
 
     pub(crate) fn retain_active(&mut self, now: SystemTime, retain_for: Duration) {
@@ -219,6 +222,10 @@ impl TasksState {
 
     pub(crate) fn task(&self, id: u64) -> Option<TaskRef> {
         self.tasks.get(&id).map(Rc::downgrade)
+    }
+
+    pub(crate) fn dropped_events(&self) -> u64 {
+        self.dropped_events
     }
 }
 

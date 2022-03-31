@@ -18,6 +18,7 @@ pub(crate) struct AsyncOpsState {
     async_ops: HashMap<u64, Rc<RefCell<AsyncOp>>>,
     ids: Ids,
     new_async_ops: Vec<AsyncOpRef>,
+    dropped_events: u64,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -201,6 +202,8 @@ impl AsyncOpsState {
                 }
             }
         }
+
+        self.dropped_events += update.dropped_events;
     }
 
     pub(crate) fn retain_active(&mut self, now: SystemTime, retain_for: Duration) {
@@ -216,6 +219,10 @@ impl AsyncOpsState {
                 })
                 .unwrap_or(true)
         })
+    }
+
+    pub(crate) fn dropped_events(&self) -> u64 {
+        self.dropped_events
     }
 }
 

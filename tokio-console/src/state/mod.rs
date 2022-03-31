@@ -200,6 +200,10 @@ impl State {
         &mut self.tasks_state
     }
 
+    pub(crate) fn resources_state(&mut self) -> &ResourcesState {
+        &self.resources_state
+    }
+
     pub(crate) fn resources_state_mut(&mut self) -> &mut ResourcesState {
         &mut self.resources_state
     }

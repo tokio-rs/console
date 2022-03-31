@@ -127,6 +127,15 @@ async fn main() -> color_eyre::Result<()> {
                     .0
                     .push(Span::styled(" PAUSED", view.styles.fg(Color::Red)));
             }
+            let dropped_updates = state.async_ops_state().dropped_events()
+                + state.tasks_state().dropped_events()
+                + state.resources_state().dropped_events();
+            if dropped_updates > 0 {
+                header_text.0.push(Span::styled(
+                    format!(" dropped updates: {}", dropped_updates),
+                    view.styles.fg(Color::Red),
+                ));
+            }
             let header = Paragraph::new(header_text).wrap(Wrap { trim: true });
             let view_controls = Paragraph::new(Spans::from(vec![
                 Span::raw("views: "),
