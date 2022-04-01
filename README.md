@@ -116,13 +116,15 @@ notes:
 * the `tokio` and `runtime` [`tracing` targets] must be enabled at the [`TRACE`
   level].
 
-  if you're using the using [`console_subscriber::init()`][init] or
+  + if you're using the [`console_subscriber::init()`][init] or
   [`console_subscriber::build()`][build] APIs, these targets are enabled
   automatically.
 
-  if you are manually configuring the `tracing` subscriber using the
+  + if you are manually configuring the `tracing` subscriber using the
   [`EnvFilter`] or [`Targets`] filters from [`tracing-subscriber`], add
   `"tokio=trace,runtime=trace"` to your filter configuration.
+
+  + also ensure you have not enabled any of the [compile time filter features](https://docs.rs/tracing/latest/tracing/level_filters/index.html#compile-time-filters) in your `Cargo.toml`.
 
 ### running the console
 
