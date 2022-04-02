@@ -89,6 +89,19 @@ runtime][Tokio] is considered *experimental*. In order to use
   Missing this configuration file during compilation will cause tokio-console to not work, and alternating
   between building with and without this configuration file included will cause
   full rebuilds of your project.
+
+* the `tokio` and `runtime` [`tracing` targets] must be enabled at the [`TRACE`
+  level].
+
+  + if you're using the [`console_subscriber::init()`][init] or
+  [`console_subscriber::Builder`][builder] APIs, these targets are enabled
+  automatically.
+
+  + if you are manually configuring the `tracing` subscriber using the
+  [`EnvFilter`] or [`Targets`] filters from [`tracing-subscriber`], add
+  `"tokio=trace,runtime=trace"` to your filter configuration.
+
+  + also, ensure you have not enabled any of the [compile time filter features][compile_time_filters] in your `Cargo.toml`.
   
 #### Required Tokio Versions
 
@@ -123,6 +136,11 @@ Other instrumentation is added in later Tokio releases:
 [`tokio::time`]: https://docs.rs/tokio/1/tokio/time/index.html
 [Tokio v1.15.0]: https://github.com/tokio-rs/tokio/releases/tag/tokio-1.13.0
 [`tokio::sync`]: https://docs.rs/tokio/1/tokio/sync/index.html
+[`EnvFilter`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
+[`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/targets/struct.Targets.html
+[builder]: https://tokio-console.netlify.app/console_subscriber/struct.builder.html
+[init]: https://tokio-console.netlify.app/console_subscriber/fn.init.html
+[compile_time_filters]: https://docs.rs/tracing/latest/tracing/level_filters/index.html#compile-time-filters
 
 ### Adding the Console Subscriber
 
