@@ -250,7 +250,7 @@ cargo run --example $name
 [`console-subscriber`]: ./console-subscriber
 [`console`]: ./console
 [`Layer`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html
-[`tracing` target]: https://docs.rs/tracing/latest/tracing/struct.Metadata.html
+[`tracing` targets]: https://docs.rs/tracing/latest/tracing/struct.Metadata.html
 [`TRACE` level]: https://docs.rs/tracing/latest/tracing/struct.Level.html#associatedconstant.TRACE
 [builder]: https:/docs.rs/console-subscriber/latest/console_subscriber/struct.builder.html
 [init]: https:/docs.rs/console-subscriber/latest/console_subscriber/fn.init.html

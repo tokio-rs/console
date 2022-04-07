@@ -137,6 +137,8 @@ Other instrumentation is added in later Tokio releases:
 [`tokio::time`]: https://docs.rs/tokio/1/tokio/time/index.html
 [Tokio v1.15.0]: https://github.com/tokio-rs/tokio/releases/tag/tokio-1.13.0
 [`tokio::sync`]: https://docs.rs/tokio/1/tokio/sync/index.html
+[`tracing` targets]: https://docs.rs/tracing/latest/tracing/struct.Metadata.html
+[`TRACE` level]: https://docs.rs/tracing/latest/tracing/struct.Level.html#associatedconstant.TRACE
 [`EnvFilter`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
 [`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/targets/struct.Targets.html
 [builder]: https:/docs.rs/console-subscriber/latest/console_subscriber/struct.builder.html
