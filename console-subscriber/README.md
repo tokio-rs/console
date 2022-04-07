@@ -101,7 +101,8 @@ runtime][Tokio] is considered *experimental*. In order to use
   [`EnvFilter`] or [`Targets`] filters from [`tracing-subscriber`], add
   `"tokio=trace,runtime=trace"` to your filter configuration.
 
-  + also, ensure you have not enabled any of the [compile time filter features][compile_time_filters] in your `Cargo.toml`.
+  + also, ensure you have not enabled any of the [compile time filter 
+    features][compile_time_filters] in your `Cargo.toml`.
   
 #### Required Tokio Versions
 
@@ -138,8 +139,8 @@ Other instrumentation is added in later Tokio releases:
 [`tokio::sync`]: https://docs.rs/tokio/1/tokio/sync/index.html
 [`EnvFilter`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
 [`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/targets/struct.Targets.html
-[builder]: https://tokio-console.netlify.app/console_subscriber/struct.builder.html
-[init]: https://tokio-console.netlify.app/console_subscriber/fn.init.html
+[builder]: https:/docs.rs/console-subscriber/latest/console_subscriber/struct.builder.html
+[init]: https:/docs.rs/console-subscriber/latest/console_subscriber/fn.init.html
 [compile_time_filters]: https://docs.rs/tracing/latest/tracing/level_filters/index.html#compile-time-filters
 
 ### Adding the Console Subscriber
