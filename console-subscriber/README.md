@@ -90,18 +90,18 @@ runtime][Tokio] is considered *experimental*. In order to use
   between building with and without this configuration file included will cause
   full rebuilds of your project.
 
-* the `tokio` and `runtime` [`tracing` targets] must be enabled at the [`TRACE`
+* The `tokio` and `runtime` [`tracing` targets] must be enabled at the [`TRACE`
   level].
 
-  + if you're using the [`console_subscriber::init()`][init] or
+  + If you're using the [`console_subscriber::init()`][init] or
   [`console_subscriber::Builder`][builder] APIs, these targets are enabled
   automatically.
 
-  + if you are manually configuring the `tracing` subscriber using the
+  + If you are manually configuring the `tracing` subscriber using the
   [`EnvFilter`] or [`Targets`] filters from [`tracing-subscriber`], add
   `"tokio=trace,runtime=trace"` to your filter configuration.
 
-  + also, ensure you have not enabled any of the [compile time filter 
+  + Also, ensure you have not enabled any of the [compile time filter 
     features][compile_time_filters] in your `Cargo.toml`.
   
 #### Required Tokio Versions
