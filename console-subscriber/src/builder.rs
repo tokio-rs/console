@@ -180,9 +180,11 @@ impl Builder {
         }
     }
 
-    /// Sets whether we are are tracing events coming from the console subscriber
+    /// Sets whether tasks, resources, and async ops from the console
+    /// subscriber thread are recorded.
     ///
-    /// The default is to drop events coming from the console subscriber thread.
+    /// By default, events from the console subscriber are discarded and
+    /// not exported to clients.
     pub fn enable_self_trace(self, self_trace: bool) -> Self {
         Self { self_trace, ..self }
     }
