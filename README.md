@@ -116,13 +116,16 @@ notes:
 * the `tokio` and `runtime` [`tracing` targets] must be enabled at the [`TRACE`
   level].
 
-  if you're using the using [`console_subscriber::init()`][init] or
-  [`console_subscriber::build()`][build] APIs, these targets are enabled
+  + if you're using the [`console_subscriber::init()`][init] or
+  [`console_subscriber::Builder`][builder] APIs, these targets are enabled
   automatically.
 
-  if you are manually configuring the `tracing` subscriber using the
+  + if you are manually configuring the `tracing` subscriber using the
   [`EnvFilter`] or [`Targets`] filters from [`tracing-subscriber`], add
   `"tokio=trace,runtime=trace"` to your filter configuration.
+
+  + also, ensure you have not enabled any of the [compile time filter 
+    features][compile_time_filters] in your `Cargo.toml`.
 
 ### running the console
 
@@ -259,9 +262,10 @@ cargo run --example $name
 [`console-subscriber`]: ./console-subscriber
 [`tokio-console`]: ./tokio-console
 [`Layer`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html
-[`tracing` target]: https://docs.rs/tracing/latest/tracing/struct.Metadata.html
+[`tracing` targets]: https://docs.rs/tracing/latest/tracing/struct.Metadata.html
 [`TRACE` level]: https://docs.rs/tracing/latest/tracing/struct.Level.html#associatedconstant.TRACE
-[build]: https://tokio-console.netlify.app/console_subscriber/fn.build.html
-[init]: https://tokio-console.netlify.app/console_subscriber/fn.init.html
+[builder]: https:/docs.rs/console-subscriber/latest/console_subscriber/struct.builder.html
+[init]: https:/docs.rs/console-subscriber/latest/console_subscriber/fn.init.html
 [`EnvFilter`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
 [`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/targets/struct.Targets.html
+[compile_time_filters]: https://docs.rs/tracing/latest/tracing/level_filters/index.html#compile-time-filters

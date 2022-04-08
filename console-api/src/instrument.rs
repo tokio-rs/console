@@ -1,1 +1,1 @@
-tonic::include_proto!("rs.tokio.console.instrument");
+include!("generated/rs.tokio.console.instrument.rs");
