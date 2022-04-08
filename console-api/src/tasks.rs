@@ -1,1 +1,1 @@
-tonic::include_proto!("rs.tokio.console.tasks");
+include!("generated/rs.tokio.console.tasks.rs");

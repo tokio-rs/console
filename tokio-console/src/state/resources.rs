@@ -74,7 +74,7 @@ impl Default for SortBy {
 }
 
 impl SortBy {
-    pub fn sort(&self, now: SystemTime, resources: &mut Vec<Weak<RefCell<Resource>>>) {
+    pub fn sort(&self, now: SystemTime, resources: &mut [Weak<RefCell<Resource>>]) {
         match self {
             Self::Rid => resources
                 .sort_unstable_by_key(|resource| resource.upgrade().map(|r| r.borrow().num)),

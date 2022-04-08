@@ -61,9 +61,10 @@ impl Recorder {
         let (tx, rx) = crossbeam_channel::bounded(4096);
         let _worker = std::thread::Builder::new()
             .name("console/subscriber/recorder/io".into())
-            .spawn(move || match record_io(file, rx) {
-                Err(e) => eprintln!("event recorder failed: {}", e),
-                Ok(()) => {}
+            .spawn(move || {
+                if let Err(e) = record_io(file, rx) {
+                    eprintln!("event recorder failed: {}", e);
+                }
             })?;
 
         let recorder = Recorder { tx, _worker };
