@@ -1,1 +1,1 @@
-tonic::include_proto!("rs.tokio.console.resources");
+include!("generated/rs.tokio.console.resources.rs");
