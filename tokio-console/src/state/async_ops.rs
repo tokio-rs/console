@@ -67,7 +67,7 @@ impl Default for SortBy {
 }
 
 impl SortBy {
-    pub fn sort(&self, now: SystemTime, ops: &mut Vec<Weak<RefCell<AsyncOp>>>) {
+    pub fn sort(&self, now: SystemTime, ops: &mut [Weak<RefCell<AsyncOp>>]) {
         match self {
             Self::Aid => ops.sort_unstable_by_key(|ao| ao.upgrade().map(|a| a.borrow().num)),
             Self::Task => ops.sort_unstable_by_key(|ao| ao.upgrade().map(|a| a.borrow().task_id())),

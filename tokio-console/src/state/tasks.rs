@@ -420,7 +420,7 @@ impl Default for SortBy {
 }
 
 impl SortBy {
-    pub fn sort(&self, now: SystemTime, tasks: &mut Vec<Weak<RefCell<Task>>>) {
+    pub fn sort(&self, now: SystemTime, tasks: &mut [Weak<RefCell<Task>>]) {
         match self {
             Self::Tid => tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().num)),
             Self::Name => {
