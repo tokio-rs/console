@@ -27,7 +27,7 @@ mod warnings;
 async fn main() -> color_eyre::Result<()> {
     let mut args = match config::Config::from_config() {
         Err(e) => {
-            tracing::error!(%e, "failed to parse config file");
+            eprintln!("failed to parse config file: {:#?}", e);
             std::process::exit(1);
         }
         Ok(args) => args,
