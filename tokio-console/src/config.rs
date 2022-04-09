@@ -156,7 +156,7 @@ impl Config {
         let view_options = match base_view_options {
             None => config.view_options,
             Some(mut base) => {
-                merge_view_options(&mut base, config.view_options);
+                base.merge_with(config.view_options);
                 base
             }
         };
@@ -203,36 +203,6 @@ impl Config {
 
     pub(crate) fn retain_for(&self) -> Option<Duration> {
         self.retain_for.0
-    }
-}
-
-fn merge_view_options(base: &mut ViewOptions, command_line: ViewOptions) {
-    if command_line.no_colors.is_some() {
-        base.no_colors = command_line.no_colors;
-    }
-
-    if command_line.lang.is_some() {
-        base.lang = command_line.lang;
-    }
-
-    if command_line.ascii_only.is_some() {
-        base.ascii_only = command_line.ascii_only;
-    }
-
-    if command_line.truecolor.is_some() {
-        base.truecolor = command_line.truecolor;
-    }
-
-    if command_line.palette.is_some() {
-        base.palette = command_line.palette;
-    }
-
-    if command_line.toggles.color_durations.is_some() {
-        base.toggles.color_durations = command_line.toggles.color_durations;
-    }
-
-    if command_line.toggles.color_terminated.is_some() {
-        base.toggles.color_terminated = command_line.toggles.color_terminated;
     }
 }
 
@@ -293,6 +263,36 @@ impl ViewOptions {
 
     pub(crate) fn toggles(&self) -> ColorToggles {
         self.toggles
+    }
+
+    fn merge_with(&mut self, command_line: ViewOptions) {
+        if command_line.no_colors.is_some() {
+            self.no_colors = command_line.no_colors;
+        }
+
+        if command_line.lang.is_some() {
+            self.lang = command_line.lang;
+        }
+
+        if command_line.ascii_only.is_some() {
+            self.ascii_only = command_line.ascii_only;
+        }
+
+        if command_line.truecolor.is_some() {
+            self.truecolor = command_line.truecolor;
+        }
+
+        if command_line.palette.is_some() {
+            self.palette = command_line.palette;
+        }
+
+        if command_line.toggles.color_durations.is_some() {
+            self.toggles.color_durations = command_line.toggles.color_durations;
+        }
+
+        if command_line.toggles.color_terminated.is_some() {
+            self.toggles.color_terminated = command_line.toggles.color_terminated;
+        }
     }
 }
 
