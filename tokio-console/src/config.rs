@@ -1,5 +1,6 @@
 use crate::view::Palette;
 use clap::{ArgGroup, Parser as Clap, ValueHint};
+use color_eyre::eyre::WrapErr;
 use serde::Deserialize;
 use std::fs;
 use std::ops::Not;
@@ -144,8 +145,8 @@ pub struct ColorsConfig {
 // === impl Config ===
 
 impl Config {
-    pub fn from_config() -> Self {
-        let base_view_options = ConfigFile::from_config().map(|config| config.into_view_options());
+    pub fn from_config() -> color_eyre::Result<Self> {
+        let base_view_options = ConfigFile::from_config()?.map(|config| config.into_view_options());
         let mut config = Self::parse();
         let view_options = match base_view_options {
             None => config.view_options,
@@ -155,7 +156,7 @@ impl Config {
             }
         };
         config.view_options = view_options;
-        config
+        Ok(config)
     }
 
     pub fn trace_init(&mut self) -> color_eyre::Result<()> {
@@ -309,17 +310,25 @@ impl ColorToggles {
 // === impl ColorToggles ===
 
 impl ConfigFile {
-    fn from_config() -> Option<Self> {
+    fn from_config() -> color_eyre::Result<Option<Self>> {
         let mut base = dirs::config_dir();
-        if let Some(path) = base.as_mut() {
+        let base_file = if let Some(path) = base.as_mut() {
             path.push("tokio-console/console.toml");
-        }
-        let base = base.and_then(|path| fs::read_to_string(path).ok());
-        let base_file: Option<ConfigFile> = base.and_then(|raw| toml::from_str(&raw).ok());
+            fs::read_to_string(path)
+                .ok()
+                .map(|raw| toml::from_str::<ConfigFile>(&raw))
+                .transpose()
+                .wrap_err("failed to parse $XDG_CONFIG/tokio-console/console.toml")?
+        } else {
+            None
+        };
 
-        let current = fs::read_to_string("./console.toml").ok();
-        let current_file: Option<ConfigFile> = current.and_then(|raw| toml::from_str(&raw).ok());
-        merge_config_file(base_file, current_file)
+        let current_file = fs::read_to_string("./console.toml")
+            .ok()
+            .map(|raw| toml::from_str::<ConfigFile>(&raw))
+            .transpose()
+            .wrap_err("failed to parse ./console.toml")?;
+        Ok(merge_config_file(base_file, current_file))
     }
 
     fn into_view_options(self) -> ViewOptions {

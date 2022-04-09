@@ -25,7 +25,13 @@ mod warnings;
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
-    let mut args = config::Config::from_config();
+    let mut args = match config::Config::from_config() {
+        Err(e) => {
+            tracing::error!(%e, "failed to parse config file");
+            std::process::exit(1);
+        }
+        Ok(args) => args,
+    };
     let retain_for = args.retain_for();
     args.trace_init()?;
     tracing::debug!(?args.target_addr, ?args.view_options);
