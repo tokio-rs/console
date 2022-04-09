@@ -4,6 +4,7 @@ use color_eyre::eyre::WrapErr;
 use serde::Deserialize;
 use std::fs;
 use std::ops::Not;
+use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
 use std::time::Duration;
@@ -146,9 +147,19 @@ pub struct ColorsConfig {
 
 impl Config {
     pub fn from_config() -> color_eyre::Result<Self> {
-        let base_view_options = ConfigFile::from_config()?.map(|config| config.into_view_options());
+        let xdg = ViewOptions::from_config(ConfigPath::Xdg)?;
+        let current = ViewOptions::from_config(ConfigPath::Current)?;
+        let base = match (xdg, current) {
+            (None, None) => None,
+            (Some(xdg), None) => Some(xdg),
+            (None, Some(current)) => Some(current),
+            (Some(mut xdg), Some(current)) => {
+                xdg.merge_with(current);
+                Some(xdg)
+            }
+        };
         let mut config = Self::parse();
-        let view_options = match base_view_options {
+        let view_options = match base {
             None => config.view_options,
             Some(mut base) => {
                 base.merge_with(config.view_options);
@@ -260,6 +271,11 @@ impl ViewOptions {
         self.toggles
     }
 
+    fn from_config(path: ConfigPath) -> color_eyre::Result<Option<Self>> {
+        let options = ConfigFile::from_config(path)?.map(|config| config.into_view_options());
+        Ok(options)
+    }
+
     fn merge_with(&mut self, command_line: ViewOptions) {
         self.no_colors = command_line.no_colors.or(self.no_colors.take());
         self.lang = command_line.lang.or(self.lang.take());
@@ -310,25 +326,14 @@ impl ColorToggles {
 // === impl ColorToggles ===
 
 impl ConfigFile {
-    fn from_config() -> color_eyre::Result<Option<Self>> {
-        let mut base = dirs::config_dir();
-        let base_file = if let Some(path) = base.as_mut() {
-            path.push("tokio-console/console.toml");
-            fs::read_to_string(path)
-                .ok()
-                .map(|raw| toml::from_str::<ConfigFile>(&raw))
-                .transpose()
-                .wrap_err("failed to parse $XDG_CONFIG/tokio-console/console.toml")?
-        } else {
-            None
-        };
-
-        let current_file = fs::read_to_string("./console.toml")
-            .ok()
+    fn from_config(path: ConfigPath) -> color_eyre::Result<Option<Self>> {
+        let config = path
+            .into_path()
+            .and_then(|path| fs::read_to_string(path).ok())
             .map(|raw| toml::from_str::<ConfigFile>(&raw))
             .transpose()
-            .wrap_err("failed to parse ./console.toml")?;
-        Ok(merge_config_file(base_file, current_file))
+            .wrap_err_with(|| format!("failed to parse {:?}", path.into_path()))?;
+        Ok(config)
     }
 
     fn into_view_options(self) -> ViewOptions {
@@ -364,20 +369,26 @@ impl ConfigFile {
     }
 }
 
-fn merge_config_file(before: Option<ConfigFile>, after: Option<ConfigFile>) -> Option<ConfigFile> {
-    match (before, after) {
-        (None, None) => None,
-        (before @ Some(_), None) => before,
-        (None, after @ Some(_)) => after,
-        (Some(mut before), Some(after)) => {
-            let ConfigFile { charset, colors } = after;
-            if let Some(charset) = charset {
-                before.charset = Some(charset)
+enum ConfigPath {
+    Xdg,
+    Current,
+}
+
+impl ConfigPath {
+    fn into_path(&self) -> Option<PathBuf> {
+        match self {
+            Self::Xdg => {
+                let mut path = dirs::config_dir();
+                if let Some(path) = path.as_mut() {
+                    path.push("tokio-console/console.toml");
+                }
+                path.map(|path| path)
             }
-            if let Some(colors) = colors {
-                before.colors = Some(colors)
+            Self::Current => {
+                let mut path = PathBuf::new();
+                path.push("./console.toml");
+                Some(path)
             }
-            Some(before)
         }
     }
 }
