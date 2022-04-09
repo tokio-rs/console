@@ -266,33 +266,19 @@ impl ViewOptions {
     }
 
     fn merge_with(&mut self, command_line: ViewOptions) {
-        if command_line.no_colors.is_some() {
-            self.no_colors = command_line.no_colors;
-        }
-
-        if command_line.lang.is_some() {
-            self.lang = command_line.lang;
-        }
-
-        if command_line.ascii_only.is_some() {
-            self.ascii_only = command_line.ascii_only;
-        }
-
-        if command_line.truecolor.is_some() {
-            self.truecolor = command_line.truecolor;
-        }
-
-        if command_line.palette.is_some() {
-            self.palette = command_line.palette;
-        }
-
-        if command_line.toggles.color_durations.is_some() {
-            self.toggles.color_durations = command_line.toggles.color_durations;
-        }
-
-        if command_line.toggles.color_terminated.is_some() {
-            self.toggles.color_terminated = command_line.toggles.color_terminated;
-        }
+        self.no_colors = command_line.no_colors.or(self.no_colors.take());
+        self.lang = command_line.lang.or(self.lang.take());
+        self.ascii_only = command_line.ascii_only.or(self.ascii_only.take());
+        self.truecolor = command_line.truecolor.or(self.truecolor.take());
+        self.palette = command_line.palette.or(self.palette.take());
+        self.toggles.color_durations = command_line
+            .toggles
+            .color_durations
+            .or(self.toggles.color_durations.take());
+        self.toggles.color_terminated = command_line
+            .toggles
+            .color_terminated
+            .or(self.toggles.color_terminated.take());
     }
 }
 
