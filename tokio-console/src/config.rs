@@ -116,10 +116,12 @@ pub struct ViewOptions {
 pub struct ColorToggles {
     /// Disable color-coding for duration units.
     #[clap(long = "no-duration-colors", group = "colors")]
+    #[serde(rename = "durations")]
     color_durations: Option<bool>,
 
     /// Disable color-coding for terminated tasks.
     #[clap(long = "no-terminated-colors", group = "colors")]
+    #[serde(rename = "terminated")]
     color_terminated: Option<bool>,
 }
 
