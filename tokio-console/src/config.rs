@@ -110,7 +110,7 @@ pub struct ViewOptions {
 }
 
 /// Toggles on and off color coding for individual UI elements.
-#[derive(Clap, Debug, Copy, Clone)]
+#[derive(Clap, Debug, Copy, Clone, Deserialize)]
 pub struct ColorToggles {
     /// Disable color-coding for duration units.
     #[clap(long = "no-duration-colors", group = "colors")]
@@ -129,22 +129,16 @@ pub struct ConfigFile {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CharsetConfig {
-    lang: String,
-    ascii_only: bool,
+    lang: Option<String>,
+    ascii_only: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ColorsConfig {
-    enabled: bool,
-    truecolor: bool,
-    palette: Palette,
-    enable: ColorsEnable,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct ColorsEnable {
-    durations: bool,
-    terminated: bool,
+    enabled: Option<bool>,
+    truecolor: Option<bool>,
+    palette: Option<Palette>,
+    enable: Option<ColorToggles>,
 }
 
 // === impl Config ===
@@ -330,19 +324,34 @@ impl ConfigFile {
 
     fn into_view_options(self) -> ViewOptions {
         ViewOptions {
-            no_colors: self.colors.as_ref().map(|config| Not::not(config.enabled)),
-            lang: self.charset.as_ref().map(|config| config.lang.to_string()),
-            ascii_only: self.charset.as_ref().map(|config| config.ascii_only),
-            truecolor: self.colors.as_ref().map(|config| config.truecolor),
-            palette: self.colors.as_ref().map(|config| config.palette),
+            no_colors: self.no_colors(),
+            lang: self.charset.as_ref().and_then(|config| config.lang.clone()),
+            ascii_only: self.charset.as_ref().and_then(|config| config.ascii_only),
+            truecolor: self.colors.as_ref().and_then(|config| config.truecolor),
+            palette: self.colors.as_ref().and_then(|config| config.palette),
             toggles: ColorToggles {
-                color_durations: self
-                    .colors
-                    .as_ref()
-                    .map(|config| Not::not(config.enable.durations)),
-                color_terminated: self.colors.map(|config| Not::not(config.enable.terminated)),
+                color_durations: self.color_durations(),
+                color_terminated: self.color_terminated(),
             },
         }
+    }
+
+    fn no_colors(&self) -> Option<bool> {
+        self.colors
+            .as_ref()
+            .and_then(|config| config.enabled.map(Not::not))
+    }
+
+    fn color_durations(&self) -> Option<bool> {
+        self.colors
+            .as_ref()
+            .and_then(|config| config.enable.map(|toggles| toggles.color_durations()))
+    }
+
+    fn color_terminated(&self) -> Option<bool> {
+        self.colors
+            .as_ref()
+            .and_then(|config| config.enable.map(|toggles| toggles.color_terminated()))
     }
 }
 
