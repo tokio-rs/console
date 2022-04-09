@@ -277,19 +277,19 @@ impl ViewOptions {
     }
 
     fn merge_with(&mut self, command_line: ViewOptions) {
-        self.no_colors = command_line.no_colors.or(self.no_colors.take());
-        self.lang = command_line.lang.or(self.lang.take());
-        self.ascii_only = command_line.ascii_only.or(self.ascii_only.take());
-        self.truecolor = command_line.truecolor.or(self.truecolor.take());
-        self.palette = command_line.palette.or(self.palette.take());
+        self.no_colors = command_line.no_colors.or_else(|| self.no_colors.take());
+        self.lang = command_line.lang.or_else(|| self.lang.take());
+        self.ascii_only = command_line.ascii_only.or_else(|| self.ascii_only.take());
+        self.truecolor = command_line.truecolor.or_else(|| self.truecolor.take());
+        self.palette = command_line.palette.or_else(|| self.palette.take());
         self.toggles.color_durations = command_line
             .toggles
             .color_durations
-            .or(self.toggles.color_durations.take());
+            .or_else(|| self.toggles.color_durations.take());
         self.toggles.color_terminated = command_line
             .toggles
             .color_terminated
-            .or(self.toggles.color_terminated.take());
+            .or_else(|| self.toggles.color_terminated.take());
     }
 }
 
@@ -369,20 +369,21 @@ impl ConfigFile {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 enum ConfigPath {
     Xdg,
     Current,
 }
 
 impl ConfigPath {
-    fn into_path(&self) -> Option<PathBuf> {
+    fn into_path(self) -> Option<PathBuf> {
         match self {
             Self::Xdg => {
                 let mut path = dirs::config_dir();
                 if let Some(path) = path.as_mut() {
                     path.push("tokio-console/console.toml");
                 }
-                path.map(|path| path)
+                path
             }
             Self::Current => {
                 let mut path = PathBuf::new();
