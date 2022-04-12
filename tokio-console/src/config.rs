@@ -155,18 +155,12 @@ impl Config {
             (None, None) => None,
             (Some(home), None) => Some(home),
             (None, Some(current)) => Some(current),
-            (Some(mut home), Some(current)) => {
-                home.merge_with(current);
-                Some(home)
-            }
+            (Some(home), Some(current)) => Some(home.merge_with(current)),
         };
         let mut config = Self::parse();
         let view_options = match base {
             None => config.view_options,
-            Some(mut base) => {
-                base.merge_with(config.view_options);
-                base
-            }
+            Some(base) => base.merge_with(config.view_options),
         };
         config.view_options = view_options;
         Ok(config)
@@ -278,20 +272,24 @@ impl ViewOptions {
         Ok(options)
     }
 
-    fn merge_with(&mut self, command_line: ViewOptions) {
-        self.no_colors = command_line.no_colors.or_else(|| self.no_colors.take());
-        self.lang = command_line.lang.or_else(|| self.lang.take());
-        self.ascii_only = command_line.ascii_only.or_else(|| self.ascii_only.take());
-        self.truecolor = command_line.truecolor.or_else(|| self.truecolor.take());
-        self.palette = command_line.palette.or_else(|| self.palette.take());
-        self.toggles.color_durations = command_line
-            .toggles
-            .color_durations
-            .or_else(|| self.toggles.color_durations.take());
-        self.toggles.color_terminated = command_line
-            .toggles
-            .color_terminated
-            .or_else(|| self.toggles.color_terminated.take());
+    fn merge_with(self, command_line: ViewOptions) -> Self {
+        Self {
+            no_colors: command_line.no_colors.or(self.no_colors),
+            lang: command_line.lang.or(self.lang),
+            ascii_only: command_line.ascii_only.or(self.ascii_only),
+            truecolor: command_line.truecolor.or(self.truecolor),
+            palette: command_line.palette.or(self.palette),
+            toggles: ColorToggles {
+                color_durations: command_line
+                    .toggles
+                    .color_durations
+                    .or(self.toggles.color_durations),
+                color_terminated: command_line
+                    .toggles
+                    .color_terminated
+                    .or(self.toggles.color_terminated),
+            },
+        }
     }
 }
 
