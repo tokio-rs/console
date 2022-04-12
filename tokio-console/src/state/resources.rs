@@ -207,8 +207,6 @@ impl ResourcesState {
                 TypeVisibility::Public
             };
 
-            self.dropped_events += update.dropped_events;
-
             let resource = Resource {
                 num,
                 span_id,
@@ -227,6 +225,8 @@ impl ResourcesState {
             new_list.push(Rc::downgrade(&resource));
             Some((num, resource))
         });
+
+        self.dropped_events += update.dropped_events;
 
         self.resources.extend(new_resources);
 
