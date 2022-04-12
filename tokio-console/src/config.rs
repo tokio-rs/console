@@ -316,12 +316,14 @@ impl FromStr for RetainFor {
 // === impl ColorToggles ===
 
 impl ColorToggles {
+    /// Return true when disabling color-coding for duration units.
     pub fn color_durations(&self) -> bool {
-        self.color_durations.map(std::ops::Not::not).unwrap_or(true)
+        self.color_durations.map(Not::not).unwrap_or(true)
     }
 
+    /// Return true when disabling color-coding for terminated tasks.
     pub fn color_terminated(&self) -> bool {
-        self.color_durations.map(std::ops::Not::not).unwrap_or(true)
+        self.color_durations.map(Not::not).unwrap_or(true)
     }
 }
 
