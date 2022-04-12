@@ -214,9 +214,10 @@ impl Config {
 
 impl ViewOptions {
     pub fn is_utf8(&self) -> bool {
-        let lang = self.lang.as_deref().unwrap_or_default();
-        let ascii_only = self.ascii_only.unwrap_or(true);
-        lang.ends_with("UTF-8") && !ascii_only
+        if !self.ascii_only.unwrap_or(true) {
+            return false;
+        }
+        self.lang.as_deref().unwrap_or_default().ends_with("UTF-8")
     }
 
     /// Determines the color palette to use.
