@@ -128,23 +128,21 @@ async fn main() -> color_eyre::Result<()> {
                     .push(Span::styled(" PAUSED", view.styles.fg(Color::Red)));
             }
             let dropped_async_ops_state = state.async_ops_state().dropped_events();
-            if dropped_async_ops_state > 0 {
-                header_text.0.push(Span::styled(
-                    format!(" dropped async ops: {}", dropped_async_ops_state),
-                    view.styles.fg(Color::Red),
-                ));
-            }
             let dropped_tasks_state = state.tasks_state().dropped_events();
-            if dropped_tasks_state > 0 {
-                header_text.0.push(Span::styled(
-                    format!(" dropped tasks: {}", dropped_tasks_state),
-                    view.styles.fg(Color::Red),
-                ));
-            }
             let dropped_resources_state = state.resources_state().dropped_events();
-            if dropped_resources_state > 0 {
+            if (dropped_async_ops_state + dropped_tasks_state + dropped_resources_state) > 0 {
+                let mut dropped_texts = vec![];
+                if dropped_async_ops_state > 0 {
+                    dropped_texts.push(format!("{} async_ops", dropped_async_ops_state))
+                }
+                if dropped_tasks_state > 0 {
+                    dropped_texts.push(format!("{} tasks", dropped_tasks_state))
+                }
+                if dropped_resources_state > 0 {
+                    dropped_texts.push(format!("{} resources", dropped_resources_state))
+                }
                 header_text.0.push(Span::styled(
-                    format!(" dropped resources: {}", dropped_resources_state),
+                    format!(" dropped: {}", dropped_texts.join(", ")),
                     view.styles.fg(Color::Red),
                 ));
             }
