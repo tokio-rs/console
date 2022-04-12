@@ -149,15 +149,15 @@ pub struct ColorsConfig {
 
 impl Config {
     pub fn from_config() -> color_eyre::Result<Self> {
-        let xdg = ViewOptions::from_config(ConfigPath::Xdg)?;
+        let home = ViewOptions::from_config(ConfigPath::Home)?;
         let current = ViewOptions::from_config(ConfigPath::Current)?;
-        let base = match (xdg, current) {
+        let base = match (home, current) {
             (None, None) => None,
-            (Some(xdg), None) => Some(xdg),
+            (Some(home), None) => Some(home),
             (None, Some(current)) => Some(current),
-            (Some(mut xdg), Some(current)) => {
-                xdg.merge_with(current);
-                Some(xdg)
+            (Some(mut home), Some(current)) => {
+                home.merge_with(current);
+                Some(home)
             }
         };
         let mut config = Self::parse();
@@ -378,14 +378,14 @@ impl ConfigFile {
 
 #[derive(Debug, Clone, Copy)]
 enum ConfigPath {
-    Xdg,
+    Home,
     Current,
 }
 
 impl ConfigPath {
     fn into_path(self) -> Option<PathBuf> {
         match self {
-            Self::Xdg => {
+            Self::Home => {
                 let mut path = dirs::config_dir();
                 if let Some(path) = path.as_mut() {
                     path.push("tokio-console/console.toml");
