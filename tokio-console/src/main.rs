@@ -130,21 +130,21 @@ async fn main() -> color_eyre::Result<()> {
             let dropped_async_ops_state = state.async_ops_state().dropped_events();
             if dropped_async_ops_state > 0 {
                 header_text.0.push(Span::styled(
-                    format!(" dropped async_ops_state: {}", dropped_async_ops_state),
+                    format!(" dropped async ops: {}", dropped_async_ops_state),
                     view.styles.fg(Color::Red),
                 ));
             }
             let dropped_tasks_state = state.tasks_state().dropped_events();
             if dropped_tasks_state > 0 {
                 header_text.0.push(Span::styled(
-                    format!(" dropped tasks_state: {}", dropped_tasks_state),
+                    format!(" dropped tasks: {}", dropped_tasks_state),
                     view.styles.fg(Color::Red),
                 ));
             }
             let dropped_resources_state = state.resources_state().dropped_events();
             if dropped_resources_state > 0 {
                 header_text.0.push(Span::styled(
-                    format!(" dropped resources_state: {}", dropped_resources_state),
+                    format!(" dropped resources: {}", dropped_resources_state),
                     view.styles.fg(Color::Red),
                 ));
             }
