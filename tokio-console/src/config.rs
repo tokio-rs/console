@@ -125,20 +125,21 @@ pub struct ColorToggles {
     color_terminated: Option<bool>,
 }
 
+/// A sturct used to parse the toml config file
 #[derive(Debug, Clone, Deserialize)]
-pub struct ConfigFile {
+struct ConfigFile {
     charset: Option<CharsetConfig>,
     colors: Option<ColorsConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct CharsetConfig {
+struct CharsetConfig {
     lang: Option<String>,
     ascii_only: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct ColorsConfig {
+struct ColorsConfig {
     enabled: Option<bool>,
     truecolor: Option<bool>,
     palette: Option<Palette>,
