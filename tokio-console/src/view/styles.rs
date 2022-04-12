@@ -1,5 +1,5 @@
 use crate::config;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, str::FromStr};
 use tui::{
     style::{Color, Modifier, Style},
@@ -13,7 +13,7 @@ pub struct Styles {
     pub(crate) utf8: bool,
 }
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Deserialize, Serialize)]
 #[repr(u8)]
 pub enum Palette {
     #[serde(rename = "off")]

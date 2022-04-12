@@ -1,7 +1,7 @@
 use crate::view::Palette;
-use clap::{ArgGroup, Parser as Clap, ValueHint};
+use clap::{ArgGroup, Parser as Clap, Subcommand, ValueHint};
 use color_eyre::eyre::WrapErr;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::ops::Not;
 use std::path::PathBuf;
@@ -16,6 +16,7 @@ use tonic::transport::Uri;
     author,
     about,
     version,
+    propagate_version = true,
 )]
 #[deny(missing_docs)]
 pub struct Config {
@@ -66,6 +67,27 @@ pub struct Config {
     /// * `years`, `year`, `y` -- defined as 365.25 days
     #[clap(long = "retain-for", default_value = "6s")]
     retain_for: RetainFor,
+
+    /// An optional subcommand.
+    ///
+    /// If one of these is present, the console CLI will do something other than
+    /// attempting to connect to a remote server.
+    #[clap(subcommand)]
+    pub subcmd: Option<OptionalCmd>,
+}
+
+#[derive(Debug, Subcommand, PartialEq, Eq)]
+pub enum OptionalCmd {
+    /// Generate a `console.toml` config file with the default configuration
+    /// values, overridden by any provided command-line arguments.
+    ///
+    /// By default, the config file is printed to stdout. It can be redirected
+    /// to a file to generate an new configuration file:
+    ///
+    ///
+    ///     $ tokio-console gen-config > console.toml
+    ///
+    GenConfig,
 }
 
 #[derive(Debug)]
@@ -112,7 +134,7 @@ pub struct ViewOptions {
 }
 
 /// Toggles on and off color coding for individual UI elements.
-#[derive(Clap, Debug, Copy, Clone, Deserialize)]
+#[derive(Clap, Debug, Copy, Clone, Deserialize, Serialize)]
 pub struct ColorToggles {
     /// Disable color-coding for duration units.
     #[clap(long = "no-duration-colors", group = "colors")]
@@ -126,19 +148,19 @@ pub struct ColorToggles {
 }
 
 /// A sturct used to parse the toml config file
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct ConfigFile {
     charset: Option<CharsetConfig>,
     colors: Option<ColorsConfig>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct CharsetConfig {
     lang: Option<String>,
     ascii_only: Option<bool>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct ColorsConfig {
     enabled: Option<bool>,
     truecolor: Option<bool>,
@@ -166,6 +188,13 @@ impl Config {
         };
         config.view_options = view_options;
         Ok(config)
+    }
+
+    pub fn gen_config_file() -> color_eyre::Result<String> {
+        let command_line = <Self as Clap>::parse();
+        let defaults = ViewOptions::default().merge_with(command_line.view_options);
+        let config = ConfigFile::from_view_options(defaults);
+        toml::to_string_pretty(&config).map_err(Into::into)
     }
 
     pub fn trace_init(&mut self) -> color_eyre::Result<()> {
@@ -296,6 +325,22 @@ impl ViewOptions {
     }
 }
 
+impl Default for ViewOptions {
+    fn default() -> Self {
+        Self {
+            no_colors: Some(false),
+            lang: Some("en_us.UTF8".to_string()),
+            ascii_only: Some(false),
+            truecolor: Some(true),
+            palette: Some(Palette::All),
+            toggles: ColorToggles {
+                color_durations: Some(true),
+                color_terminated: Some(true),
+            },
+        }
+    }
+}
+
 fn parse_true_color(s: &str) -> bool {
     let s = s.trim();
     s.eq_ignore_ascii_case("truecolor") || s.eq_ignore_ascii_case("24bit")
@@ -357,6 +402,21 @@ impl ConfigFile {
                 color_durations: self.color_durations(),
                 color_terminated: self.color_terminated(),
             },
+        }
+    }
+
+    fn from_view_options(view_options: ViewOptions) -> Self {
+        Self {
+            charset: Some(CharsetConfig {
+                lang: view_options.lang,
+                ascii_only: view_options.ascii_only,
+            }),
+            colors: Some(ColorsConfig {
+                enabled: view_options.no_colors.map(Not::not),
+                truecolor: view_options.truecolor,
+                palette: view_options.palette,
+                enable: Some(view_options.toggles),
+            }),
         }
     }
 
