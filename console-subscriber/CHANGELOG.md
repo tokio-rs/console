@@ -1,3 +1,18 @@
+<a name="0.1.4"></a>
+## 0.1.4  (2022-04-11)
+
+
+#### Bug Fixes
+
+*  fix memory leak from historical `PollOp`s (#311) ([9178ecf0](9178ecf0), closes [#256](256))
+
+
+#### Features
+
+* **console-api:**  Update `tonic` to `0.7` (#318) ([83d8a870](83d8a870))
+*  don't trace tasks spawned through the console server (#314) ([0045e9bf](0045e9bf))
+
+
 <a name="0.1.3"></a>
 ## 0.1.3  (2022-02-18)
 

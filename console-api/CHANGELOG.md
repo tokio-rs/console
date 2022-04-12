@@ -1,3 +1,15 @@
+<a name=""></a>
+## 0.2.0 (2022-04-08)
+
+
+#### Breaking Changes
+
+*  Update `tonic` to `0.7` (#318) ([83d8a870](83d8a870))
+
+#### Features
+
+*  Update `tonic` to `0.7` (#318) ([83d8a870](83d8a870))
+
 <a name="0.1.2"></a>
 ## 0.1.2 (2022-02-04)
 

@@ -1,7 +1,7 @@
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-tonic::include_proto!("rs.tokio.console.common");
+include!("generated/rs.tokio.console.common.rs");
 
 impl From<tracing_core::Level> for metadata::Level {
     fn from(level: tracing_core::Level) -> Self {

@@ -27,16 +27,16 @@ keywords = [
 
 [dependencies]
 atty = "0.2"
-console-api = { version = "0.1.2", path = "../console-api", features = ["transport"] }
+console-api = { version = "0.2.0", path = "../console-api", features = ["transport"] }
 clap = { version = "3", features = ["cargo", "derive", "env"] }
 tokio = { version = "1", features = ["full", "rt-multi-thread"] }
-tonic = { version = "0.6", features = ["transport"] }
+tonic = { version = "0.7", features = ["transport"] }
 futures = "0.3"
 tui = { version = "0.16.0", default-features = false, features = ["crossterm"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.0", features = ["env-filter"] }
 tracing-journald = { version = "0.2", optional = true }
-prost-types = "0.9"
+prost-types = "0.10"
 crossterm = { version = "0.20", features = ["event-stream"] }
 color-eyre = { version = "0.5", features = ["issue-url"] }
 hdrhistogram = { version = "7.3.0", default-features = false, features = ["serialization"] }
@@ -44,3 +44,6 @@ h2 = "0.3"
 regex = "1.5"
 once_cell = "1.8"
 humantime = "2.1.0"
+serde = { version = "1", features = ["derive"] }
+toml = "0.5"
+dirs = "4"
