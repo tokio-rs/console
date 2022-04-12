@@ -127,12 +127,24 @@ async fn main() -> color_eyre::Result<()> {
                     .0
                     .push(Span::styled(" PAUSED", view.styles.fg(Color::Red)));
             }
-            let dropped_updates = state.async_ops_state().dropped_events()
-                + state.tasks_state().dropped_events()
-                + state.resources_state().dropped_events();
-            if dropped_updates > 0 {
+            let dropped_async_ops_state = state.async_ops_state().dropped_events();
+            if dropped_async_ops_state > 0 {
                 header_text.0.push(Span::styled(
-                    format!(" dropped updates: {}", dropped_updates),
+                    format!(" dropped async_ops_state: {}", dropped_async_ops_state),
+                    view.styles.fg(Color::Red),
+                ));
+            }
+            let dropped_tasks_state = state.tasks_state().dropped_events();
+            if dropped_tasks_state > 0 {
+                header_text.0.push(Span::styled(
+                    format!(" dropped tasks_state: {}", dropped_tasks_state),
+                    view.styles.fg(Color::Red),
+                ));
+            }
+            let dropped_resources_state = state.resources_state().dropped_events();
+            if dropped_resources_state > 0 {
+                header_text.0.push(Span::styled(
+                    format!(" dropped resources_state: {}", dropped_resources_state),
                     view.styles.fg(Color::Red),
                 ));
             }
