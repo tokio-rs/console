@@ -25,7 +25,7 @@ mod warnings;
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
-    let mut args = config::Config::from_config()?;
+    let mut args = config::Config::parse()?;
     let retain_for = args.retain_for();
     args.trace_init()?;
     tracing::debug!(?args.target_addr, ?args.view_options);

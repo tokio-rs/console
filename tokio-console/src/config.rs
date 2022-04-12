@@ -149,7 +149,8 @@ struct ColorsConfig {
 // === impl Config ===
 
 impl Config {
-    pub fn from_config() -> color_eyre::Result<Self> {
+    /// Parse from config files and command line options.
+    pub fn parse() -> color_eyre::Result<Self> {
         let home = ViewOptions::from_config(ConfigPath::Home)?;
         let current = ViewOptions::from_config(ConfigPath::Current)?;
         let base = match (home, current) {
@@ -158,7 +159,7 @@ impl Config {
             (None, Some(current)) => Some(current),
             (Some(home), Some(current)) => Some(home.merge_with(current)),
         };
-        let mut config = Self::parse();
+        let mut config = <Self as Clap>::parse();
         let view_options = match base {
             None => config.view_options,
             Some(base) => base.merge_with(config.view_options),
