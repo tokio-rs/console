@@ -72,7 +72,7 @@ use the [Tokio] runtime, this means that:
 Once the application is instrumented, install the console CLI using
 
 ```shell
-cargo install tokio-console
+cargo install --locked tokio-console
 ```
 
 Running `tokio-console` without any arguments will connect to an application on
