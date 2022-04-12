@@ -334,7 +334,12 @@ impl ConfigFile {
             .and_then(|path| fs::read_to_string(path).ok())
             .map(|raw| toml::from_str::<ConfigFile>(&raw))
             .transpose()
-            .wrap_err_with(|| format!("failed to parse {:?}", path.into_path()))?;
+            .wrap_err_with(|| {
+                format!(
+                    "failed to parse {}",
+                    path.into_path().unwrap_or_default().display()
+                )
+            })?;
         Ok(config)
     }
 
