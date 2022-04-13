@@ -465,13 +465,19 @@ impl ConfigPath {
 
 #[cfg(test)]
 mod tests {
-    use std::{ffi::OsString, fs::File, io::Write, process};
+    use std::{
+        ffi::OsString,
+        fs::File,
+        io::Write,
+        path::{Path, PathBuf},
+        process,
+    };
 
     use super::*;
 
     #[test]
     fn toml_example_changed() {
-        const PATH: &str = "../console.example.toml";
+        let path = PathBuf::from(std::env!("CARGO_MANIFEST_DIR")).join("console.example.toml");
         // Don't parse the locale or terminal color settings from the user's
         // environment, as this may differ from the one in the example.
         let defaults = Config::try_parse_from(vec![
@@ -486,26 +492,26 @@ mod tests {
             .gen_config_file()
             .expect("generating config file should succeed");
 
-        File::create(PATH)
+        File::create(&path)
             .expect("failed to open file")
             .write_all(generated.as_bytes())
             .expect("failed to write to file");
-        if let Err(diff) = git_diff(PATH) {
+        if let Err(diff) = git_diff(&path) {
             panic!(
-                "default config file has changed!\n\
+                "\n/!\\ default config file has changed!\n\
                 you should commit the new version of `tokio-console/console.example.toml`\n\n\
-                git diff output:\n{}",
+                git diff output:\n\n{}\n",
                 diff
             );
         }
     }
 
-    fn git_diff(path: &str) -> Result<(), String> {
+    fn git_diff(path: impl AsRef<Path>) -> Result<(), String> {
         let output = process::Command::new("git")
             .arg("diff")
             .arg("--exit-code")
             .arg("--")
-            .arg(path)
+            .arg(path.as_ref().display().to_string())
             .output()
             .unwrap();
 

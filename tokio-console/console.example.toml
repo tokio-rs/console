@@ -9,4 +9,4 @@ palette = 'all'
 
 [colors.enable]
 durations = true
-terminated = "barf"
+terminated = true
