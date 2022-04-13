@@ -468,12 +468,49 @@ mod tests {
     use std::{
         ffi::OsString,
         fs::File,
-        io::Write,
+        io::{BufWriter, Cursor, Write},
         path::{Path, PathBuf},
         process,
     };
 
     use super::*;
+
+    #[test]
+    fn args_example_changed() {
+        use clap::CommandFactory;
+        let path = PathBuf::from(std::env!("CARGO_MANIFEST_DIR")).join("args.example");
+
+        let mut cmd = Config::command();
+        let mut helptext = Vec::new();
+        // Format the help text to a string.
+        cmd.write_long_help(&mut Cursor::new(&mut helptext))
+            .expect("generating help should succeed");
+        let helptext = String::from_utf8(helptext).expect("help text is UTF-8");
+
+        let mut file = {
+            let file = File::create(&path).expect("failed to open file");
+            BufWriter::new(file)
+        };
+        // Drop the first four lines of the help text, as they include the
+        // version number, and it seems like a pain to have to re-generate the
+        // file every time the version changes...
+        for line in helptext.lines().skip(4) {
+            writeln!(file, "{}\n", line).expect("writing to file succeeds");
+        }
+
+        file.flush().expect("flushing should succeed");
+        drop(file);
+
+        if let Err(diff) = git_diff(&path) {
+            panic!(
+                "\n/!\\ command line arguments have changed!\n\
+                you should commit the new version of `{}`\n\n\
+                git diff output:\n\n{}\n",
+                path.display(),
+                diff
+            );
+        }
+    }
 
     #[test]
     fn toml_example_changed() {
@@ -487,7 +524,6 @@ mod tests {
             OsString::from("truecolor"),
         ])
         .expect("defaults should parse");
-
         let generated = defaults
             .gen_config_file()
             .expect("generating config file should succeed");
@@ -499,8 +535,9 @@ mod tests {
         if let Err(diff) = git_diff(&path) {
             panic!(
                 "\n/!\\ default config file has changed!\n\
-                you should commit the new version of `tokio-console/console.example.toml`\n\n\
+                you should commit the new version of `tokio-console/{}`\n\n\
                 git diff output:\n\n{}\n",
+                path.display(),
                 diff
             );
         }

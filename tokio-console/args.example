@@ -1,0 +1,190 @@
+USAGE:
+
+    tokio-console [OPTIONS] [TARGET_ADDR] [SUBCOMMAND]
+
+
+
+ARGS:
+
+    <TARGET_ADDR>
+
+            The address of a console-enabled process to connect to.
+
+            
+
+            This may be an IP address and port, or a DNS name.
+
+            
+
+            [default: http://127.0.0.1:6669]
+
+
+
+OPTIONS:
+
+        --ascii-only <ASCII_ONLY>
+
+            Explicitly use only ASCII characters
+
+
+
+        --colorterm <truecolor>
+
+            Overrides the value of the `COLORTERM` environment variable.
+
+            
+
+            If this is set to `24bit` or `truecolor`, 24-bit RGB color support will be enabled.
+
+            
+
+            [env: COLORTERM=truecolor]
+
+            [possible values: 24bit, truecolor]
+
+
+
+    -h, --help
+
+            Print help information
+
+
+
+        --lang <LANG>
+
+            Overrides the terminal's default language
+
+            
+
+            [env: LANG=en_US.UTF-8]
+
+
+
+        --log <ENV_FILTER>
+
+            Log level filter for the console's internal diagnostics.
+
+            
+
+            The console will log to stderr if a log level filter is provided. Since the console
+
+            application runs interactively, stderr should generally be redirected to a file to avoid
+
+            interfering with the console's text output.
+
+            
+
+            [env: RUST_LOG=]
+
+            [default: off]
+
+
+
+        --no-colors <no-colors>
+
+            Disable ANSI colors entirely
+
+
+
+        --no-duration-colors <COLOR_DURATIONS>
+
+            Disable color-coding for duration units
+
+
+
+        --no-terminated-colors <COLOR_TERMINATED>
+
+            Disable color-coding for terminated tasks
+
+
+
+        --palette <PALETTE>
+
+            Explicitly set which color palette to use
+
+            
+
+            [possible values: 8, 16, 256, all, off]
+
+
+
+        --retain-for <RETAIN_FOR>
+
+            How long to continue displaying completed tasks and dropped resources after they have
+
+            been closed.
+
+            
+
+            This accepts either a duration, parsed as a combination of time spans (such as `5days
+
+            2min 2s`), or `none` to disable removing completed tasks and dropped resources.
+
+            
+
+            Each time span is an integer number followed by a suffix. Supported suffixes are:
+
+            
+
+            * `nsec`, `ns` -- nanoseconds
+
+            
+
+            * `usec`, `us` -- microseconds
+
+            
+
+            * `msec`, `ms` -- milliseconds
+
+            
+
+            * `seconds`, `second`, `sec`, `s`
+
+            
+
+            * `minutes`, `minute`, `min`, `m`
+
+            
+
+            * `hours`, `hour`, `hr`, `h`
+
+            
+
+            * `days`, `day`, `d`
+
+            
+
+            * `weeks`, `week`, `w`
+
+            
+
+            * `months`, `month`, `M` -- defined as 30.44 days
+
+            
+
+            * `years`, `year`, `y` -- defined as 365.25 days
+
+            
+
+            [default: 6s]
+
+
+
+    -V, --version
+
+            Print version information
+
+
+
+SUBCOMMANDS:
+
+    gen-config
+
+            Generate a `console.toml` config file with the default configuration values, overridden
+
+            by any provided command-line arguments
+
+    help
+
+            Print this message or the help of the given subcommand(s)
+
