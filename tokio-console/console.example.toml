@@ -1,0 +1,12 @@
+[charset]
+lang = 'en_US.UTF-8'
+ascii_only = false
+
+[colors]
+enabled = true
+truecolor = true
+palette = 'all'
+
+[colors.enable]
+durations = true
+terminated = true

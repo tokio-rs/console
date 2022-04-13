@@ -190,9 +190,8 @@ impl Config {
         Ok(config)
     }
 
-    pub fn gen_config_file() -> color_eyre::Result<String> {
-        let command_line = <Self as Clap>::parse();
-        let defaults = ViewOptions::default().merge_with(command_line.view_options);
+    pub fn gen_config_file(self) -> color_eyre::Result<String> {
+        let defaults = ViewOptions::default().merge_with(self.view_options);
         let config = ConfigFile::from_view_options(defaults);
         toml::to_string_pretty(&config).map_err(Into::into)
     }
@@ -461,5 +460,61 @@ impl ConfigPath {
                 Some(path)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{ffi::OsString, fs::File, io::Write, process};
+
+    use super::*;
+
+    #[test]
+    fn toml_example_changed() {
+        const PATH: &str = "../console.example.toml";
+        // Don't parse the locale or terminal color settings from the user's
+        // environment, as this may differ from the one in the example.
+        let defaults = Config::try_parse_from(vec![
+            OsString::from("--lang"),
+            OsString::from("en_US.UTF-8"),
+            OsString::from("--colorterm"),
+            OsString::from("truecolor"),
+        ])
+        .expect("defaults should parse");
+
+        let generated = defaults
+            .gen_config_file()
+            .expect("generating config file should succeed");
+
+        File::create(PATH)
+            .expect("failed to open file")
+            .write_all(generated.as_bytes())
+            .expect("failed to write to file");
+        if let Err(diff) = git_diff(PATH) {
+            panic!(
+                "default config file has changed!\n\
+                you should commit the new version of `tokio-console/console.example.toml`\n\n\
+                git diff output:\n{}",
+                diff
+            );
+        }
+    }
+
+    fn git_diff(path: &str) -> Result<(), String> {
+        let output = process::Command::new("git")
+            .arg("diff")
+            .arg("--exit-code")
+            .arg("--")
+            .arg(path)
+            .output()
+            .unwrap();
+
+        if output.status.success() {
+            return Ok(());
+        }
+
+        let diff = String::from_utf8(output.stdout).expect("git diff output not utf8");
+
+        Err(diff)
     }
 }
