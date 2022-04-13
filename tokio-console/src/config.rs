@@ -495,7 +495,7 @@ mod tests {
         // version number, and it seems like a pain to have to re-generate the
         // file every time the version changes...
         for line in helptext.lines().skip(4) {
-            writeln!(file, "{}\n", line).expect("writing to file succeeds");
+            writeln!(file, "{}", line).expect("writing to file succeeds");
         }
 
         file.flush().expect("flushing should succeed");
@@ -547,16 +547,23 @@ mod tests {
         let output = process::Command::new("git")
             .arg("diff")
             .arg("--exit-code")
+            .arg(format!(
+                "--color={}",
+                std::env::var("CARGO_TERM_COLOR")
+                    .as_ref()
+                    .map(String::as_str)
+                    .unwrap_or("always")
+            ))
             .arg("--")
             .arg(path.as_ref().display().to_string())
             .output()
             .unwrap();
 
+        let diff = String::from_utf8(output.stdout).expect("git diff output not utf8");
         if output.status.success() {
+            println!("git diff:\n{}", diff);
             return Ok(());
         }
-
-        let diff = String::from_utf8(output.stdout).expect("git diff output not utf8");
 
         Err(diff)
     }
