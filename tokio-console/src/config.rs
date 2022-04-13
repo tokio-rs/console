@@ -579,7 +579,7 @@ mod tests {
 
         ENV_VARS_CLOBBERED.call_once(|| {
             env::set_var("COLORTERM", "truecolor");
-            env::set_var("LANG", "en_us.UTF-8");
+            env::set_var("LANG", "en_US.UTF-8");
         })
     }
 }
