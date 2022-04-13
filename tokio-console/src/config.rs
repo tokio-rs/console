@@ -190,9 +190,8 @@ impl Config {
         Ok(config)
     }
 
-    pub fn gen_config_file() -> color_eyre::Result<String> {
-        let command_line = <Self as Clap>::parse();
-        let defaults = ViewOptions::default().merge_with(command_line.view_options);
+    pub fn gen_config_file(self) -> color_eyre::Result<String> {
+        let defaults = ViewOptions::default().merge_with(self.view_options);
         let config = ConfigFile::from_view_options(defaults);
         toml::to_string_pretty(&config).map_err(Into::into)
     }
@@ -461,5 +460,126 @@ impl ConfigPath {
                 Some(path)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        env,
+        fs::File,
+        io::{BufWriter, Cursor, Write},
+        path::{Path, PathBuf},
+        process,
+    };
+
+    use super::*;
+
+    #[test]
+    fn args_example_changed() {
+        use clap::CommandFactory;
+
+        // Override env vars that may effect the defaults.
+        clobber_env_vars();
+
+        let path = PathBuf::from(std::env!("CARGO_MANIFEST_DIR")).join("args.example");
+
+        let mut cmd = Config::command();
+        let mut helptext = Vec::new();
+        // Format the help text to a string.
+        cmd.write_long_help(&mut Cursor::new(&mut helptext))
+            .expect("generating help should succeed");
+        let helptext = String::from_utf8(helptext).expect("help text is UTF-8");
+
+        let mut file = {
+            let file = File::create(&path).expect("failed to open file");
+            BufWriter::new(file)
+        };
+        // Drop the first four lines of the help text, as they include the
+        // version number, and it seems like a pain to have to re-generate the
+        // file every time the version changes...
+        for line in helptext.lines().skip(4) {
+            writeln!(file, "{}", line).expect("writing to file succeeds");
+        }
+
+        file.flush().expect("flushing should succeed");
+        drop(file);
+
+        if let Err(diff) = git_diff(&path) {
+            panic!(
+                "\n/!\\ command line arguments have changed!\n\
+                you should commit the new version of `{}`\n\n\
+                git diff output:\n\n{}\n",
+                path.display(),
+                diff
+            );
+        }
+    }
+
+    #[test]
+    fn toml_example_changed() {
+        // Override env vars that may effect the defaults.
+        clobber_env_vars();
+
+        let path = PathBuf::from(std::env!("CARGO_MANIFEST_DIR")).join("console.example.toml");
+
+        let generated = Config::try_parse_from(std::iter::empty::<std::ffi::OsString>())
+            .expect("should parse empty config")
+            .gen_config_file()
+            .expect("generating config file should succeed");
+
+        File::create(&path)
+            .expect("failed to open file")
+            .write_all(generated.as_bytes())
+            .expect("failed to write to file");
+        if let Err(diff) = git_diff(&path) {
+            panic!(
+                "\n/!\\ default config file has changed!\n\
+                you should commit the new version of `tokio-console/{}`\n\n\
+                git diff output:\n\n{}\n",
+                path.display(),
+                diff
+            );
+        }
+    }
+
+    fn git_diff(path: impl AsRef<Path>) -> Result<(), String> {
+        let output = process::Command::new("git")
+            .arg("diff")
+            .arg("--exit-code")
+            .arg(format!(
+                "--color={}",
+                env::var("CARGO_TERM_COLOR")
+                    .as_ref()
+                    .map(String::as_str)
+                    .unwrap_or("always")
+            ))
+            .arg("--")
+            .arg(path.as_ref().display().to_string())
+            .output()
+            .unwrap();
+
+        let diff = String::from_utf8(output.stdout).expect("git diff output not utf8");
+        if output.status.success() {
+            println!("git diff:\n{}", diff);
+            return Ok(());
+        }
+
+        Err(diff)
+    }
+
+    /// Override any env vars that may effect the generated defaults for CLI
+    /// arguments.
+    fn clobber_env_vars() {
+        use std::sync::Once;
+
+        // `set_env` is unsafe in a multi-threaded environment, so ensure that
+        // this only happens once...
+        static ENV_VARS_CLOBBERED: Once = Once::new();
+
+        ENV_VARS_CLOBBERED.call_once(|| {
+            env::set_var("COLORTERM", "truecolor");
+            env::set_var("LANG", "en_US.UTF-8");
+        })
     }
 }

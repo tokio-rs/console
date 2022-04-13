@@ -29,7 +29,7 @@ async fn main() -> color_eyre::Result<()> {
 
     if args.subcmd == Some(config::OptionalCmd::GenConfig) {
         // Generate a default config file and exit.
-        let toml = config::Config::gen_config_file()?;
+        let toml = args.gen_config_file()?;
         println!("{}", toml);
         return Ok(());
     }
