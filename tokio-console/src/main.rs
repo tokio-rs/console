@@ -26,6 +26,14 @@ mod warnings;
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     let mut args = config::Config::parse()?;
+
+    if args.subcmd == Some(config::OptionalCmd::GenConfig) {
+        // Generate a default config file and exit.
+        let toml = config::Config::gen_config_file()?;
+        println!("{}", toml);
+        return Ok(());
+    }
+
     let retain_for = args.retain_for();
     args.trace_init()?;
     tracing::debug!(?args.target_addr, ?args.view_options);
