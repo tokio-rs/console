@@ -466,7 +466,7 @@ impl ConfigPath {
 #[cfg(test)]
 mod tests {
     use std::{
-        ffi::OsString,
+        env,
         fs::File,
         io::{BufWriter, Cursor, Write},
         path::{Path, PathBuf},
@@ -478,6 +478,10 @@ mod tests {
     #[test]
     fn args_example_changed() {
         use clap::CommandFactory;
+
+        // Override env vars that may effect the defaults.
+        clobber_env_vars();
+
         let path = PathBuf::from(std::env!("CARGO_MANIFEST_DIR")).join("args.example");
 
         let mut cmd = Config::command();
@@ -514,17 +518,13 @@ mod tests {
 
     #[test]
     fn toml_example_changed() {
+        // Override env vars that may effect the defaults.
+        clobber_env_vars();
+
         let path = PathBuf::from(std::env!("CARGO_MANIFEST_DIR")).join("console.example.toml");
-        // Don't parse the locale or terminal color settings from the user's
-        // environment, as this may differ from the one in the example.
-        let defaults = Config::try_parse_from(vec![
-            OsString::from("--lang"),
-            OsString::from("en_US.UTF-8"),
-            OsString::from("--colorterm"),
-            OsString::from("truecolor"),
-        ])
-        .expect("defaults should parse");
-        let generated = defaults
+
+        let generated = Config::try_parse_from(std::iter::empty::<std::ffi::OsString>())
+            .expect("should parse empty config")
             .gen_config_file()
             .expect("generating config file should succeed");
 
@@ -549,7 +549,7 @@ mod tests {
             .arg("--exit-code")
             .arg(format!(
                 "--color={}",
-                std::env::var("CARGO_TERM_COLOR")
+                env::var("CARGO_TERM_COLOR")
                     .as_ref()
                     .map(String::as_str)
                     .unwrap_or("always")
@@ -566,5 +566,20 @@ mod tests {
         }
 
         Err(diff)
+    }
+
+    /// Override any env vars that may effect the generated defaults for CLI
+    /// arguments.
+    fn clobber_env_vars() {
+        use std::sync::Once;
+
+        // `set_env` is unsafe in a multi-threaded environment, so ensure that
+        // this only happens once...
+        static ENV_VARS_CLOBBERED: Once = Once::new();
+
+        ENV_VARS_CLOBBERED.call_once(|| {
+            env::set_var("COLORTERM", "truecolor");
+            env::set_var("LANG", "en_us.UTF-8");
+        })
     }
 }
