@@ -135,6 +135,7 @@ pub struct ViewOptions {
 
 /// Toggles on and off color coding for individual UI elements.
 #[derive(Clap, Debug, Copy, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ColorToggles {
     /// Disable color-coding for duration units.
     #[clap(long = "no-duration-colors", group = "colors")]
@@ -149,18 +150,21 @@ pub struct ColorToggles {
 
 /// A sturct used to parse the toml config file
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 struct ConfigFile {
     charset: Option<CharsetConfig>,
     colors: Option<ColorsConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 struct CharsetConfig {
     lang: Option<String>,
     ascii_only: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 struct ColorsConfig {
     enabled: Option<bool>,
     truecolor: Option<bool>,
