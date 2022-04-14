@@ -76,7 +76,7 @@ others.
 
 [gsoc]: https://github.com/tokio-rs/console-gsoc
 [tokio-blog]: https://tokio.rs/blog/2020-12-tokio-1-0#tracing
-[shiny-future]: https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/barbara_makes_a_wish.html
+[shiny-future]: https://rust-lang.github.io/wg-async/vision/submitted_stories/shiny_future/barbara_makes_a_wish.html
 [tw-1]: http://blog.pnkfx.org/blog/2021/04/26/road-to-turbowish-part-1-goals/
 [tw-2]: http://blog.pnkfx.org/blog/2021/04/27/road-to-turbowish-part-2-stories/
 [tw-3]: http://blog.pnkfx.org/blog/2021/05/03/road-to-turbowish-part-3-design/
