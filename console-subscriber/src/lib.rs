@@ -118,7 +118,7 @@ pub struct ConsoleLayer {
 
 /// A gRPC [`Server`] that implements the [`tokio-console` wire format][wire].
 ///
-/// Client applications, such as the [`tokio-console CLI][cli] connect to the gRPC
+/// Client applications, such as the [`tokio-console` CLI][cli] connect to the gRPC
 /// server, and stream data about the runtime's history (such as a list of the
 /// currently active tasks, or statistics summarizing polling times). A [`Server`] also
 /// interprets commands from a client application, such a request to focus in on
