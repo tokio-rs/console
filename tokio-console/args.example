@@ -34,7 +34,7 @@ OPTIONS:
             application runs interactively, stderr should generally be redirected to a file to avoid
             interfering with the console's text output.
             
-            [env: RUST_LOG=info]
+            [env: RUST_LOG=]
 
         --no-colors <no-colors>
             Disable ANSI colors entirely
