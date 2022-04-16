@@ -38,11 +38,11 @@ async fn main() -> color_eyre::Result<()> {
     args.trace_init()?;
     tracing::debug!(?args.target_addr, ?args.view_options);
 
+    let target = args.target_addr();
+    tracing::info!(?target, "using target addr");
+
     let styles = view::Styles::from_config(args.view_options);
     styles.error_init()?;
-
-    let target = args.target_addr;
-    tracing::info!(?target, "using target addr");
 
     let (mut terminal, _cleanup) = term::init_crossterm()?;
     terminal.clear()?;
