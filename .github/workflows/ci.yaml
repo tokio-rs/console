@@ -25,11 +25,9 @@ env:
   RUSTUP_MAX_RETRIES: 10
   # Don't emit giant backtraces in the CI logs.
   RUST_BACKTRACE: short
-  # Make Rust 1.56.0 the minimum supported Rust version.
-  #
-  # Some of our dependencies require `edition = "2021"` which is only supported
-  # on 1.56.0+.
-  minrust: 1.56.0
+  # Make 1.58 MSRV due to <=1.57 failing to build console-api due to a bug
+  # with cargo version resolution. 
+  minrust: 1.58.0
 
 jobs:
   check:

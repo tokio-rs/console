@@ -2,7 +2,6 @@ use color_eyre::{eyre::eyre, Help, SectionExt};
 use console_api::tasks::TaskDetails;
 use state::State;
 
-use clap::Parser as Clap;
 use futures::stream::StreamExt;
 use tokio::sync::{mpsc, watch};
 use tui::{
@@ -26,7 +25,15 @@ mod warnings;
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
-    let mut args = config::Config::parse();
+    let mut args = config::Config::parse()?;
+
+    if args.subcmd == Some(config::OptionalCmd::GenConfig) {
+        // Generate a default config file and exit.
+        let toml = args.gen_config_file()?;
+        println!("{}", toml);
+        return Ok(());
+    }
+
     let retain_for = args.retain_for();
     args.trace_init()?;
     tracing::debug!(?args.target_addr, ?args.view_options);
@@ -126,6 +133,25 @@ async fn main() -> color_eyre::Result<()> {
                 header_text
                     .0
                     .push(Span::styled(" PAUSED", view.styles.fg(Color::Red)));
+            }
+            let dropped_async_ops_state = state.async_ops_state().dropped_events();
+            let dropped_tasks_state = state.tasks_state().dropped_events();
+            let dropped_resources_state = state.resources_state().dropped_events();
+            if (dropped_async_ops_state + dropped_tasks_state + dropped_resources_state) > 0 {
+                let mut dropped_texts = vec![];
+                if dropped_async_ops_state > 0 {
+                    dropped_texts.push(format!("{} async_ops", dropped_async_ops_state))
+                }
+                if dropped_tasks_state > 0 {
+                    dropped_texts.push(format!("{} tasks", dropped_tasks_state))
+                }
+                if dropped_resources_state > 0 {
+                    dropped_texts.push(format!("{} resources", dropped_resources_state))
+                }
+                header_text.0.push(Span::styled(
+                    format!(" dropped: {}", dropped_texts.join(", ")),
+                    view.styles.fg(Color::Red),
+                ));
             }
             let header = Paragraph::new(header_text).wrap(Wrap { trim: true });
             let view_controls = Paragraph::new(Spans::from(vec![

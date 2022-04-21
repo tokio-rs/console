@@ -200,6 +200,10 @@ impl State {
         &mut self.tasks_state
     }
 
+    pub(crate) fn resources_state(&mut self) -> &ResourcesState {
+        &self.resources_state
+    }
+
     pub(crate) fn resources_state_mut(&mut self) -> &mut ResourcesState {
         &mut self.resources_state
     }
@@ -342,7 +346,7 @@ impl Field {
         Some(Self { name, value })
     }
 
-    fn make_formatted(styles: &view::Styles, fields: &mut Vec<Field>) -> Vec<Vec<Span<'static>>> {
+    fn make_formatted(styles: &view::Styles, fields: &mut [Field]) -> Vec<Vec<Span<'static>>> {
         let key_style = styles.fg(Color::LightBlue).add_modifier(Modifier::BOLD);
         let delim_style = styles.fg(Color::LightBlue).add_modifier(Modifier::DIM);
         let val_style = styles.fg(Color::Yellow);
@@ -465,7 +469,7 @@ impl PartialOrd for Attribute {
 impl Attribute {
     fn make_formatted(
         styles: &view::Styles,
-        attributes: &mut Vec<Attribute>,
+        attributes: &mut [Attribute],
     ) -> Vec<Vec<Span<'static>>> {
         let key_style = styles.fg(Color::LightBlue).add_modifier(Modifier::BOLD);
         let delim_style = styles.fg(Color::LightBlue).add_modifier(Modifier::DIM);

@@ -1,5 +1,10 @@
 use crate::view::Palette;
-use clap::{ArgGroup, Parser as Clap, ValueHint};
+use clap::{ArgGroup, Parser as Clap, Subcommand, ValueHint};
+use color_eyre::eyre::WrapErr;
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::ops::Not;
+use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
 use std::time::Duration;
@@ -11,6 +16,7 @@ use tonic::transport::Uri;
     author,
     about,
     version,
+    propagate_version = true,
 )]
 #[deny(missing_docs)]
 pub struct Config {
@@ -61,6 +67,27 @@ pub struct Config {
     /// * `years`, `year`, `y` -- defined as 365.25 days
     #[clap(long = "retain-for", default_value = "6s")]
     retain_for: RetainFor,
+
+    /// An optional subcommand.
+    ///
+    /// If one of these is present, the console CLI will do something other than
+    /// attempting to connect to a remote server.
+    #[clap(subcommand)]
+    pub subcmd: Option<OptionalCmd>,
+}
+
+#[derive(Debug, Subcommand, PartialEq, Eq)]
+pub enum OptionalCmd {
+    /// Generate a `console.toml` config file with the default configuration
+    /// values, overridden by any provided command-line arguments.
+    ///
+    /// By default, the config file is printed to stdout. It can be redirected
+    /// to a file to generate an new configuration file:
+    ///
+    ///
+    ///     $ tokio-console gen-config > console.toml
+    ///
+    GenConfig,
 }
 
 #[derive(Debug)]
@@ -71,15 +98,15 @@ struct RetainFor(Option<Duration>);
 pub struct ViewOptions {
     /// Disable ANSI colors entirely.
     #[clap(name = "no-colors", long = "no-colors")]
-    no_colors: bool,
+    no_colors: Option<bool>,
 
     /// Overrides the terminal's default language.
-    #[clap(long = "lang", env = "LANG", default_value = "en_us.UTF-8")]
-    lang: String,
+    #[clap(long = "lang", env = "LANG")]
+    lang: Option<String>,
 
     /// Explicitly use only ASCII characters.
     #[clap(long = "ascii-only")]
-    ascii_only: bool,
+    ascii_only: Option<bool>,
 
     /// Overrides the value of the `COLORTERM` environment variable.
     ///
@@ -107,20 +134,72 @@ pub struct ViewOptions {
 }
 
 /// Toggles on and off color coding for individual UI elements.
-#[derive(Clap, Debug, Copy, Clone)]
+#[derive(Clap, Debug, Copy, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ColorToggles {
     /// Disable color-coding for duration units.
-    #[clap(long = "no-duration-colors", parse(from_flag = std::ops::Not::not), group = "colors")]
-    pub(crate) color_durations: bool,
+    #[clap(long = "no-duration-colors", group = "colors")]
+    #[serde(rename = "durations")]
+    color_durations: Option<bool>,
 
     /// Disable color-coding for terminated tasks.
-    #[clap(long = "no-terminated-colors", parse(from_flag = std::ops::Not::not), group = "colors")]
-    pub(crate) color_terminated: bool,
+    #[clap(long = "no-terminated-colors", group = "colors")]
+    #[serde(rename = "terminated")]
+    color_terminated: Option<bool>,
+}
+
+/// A sturct used to parse the toml config file
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ConfigFile {
+    charset: Option<CharsetConfig>,
+    colors: Option<ColorsConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct CharsetConfig {
+    lang: Option<String>,
+    ascii_only: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ColorsConfig {
+    enabled: Option<bool>,
+    truecolor: Option<bool>,
+    palette: Option<Palette>,
+    enable: Option<ColorToggles>,
 }
 
 // === impl Config ===
 
 impl Config {
+    /// Parse from config files and command line options.
+    pub fn parse() -> color_eyre::Result<Self> {
+        let home = ViewOptions::from_config(ConfigPath::Home)?;
+        let current = ViewOptions::from_config(ConfigPath::Current)?;
+        let base = match (home, current) {
+            (None, None) => None,
+            (Some(home), None) => Some(home),
+            (None, Some(current)) => Some(current),
+            (Some(home), Some(current)) => Some(home.merge_with(current)),
+        };
+        let mut config = <Self as Clap>::parse();
+        let view_options = match base {
+            None => config.view_options,
+            Some(base) => base.merge_with(config.view_options),
+        };
+        config.view_options = view_options;
+        Ok(config)
+    }
+
+    pub fn gen_config_file(self) -> color_eyre::Result<String> {
+        let defaults = ViewOptions::default().merge_with(self.view_options);
+        let config = ConfigFile::from_view_options(defaults);
+        toml::to_string_pretty(&config).map_err(Into::into)
+    }
+
     pub fn trace_init(&mut self) -> color_eyre::Result<()> {
         let filter = std::mem::take(&mut self.env_filter);
         use tracing_subscriber::prelude::*;
@@ -167,7 +246,10 @@ impl Config {
 
 impl ViewOptions {
     pub fn is_utf8(&self) -> bool {
-        self.lang.ends_with("UTF-8") && !self.ascii_only
+        if !self.ascii_only.unwrap_or(true) {
+            return false;
+        }
+        self.lang.as_deref().unwrap_or_default().ends_with("UTF-8")
     }
 
     /// Determines the color palette to use.
@@ -179,7 +261,7 @@ impl ViewOptions {
     /// - Checking the `terminfo` database via `tput`
     pub(crate) fn determine_palette(&self) -> Palette {
         // Did the user explicitly disable colors?
-        if self.no_colors {
+        if self.no_colors.unwrap_or(true) {
             tracing::debug!("colors explicitly disabled by `--no-colors`");
             return Palette::NoColors;
         }
@@ -219,6 +301,47 @@ impl ViewOptions {
     pub(crate) fn toggles(&self) -> ColorToggles {
         self.toggles
     }
+
+    fn from_config(path: ConfigPath) -> color_eyre::Result<Option<Self>> {
+        let options = ConfigFile::from_config(path)?.map(|config| config.into_view_options());
+        Ok(options)
+    }
+
+    fn merge_with(self, command_line: ViewOptions) -> Self {
+        Self {
+            no_colors: command_line.no_colors.or(self.no_colors),
+            lang: command_line.lang.or(self.lang),
+            ascii_only: command_line.ascii_only.or(self.ascii_only),
+            truecolor: command_line.truecolor.or(self.truecolor),
+            palette: command_line.palette.or(self.palette),
+            toggles: ColorToggles {
+                color_durations: command_line
+                    .toggles
+                    .color_durations
+                    .or(self.toggles.color_durations),
+                color_terminated: command_line
+                    .toggles
+                    .color_terminated
+                    .or(self.toggles.color_terminated),
+            },
+        }
+    }
+}
+
+impl Default for ViewOptions {
+    fn default() -> Self {
+        Self {
+            no_colors: Some(false),
+            lang: Some("en_us.UTF8".to_string()),
+            ascii_only: Some(false),
+            truecolor: Some(true),
+            palette: Some(Palette::All),
+            toggles: ColorToggles {
+                color_durations: Some(true),
+                color_terminated: Some(true),
+            },
+        }
+    }
 }
 
 fn parse_true_color(s: &str) -> bool {
@@ -236,5 +359,231 @@ impl FromStr for RetainFor {
                 .parse::<humantime::Duration>()
                 .map(|duration| RetainFor(Some(duration.into()))),
         }
+    }
+}
+
+// === impl ColorToggles ===
+
+impl ColorToggles {
+    /// Return true when disabling color-coding for duration units.
+    pub fn color_durations(&self) -> bool {
+        self.color_durations.map(Not::not).unwrap_or(true)
+    }
+
+    /// Return true when disabling color-coding for terminated tasks.
+    pub fn color_terminated(&self) -> bool {
+        self.color_durations.map(Not::not).unwrap_or(true)
+    }
+}
+
+// === impl ColorToggles ===
+
+impl ConfigFile {
+    fn from_config(path: ConfigPath) -> color_eyre::Result<Option<Self>> {
+        let config = path
+            .into_path()
+            .and_then(|path| fs::read_to_string(path).ok())
+            .map(|raw| toml::from_str::<ConfigFile>(&raw))
+            .transpose()
+            .wrap_err_with(|| {
+                format!(
+                    "failed to parse {}",
+                    path.into_path().unwrap_or_default().display()
+                )
+            })?;
+        Ok(config)
+    }
+
+    fn into_view_options(self) -> ViewOptions {
+        ViewOptions {
+            no_colors: self.no_colors(),
+            lang: self.charset.as_ref().and_then(|config| config.lang.clone()),
+            ascii_only: self.charset.as_ref().and_then(|config| config.ascii_only),
+            truecolor: self.colors.as_ref().and_then(|config| config.truecolor),
+            palette: self.colors.as_ref().and_then(|config| config.palette),
+            toggles: ColorToggles {
+                color_durations: self.color_durations(),
+                color_terminated: self.color_terminated(),
+            },
+        }
+    }
+
+    fn from_view_options(view_options: ViewOptions) -> Self {
+        Self {
+            charset: Some(CharsetConfig {
+                lang: view_options.lang,
+                ascii_only: view_options.ascii_only,
+            }),
+            colors: Some(ColorsConfig {
+                enabled: view_options.no_colors.map(Not::not),
+                truecolor: view_options.truecolor,
+                palette: view_options.palette,
+                enable: Some(view_options.toggles),
+            }),
+        }
+    }
+
+    fn no_colors(&self) -> Option<bool> {
+        self.colors
+            .as_ref()
+            .and_then(|config| config.enabled.map(Not::not))
+    }
+
+    fn color_durations(&self) -> Option<bool> {
+        self.colors
+            .as_ref()
+            .and_then(|config| config.enable.map(|toggles| toggles.color_durations()))
+    }
+
+    fn color_terminated(&self) -> Option<bool> {
+        self.colors
+            .as_ref()
+            .and_then(|config| config.enable.map(|toggles| toggles.color_terminated()))
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ConfigPath {
+    Home,
+    Current,
+}
+
+impl ConfigPath {
+    fn into_path(self) -> Option<PathBuf> {
+        match self {
+            Self::Home => {
+                let mut path = dirs::config_dir();
+                if let Some(path) = path.as_mut() {
+                    path.push("tokio-console/console.toml");
+                }
+                path
+            }
+            Self::Current => {
+                let mut path = PathBuf::new();
+                path.push("./console.toml");
+                Some(path)
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        env,
+        fs::File,
+        io::{BufWriter, Cursor, Write},
+        path::{Path, PathBuf},
+        process,
+    };
+
+    use super::*;
+
+    #[test]
+    fn args_example_changed() {
+        use clap::CommandFactory;
+
+        // Override env vars that may effect the defaults.
+        clobber_env_vars();
+
+        let path = PathBuf::from(std::env!("CARGO_MANIFEST_DIR")).join("args.example");
+
+        let mut cmd = Config::command();
+        let mut helptext = Vec::new();
+        // Format the help text to a string.
+        cmd.write_long_help(&mut Cursor::new(&mut helptext))
+            .expect("generating help should succeed");
+        let helptext = String::from_utf8(helptext).expect("help text is UTF-8");
+
+        let mut file = {
+            let file = File::create(&path).expect("failed to open file");
+            BufWriter::new(file)
+        };
+        // Drop the first four lines of the help text, as they include the
+        // version number, and it seems like a pain to have to re-generate the
+        // file every time the version changes...
+        for line in helptext.lines().skip(4) {
+            writeln!(file, "{}", line).expect("writing to file succeeds");
+        }
+
+        file.flush().expect("flushing should succeed");
+        drop(file);
+
+        if let Err(diff) = git_diff(&path) {
+            panic!(
+                "\n/!\\ command line arguments have changed!\n\
+                you should commit the new version of `{}`\n\n\
+                git diff output:\n\n{}\n",
+                path.display(),
+                diff
+            );
+        }
+    }
+
+    #[test]
+    fn toml_example_changed() {
+        // Override env vars that may effect the defaults.
+        clobber_env_vars();
+
+        let path = PathBuf::from(std::env!("CARGO_MANIFEST_DIR")).join("console.example.toml");
+
+        let generated = Config::try_parse_from(std::iter::empty::<std::ffi::OsString>())
+            .expect("should parse empty config")
+            .gen_config_file()
+            .expect("generating config file should succeed");
+
+        File::create(&path)
+            .expect("failed to open file")
+            .write_all(generated.as_bytes())
+            .expect("failed to write to file");
+        if let Err(diff) = git_diff(&path) {
+            panic!(
+                "\n/!\\ default config file has changed!\n\
+                you should commit the new version of `tokio-console/{}`\n\n\
+                git diff output:\n\n{}\n",
+                path.display(),
+                diff
+            );
+        }
+    }
+
+    fn git_diff(path: impl AsRef<Path>) -> Result<(), String> {
+        let output = process::Command::new("git")
+            .arg("diff")
+            .arg("--exit-code")
+            .arg(format!(
+                "--color={}",
+                env::var("CARGO_TERM_COLOR")
+                    .as_ref()
+                    .map(String::as_str)
+                    .unwrap_or("always")
+            ))
+            .arg("--")
+            .arg(path.as_ref().display().to_string())
+            .output()
+            .unwrap();
+
+        let diff = String::from_utf8(output.stdout).expect("git diff output not utf8");
+        if output.status.success() {
+            println!("git diff:\n{}", diff);
+            return Ok(());
+        }
+
+        Err(diff)
+    }
+
+    /// Override any env vars that may effect the generated defaults for CLI
+    /// arguments.
+    fn clobber_env_vars() {
+        use std::sync::Once;
+
+        // `set_env` is unsafe in a multi-threaded environment, so ensure that
+        // this only happens once...
+        static ENV_VARS_CLOBBERED: Once = Once::new();
+
+        ENV_VARS_CLOBBERED.call_once(|| {
+            env::set_var("COLORTERM", "truecolor");
+            env::set_var("LANG", "en_US.UTF-8");
+        })
     }
 }

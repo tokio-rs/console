@@ -1,4 +1,5 @@
 use crate::config;
+use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, str::FromStr};
 use tui::{
     style::{Color, Modifier, Style},
@@ -12,17 +13,22 @@ pub struct Styles {
     pub(crate) utf8: bool,
 }
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Deserialize, Serialize)]
 #[repr(u8)]
 pub enum Palette {
+    #[serde(rename = "off")]
     NoColors,
     /// Use ANSI 8 color palette only.
+    #[serde(rename = "8")]
     Ansi8,
     /// Use ANSI 16 color palette only.
+    #[serde(rename = "16")]
     Ansi16,
     /// Enable ANSI 256-color palette.
+    #[serde(rename = "256")]
     Ansi256,
     /// Enable all RGB colors.
+    #[serde(rename = "all")]
     All,
 }
 
@@ -102,7 +108,7 @@ impl Styles {
 
     pub fn time_units<'a>(&self, text: impl Into<Cow<'a, str>>) -> Span<'a> {
         let mut text = text.into();
-        if !self.toggles.color_durations {
+        if !self.toggles.color_durations() {
             return Span::raw(text);
         }
 
@@ -136,7 +142,7 @@ impl Styles {
     }
 
     pub fn terminated(&self) -> Style {
-        if !self.toggles.color_terminated {
+        if !self.toggles.color_terminated() {
             return Style::default();
         }
 

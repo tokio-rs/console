@@ -72,7 +72,7 @@ use the [Tokio] runtime, this means that:
 Once the application is instrumented, install the console CLI using
 
 ```shell
-cargo install tokio-console
+cargo install --locked tokio-console
 ```
 
 Running `tokio-console` without any arguments will connect to an application on
@@ -94,6 +94,8 @@ A DNS name can also be provided as the target address:
 ```shell
 tokio-console http://my.instrumented.application.local:6669
 ```
+
+See [here][cli-ref] for a complete list of all command-line arguments.
 
 When the console CLI is launched, it displays a list of all [asynchronous tasks]
 in the program:
@@ -131,112 +133,17 @@ a large number of tasks, such as this [`tokio::sync::Semaphore`]:
 Like the task details view, pressing the <kbd>escape</kbd> key while viewing a resource's details
 returns to the resource list.
 
+A configuration file (`console.toml`) can be used to configure the console's
+behavior. See [the documentation][cfg-ref] for details.
+
 [`tokio-console`]: https://github.com/tokio-rs/console
 [Tokio]: https://tokio.rs
 [asynchronous tasks]: https://tokio.rs/tokio/tutorial/spawning#tasks
 [resources]: https://tokio.rs/tokio/tutorial/async#async-fn-as-a-future
 [`tokio::sync::oneshot`]: https://docs.rs/tokio/latest/tokio/sync/oneshot/index.html
 [`tokio::sync::Semaphore`]: https://docs.rs/tokio/latest/tokio/sync/struct.Semaphore.html
-
-### Command-Line Arguments
-
-Running `tokio-console --help` displays a list of all available command-line
-arguments:
-```shell
-$ tokio-console --help
-
-tokio-console 0.1.3
-
-USAGE:
-    tokio-console [OPTIONS] [TARGET_ADDR]
-
-ARGS:
-    <TARGET_ADDR>
-            The address of a console-enabled process to connect to.
-
-            This may be an IP address and port, or a DNS name.
-
-            [default: http://127.0.0.1:6669]
-
-OPTIONS:
-        --ascii-only
-            Explicitly use only ASCII characters
-
-        --colorterm <truecolor>
-            Overrides the value of the `COLORTERM` environment variable.
-
-            If this is set to `24bit` or `truecolor`, 24-bit RGB color support will be enabled.
-
-            [env: COLORTERM=truecolor]
-            [possible values: 24bit, truecolor]
-
-    -h, --help
-            Print help information
-
-        --lang <LANG>
-            Overrides the terminal's default language
-
-            [env: LANG=en_US.UTF-8]
-            [default: en_us.UTF-8]
-
-        --log <ENV_FILTER>
-            Log level filter for the console's internal diagnostics.
-
-            The console will log to stderr if a log level filter is provided. Since the console
-            application runs interactively, stderr should generally be redirected to a file to avoid
-            interfering with the console's text output.
-
-            [env: RUST_LOG=]
-            [default: off]
-
-        --no-colors
-            Disable ANSI colors entirely
-
-        --no-duration-colors
-            Disable color-coding for duration units
-
-        --no-terminated-colors
-            Disable color-coding for terminated tasks
-
-        --palette <PALETTE>
-            Explicitly set which color palette to use
-
-            [possible values: 8, 16, 256, all, off]
-
-        --retain-for <RETAIN_FOR>
-            How long to continue displaying completed tasks and dropped resources after they have
-            been closed.
-
-            This accepts either a duration, parsed as a combination of time spans (such as `5days
-            2min 2s`), or `none` to disable removing completed tasks and dropped resources.
-
-            Each time span is an integer number followed by a suffix. Supported suffixes are:
-
-            * `nsec`, `ns` -- nanoseconds
-
-            * `usec`, `us` -- microseconds
-
-            * `msec`, `ms` -- milliseconds
-
-            * `seconds`, `second`, `sec`, `s`
-
-            * `minutes`, `minute`, `min`, `m`
-
-            * `hours`, `hour`, `hr`, `h`
-
-            * `days`, `day`, `d`
-
-            * `weeks`, `week`, `w`
-
-            * `months`, `month`, `M` -- defined as 30.44 days
-
-            * `years`, `year`, `y` -- defined as 365.25 days
-
-            [default: 6s]
-
-    -V, --version
-            Print version information
-```
+[cli-ref]: https://docs.rs/tokio-console/latest/tokio_console/config_reference/index.html#command-line-arguments
+[cfg-ref]: https://docs.rs/tokio-console/latest/tokio_console/config_reference/index.html#configuration-file
 
 ## Getting Help
 

@@ -38,7 +38,7 @@ toolkit consists of multiple components:
   [`tracing`].
 
 * tools for **displaying and exploring diagnostic data**, implemented as gRPC
-  clients using the console wire protocol. the [`console`] crate implements an
+  clients using the console wire protocol. the [`tokio-console`] crate implements an
   **an interactive command-line tool** that consumes this data, but **other
   implementations**, such as graphical or web-based tools, are also possible.
 
@@ -76,7 +76,7 @@ others.
 
 [gsoc]: https://github.com/tokio-rs/console-gsoc
 [tokio-blog]: https://tokio.rs/blog/2020-12-tokio-1-0#tracing
-[shiny-future]: https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/barbara_makes_a_wish.html
+[shiny-future]: https://rust-lang.github.io/wg-async/vision/submitted_stories/shiny_future/barbara_makes_a_wish.html
 [tw-1]: http://blog.pnkfx.org/blog/2021/04/26/road-to-turbowish-part-1-goals/
 [tw-2]: http://blog.pnkfx.org/blog/2021/04/27/road-to-turbowish-part-2-stories/
 [tw-3]: http://blog.pnkfx.org/blog/2021/05/03/road-to-turbowish-part-3-design/
@@ -116,21 +116,36 @@ notes:
 * the `tokio` and `runtime` [`tracing` targets] must be enabled at the [`TRACE`
   level].
 
-  if you're using the using [`console_subscriber::init()`][init] or
-  [`console_subscriber::build()`][build] APIs, these targets are enabled
+  + if you're using the [`console_subscriber::init()`][init] or
+  [`console_subscriber::Builder`][builder] APIs, these targets are enabled
   automatically.
 
-  if you are manually configuring the `tracing` subscriber using the
+  + if you are manually configuring the `tracing` subscriber using the
   [`EnvFilter`] or [`Targets`] filters from [`tracing-subscriber`], add
   `"tokio=trace,runtime=trace"` to your filter configuration.
 
+  + also, ensure you have not enabled any of the [compile time filter 
+    features][compile_time_filters] in your `Cargo.toml`.
+
 ### running the console
 
-to **run the console command-line tool**, simply
+to **run the console command-line tool**, install `tokio-console` from [crates.io](https://crates.io/crates/tokio-console)
+
 ```shell
-$ cargo run
+$ cargo install --locked tokio-console
 ```
-in this repository.
+
+and run locally
+
+```shell
+$ tokio-console
+```
+
+> **alternative method:** run the tool from a local checkout of this repository
+>
+> ```shell
+> $ cargo run
+> ```
 
 by default, this will attempt to connect to an instrumented application running
 on localhost on port 6669. if the application is running somewhere else, or is
@@ -245,11 +260,12 @@ cargo run --example $name
 [`tracing-subscriber`]: https://lib.rs/crates/tracing-subscriber
 [`console-api`]: ./console-api
 [`console-subscriber`]: ./console-subscriber
-[`console`]: ./console
+[`tokio-console`]: ./tokio-console
 [`Layer`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html
-[`tracing` target]: https://docs.rs/tracing/latest/tracing/struct.Metadata.html
+[`tracing` targets]: https://docs.rs/tracing/latest/tracing/struct.Metadata.html
 [`TRACE` level]: https://docs.rs/tracing/latest/tracing/struct.Level.html#associatedconstant.TRACE
-[build]: https://tokio-console.netlify.app/console_subscriber/fn.build.html
-[init]: https://tokio-console.netlify.app/console_subscriber/fn.init.html
+[builder]: https:/docs.rs/console-subscriber/latest/console_subscriber/struct.builder.html
+[init]: https:/docs.rs/console-subscriber/latest/console_subscriber/fn.init.html
 [`EnvFilter`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
 [`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/targets/struct.Targets.html
+[compile_time_filters]: https://docs.rs/tracing/latest/tracing/level_filters/index.html#compile-time-filters

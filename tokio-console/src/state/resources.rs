@@ -16,6 +16,7 @@ pub(crate) struct ResourcesState {
     resources: HashMap<u64, Rc<RefCell<Resource>>>,
     pub(crate) ids: Ids,
     new_resources: Vec<ResourceRef>,
+    dropped_events: u64,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -74,7 +75,7 @@ impl Default for SortBy {
 }
 
 impl SortBy {
-    pub fn sort(&self, now: SystemTime, resources: &mut Vec<Weak<RefCell<Resource>>>) {
+    pub fn sort(&self, now: SystemTime, resources: &mut [Weak<RefCell<Resource>>]) {
         match self {
             Self::Rid => resources
                 .sort_unstable_by_key(|resource| resource.upgrade().map(|r| r.borrow().num)),
@@ -225,6 +226,8 @@ impl ResourcesState {
             Some((num, resource))
         });
 
+        self.dropped_events += update.dropped_events;
+
         self.resources.extend(new_resources);
 
         for (span_id, stats) in stats_update {
@@ -251,6 +254,10 @@ impl ResourcesState {
                 })
                 .unwrap_or(true)
         })
+    }
+
+    pub(crate) fn dropped_events(&self) -> u64 {
+        self.dropped_events
     }
 }
 
