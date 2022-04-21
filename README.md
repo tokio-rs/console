@@ -264,8 +264,8 @@ cargo run --example $name
 [`Layer`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html
 [`tracing` targets]: https://docs.rs/tracing/latest/tracing/struct.Metadata.html
 [`TRACE` level]: https://docs.rs/tracing/latest/tracing/struct.Level.html#associatedconstant.TRACE
-[builder]: https:/docs.rs/console-subscriber/latest/console_subscriber/struct.builder.html
-[init]: https:/docs.rs/console-subscriber/latest/console_subscriber/fn.init.html
+[builder]: https://docs.rs/console-subscriber/latest/console_subscriber/struct.builder.html
+[init]: https://docs.rs/console-subscriber/latest/console_subscriber/fn.init.html
 [`EnvFilter`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
 [`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/targets/struct.Targets.html
 [compile_time_filters]: https://docs.rs/tracing/latest/tracing/level_filters/index.html#compile-time-filters
