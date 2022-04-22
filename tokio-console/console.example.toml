@@ -1,5 +1,5 @@
 target_addr = 'http://127.0.0.1:6669/'
-log = 'info'
+log = 'off'
 retention = '6s'
 
 [charset]

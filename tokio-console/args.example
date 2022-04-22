@@ -36,6 +36,8 @@ OPTIONS:
             application runs interactively, stderr should generally be redirected to a file to avoid
             interfering with the console's text output.
             
+            [default: off]
+            
             [env: RUST_LOG=]
 
         --no-colors <no-colors>
@@ -80,6 +82,8 @@ OPTIONS:
             * `months`, `month`, `M` -- defined as 30.44 days
             
             * `years`, `year`, `y` -- defined as 365.25 days
+            
+            [default: 6s]
 
     -V, --version
             Print version information

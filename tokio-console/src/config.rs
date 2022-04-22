@@ -34,6 +34,8 @@ pub struct Config {
     /// The console will log to stderr if a log level filter is provided. Since
     /// the console application runs interactively, stderr should generally be
     /// redirected to a file to avoid interfering with the console's text output.
+    ///
+    /// [default: off]
     #[clap(long = "log", env = "RUST_LOG")]
     pub(crate) env_filter: Option<tracing_subscriber::EnvFilter>,
 
@@ -68,6 +70,8 @@ pub struct Config {
     /// * `months`, `month`, `M` -- defined as 30.44 days
     ///
     /// * `years`, `year`, `y` -- defined as 365.25 days
+    ///
+    /// [default: 6s]
     #[clap(long = "retain-for")]
     retain_for: Option<RetainFor>,
 
@@ -292,7 +296,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             target_addr: Some(default_target_addr()),
-            env_filter: Some(tracing_subscriber::EnvFilter::new("info")),
+            env_filter: Some(tracing_subscriber::EnvFilter::new("off")),
             retain_for: Some(RetainFor(Some(Duration::from_secs(6)))),
             view_options: ViewOptions::default(),
             subcmd: None,
