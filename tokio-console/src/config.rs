@@ -177,7 +177,7 @@ pub struct ColorToggles {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct ConfigFile {
-    target_addr: Option<String>,
+    default_target_addr: Option<String>,
     log: Option<String>,
     retention: Option<RetainFor>,
     charset: Option<CharsetConfig>,
@@ -459,14 +459,14 @@ impl ConfigFile {
 
     fn target_addr(&self) -> color_eyre::Result<Option<Uri>> {
         let uri = self
-            .target_addr
+            .default_target_addr
             .as_ref()
             .map(|addr| addr.parse::<Uri>())
             .transpose()
             .wrap_err_with(|| {
                 format!(
                     "failed to parse target address {:?} as URI",
-                    self.target_addr
+                    self.default_target_addr
                 )
             })?;
         Ok(uri)
@@ -508,7 +508,7 @@ impl ConfigFile {
 impl From<Config> for ConfigFile {
     fn from(config: Config) -> Self {
         Self {
-            target_addr: config.target_addr.map(|addr| addr.to_string()),
+            default_target_addr: config.target_addr.map(|addr| addr.to_string()),
             log: config.env_filter.map(|filter| filter.to_string()),
             retention: config.retain_for,
             charset: Some(CharsetConfig {
