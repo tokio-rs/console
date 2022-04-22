@@ -24,6 +24,8 @@ pub struct Config {
     /// The address of a console-enabled process to connect to.
     ///
     /// This may be an IP address and port, or a DNS name.
+    ///
+    /// [default: http://127.0.0.1:6669]
     #[clap(value_hint = ValueHint::Url)]
     pub(crate) target_addr: Option<Uri>,
 
