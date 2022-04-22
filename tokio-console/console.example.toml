@@ -1,6 +1,6 @@
 target_addr = 'http://127.0.0.1:6669/'
-env_filter = 'info'
 retain_for = '6s'
+log = 'info'
 
 [charset]
 lang = 'en_US.UTF-8'

@@ -165,7 +165,7 @@ pub struct ColorToggles {
 #[serde(deny_unknown_fields)]
 struct ConfigFile {
     target_addr: Option<String>,
-    env_filter: Option<String>,
+    log: Option<String>,
     retain_for: Option<String>,
     charset: Option<CharsetConfig>,
     colors: Option<ColorsConfig>,
@@ -454,11 +454,11 @@ impl ConfigFile {
 
     fn env_filter(&self) -> color_eyre::Result<Option<tracing_subscriber::EnvFilter>> {
         let env_filter = self
-            .env_filter
+            .log
             .as_ref()
             .map(|directive| directive.parse::<tracing_subscriber::EnvFilter>())
             .transpose()
-            .wrap_err(format!("failed to parse EnvFilter, {:?}", self.env_filter))?;
+            .wrap_err(format!("failed to parse EnvFilter, {:?}", self.log))?;
         Ok(env_filter)
     }
 
@@ -495,7 +495,7 @@ impl From<Config> for ConfigFile {
     fn from(config: Config) -> Self {
         Self {
             target_addr: config.target_addr.map(|addr| addr.to_string()),
-            env_filter: config.env_filter.map(|filter| filter.to_string()),
+            log: config.env_filter.map(|filter| filter.to_string()),
             retain_for: config.retain_for.map(|value| value.to_string()),
             charset: Some(CharsetConfig {
                 lang: config.view_options.lang,
