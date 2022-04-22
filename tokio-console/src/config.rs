@@ -457,7 +457,12 @@ impl ConfigFile {
             .as_ref()
             .map(|addr| addr.parse::<Uri>())
             .transpose()
-            .wrap_err(format!("failed to parse Uri, {:?}", self.target_addr))?;
+            .wrap_err_with(|| {
+                format!(
+                    "failed to parse target address {:?} as URI",
+                    self.target_addr
+                )
+            })?;
         Ok(uri)
     }
 
@@ -467,7 +472,7 @@ impl ConfigFile {
             .as_ref()
             .map(|directive| directive.parse::<tracing_subscriber::EnvFilter>())
             .transpose()
-            .wrap_err(format!("failed to parse EnvFilter, {:?}", self.log))?;
+            .wrap_err_with(|| format!("failed to parse log filter {:?}", self.log))?;
         Ok(env_filter)
     }
 
