@@ -93,7 +93,7 @@ pub enum OptionalCmd {
     GenConfig,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 struct RetainFor(Option<Duration>);
 
 impl fmt::Display for RetainFor {
@@ -102,6 +102,15 @@ impl fmt::Display for RetainFor {
             None => write!(f, ""),
             Some(duration) => write!(f, "{:?}", duration),
         }
+    }
+}
+
+impl Serialize for RetainFor {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
     }
 }
 
@@ -166,7 +175,7 @@ pub struct ColorToggles {
 struct ConfigFile {
     target_addr: Option<String>,
     log: Option<String>,
-    retain_for: Option<String>,
+    retention: Option<RetainFor>,
     charset: Option<CharsetConfig>,
     colors: Option<ColorsConfig>,
 }
@@ -462,14 +471,8 @@ impl ConfigFile {
         Ok(env_filter)
     }
 
-    fn retain_for(&self) -> color_eyre::Result<Option<RetainFor>> {
-        let retain_for = self
-            .retain_for
-            .as_ref()
-            .map(|retain_for| retain_for.parse::<RetainFor>())
-            .transpose()
-            .wrap_err(format!("failed to parse RetainFor, {:?}", self.retain_for))?;
-        Ok(retain_for)
+    fn retain_for(&self) -> Option<RetainFor> {
+        self.retention
     }
 
     fn no_colors(&self) -> Option<bool> {
@@ -496,7 +499,7 @@ impl From<Config> for ConfigFile {
         Self {
             target_addr: config.target_addr.map(|addr| addr.to_string()),
             log: config.env_filter.map(|filter| filter.to_string()),
-            retain_for: config.retain_for.map(|value| value.to_string()),
+            retention: config.retain_for,
             charset: Some(CharsetConfig {
                 lang: config.view_options.lang,
                 ascii_only: config.view_options.ascii_only,
@@ -518,7 +521,7 @@ impl TryFrom<ConfigFile> for Config {
         Ok(Config {
             target_addr: value.target_addr()?,
             env_filter: value.env_filter()?,
-            retain_for: value.retain_for()?,
+            retain_for: value.retain_for(),
             view_options: ViewOptions {
                 no_colors: value.no_colors(),
                 lang: value
