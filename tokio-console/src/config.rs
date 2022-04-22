@@ -305,7 +305,9 @@ impl Default for Config {
 }
 
 fn default_target_addr() -> Uri {
-    "http://127.0.0.1:6669".parse::<Uri>().unwrap_or_default()
+    "http://127.0.0.1:6669"
+        .parse::<Uri>()
+        .expect("default target address should be a valid URI")
 }
 
 // === impl ViewOptions ===
