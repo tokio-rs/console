@@ -2,6 +2,7 @@ use crate::view::Palette;
 use clap::{ArgGroup, Parser as Clap, Subcommand, ValueHint};
 use color_eyre::eyre::WrapErr;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::fs;
 use std::ops::Not;
 use std::path::PathBuf;
@@ -23,16 +24,20 @@ pub struct Config {
     /// The address of a console-enabled process to connect to.
     ///
     /// This may be an IP address and port, or a DNS name.
-    #[clap(default_value = "http://127.0.0.1:6669", value_hint = ValueHint::Url)]
-    pub(crate) target_addr: Uri,
+    ///
+    /// [default: http://127.0.0.1:6669]
+    #[clap(value_hint = ValueHint::Url)]
+    pub(crate) target_addr: Option<Uri>,
 
     /// Log level filter for the console's internal diagnostics.
     ///
     /// The console will log to stderr if a log level filter is provided. Since
     /// the console application runs interactively, stderr should generally be
     /// redirected to a file to avoid interfering with the console's text output.
-    #[clap(long = "log", env = "RUST_LOG", default_value = "off")]
-    pub(crate) env_filter: tracing_subscriber::EnvFilter,
+    ///
+    /// [default: off]
+    #[clap(long = "log", env = "RUST_LOG")]
+    pub(crate) env_filter: Option<tracing_subscriber::EnvFilter>,
 
     #[clap(flatten)]
     pub(crate) view_options: ViewOptions,
@@ -65,8 +70,10 @@ pub struct Config {
     /// * `months`, `month`, `M` -- defined as 30.44 days
     ///
     /// * `years`, `year`, `y` -- defined as 365.25 days
-    #[clap(long = "retain-for", default_value = "6s")]
-    retain_for: RetainFor,
+    ///
+    /// [default: 6s]
+    #[clap(long = "retain-for")]
+    retain_for: Option<RetainFor>,
 
     /// An optional subcommand.
     ///
@@ -90,8 +97,26 @@ pub enum OptionalCmd {
     GenConfig,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 struct RetainFor(Option<Duration>);
+
+impl fmt::Display for RetainFor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            None => write!(f, ""),
+            Some(duration) => write!(f, "{:?}", duration),
+        }
+    }
+}
+
+impl Serialize for RetainFor {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
 
 #[derive(Clap, Debug, Clone)]
 #[clap(group = ArgGroup::new("colors").conflicts_with("no-colors"))]
@@ -152,6 +177,9 @@ pub struct ColorToggles {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct ConfigFile {
+    default_target_addr: Option<String>,
+    log: Option<String>,
+    retention: Option<RetainFor>,
     charset: Option<CharsetConfig>,
     colors: Option<ColorsConfig>,
 }
@@ -177,26 +205,25 @@ struct ColorsConfig {
 impl Config {
     /// Parse from config files and command line options.
     pub fn parse() -> color_eyre::Result<Self> {
-        let home = ViewOptions::from_config(ConfigPath::Home)?;
-        let current = ViewOptions::from_config(ConfigPath::Current)?;
+        let home = Self::from_path(ConfigPath::Home)?;
+        let current = Self::from_path(ConfigPath::Current)?;
         let base = match (home, current) {
             (None, None) => None,
             (Some(home), None) => Some(home),
             (None, Some(current)) => Some(current),
             (Some(home), Some(current)) => Some(home.merge_with(current)),
         };
-        let mut config = <Self as Clap>::parse();
-        let view_options = match base {
-            None => config.view_options,
-            Some(base) => base.merge_with(config.view_options),
+        let config = <Self as Clap>::parse();
+        let config = match base {
+            None => config,
+            Some(base) => base.merge_with(config),
         };
-        config.view_options = view_options;
         Ok(config)
     }
 
     pub fn gen_config_file(self) -> color_eyre::Result<String> {
-        let defaults = ViewOptions::default().merge_with(self.view_options);
-        let config = ConfigFile::from_view_options(defaults);
+        let defaults = Self::default().merge_with(self);
+        let config: ConfigFile = defaults.into();
         toml::to_string_pretty(&config).map_err(Into::into)
     }
 
@@ -238,8 +265,49 @@ impl Config {
     }
 
     pub(crate) fn retain_for(&self) -> Option<Duration> {
-        self.retain_for.0
+        self.retain_for.as_ref().and_then(|value| value.0)
     }
+
+    pub(crate) fn target_addr(&self) -> Uri {
+        self.target_addr
+            .as_ref()
+            .unwrap_or(&default_target_addr())
+            .clone()
+    }
+
+    fn from_path(config_path: ConfigPath) -> color_eyre::Result<Option<Self>> {
+        ConfigFile::from_path(config_path)?
+            .map(|config| config.try_into())
+            .transpose()
+    }
+
+    fn merge_with(self, other: Self) -> Self {
+        Self {
+            target_addr: other.target_addr.or(self.target_addr),
+            env_filter: other.env_filter.or(self.env_filter),
+            retain_for: other.retain_for.or(self.retain_for),
+            view_options: self.view_options.merge_with(other.view_options),
+            subcmd: other.subcmd.or(self.subcmd),
+        }
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            target_addr: Some(default_target_addr()),
+            env_filter: Some(tracing_subscriber::EnvFilter::new("off")),
+            retain_for: Some(RetainFor(Some(Duration::from_secs(6)))),
+            view_options: ViewOptions::default(),
+            subcmd: None,
+        }
+    }
+}
+
+fn default_target_addr() -> Uri {
+    "http://127.0.0.1:6669"
+        .parse::<Uri>()
+        .expect("default target address should be a valid URI")
 }
 
 // === impl ViewOptions ===
@@ -300,11 +368,6 @@ impl ViewOptions {
 
     pub(crate) fn toggles(&self) -> ColorToggles {
         self.toggles
-    }
-
-    fn from_config(path: ConfigPath) -> color_eyre::Result<Option<Self>> {
-        let options = ConfigFile::from_config(path)?.map(|config| config.into_view_options());
-        Ok(options)
     }
 
     fn merge_with(self, command_line: ViewOptions) -> Self {
@@ -379,7 +442,7 @@ impl ColorToggles {
 // === impl ColorToggles ===
 
 impl ConfigFile {
-    fn from_config(path: ConfigPath) -> color_eyre::Result<Option<Self>> {
+    fn from_path(path: ConfigPath) -> color_eyre::Result<Option<Self>> {
         let config = path
             .into_path()
             .and_then(|path| fs::read_to_string(path).ok())
@@ -394,33 +457,33 @@ impl ConfigFile {
         Ok(config)
     }
 
-    fn into_view_options(self) -> ViewOptions {
-        ViewOptions {
-            no_colors: self.no_colors(),
-            lang: self.charset.as_ref().and_then(|config| config.lang.clone()),
-            ascii_only: self.charset.as_ref().and_then(|config| config.ascii_only),
-            truecolor: self.colors.as_ref().and_then(|config| config.truecolor),
-            palette: self.colors.as_ref().and_then(|config| config.palette),
-            toggles: ColorToggles {
-                color_durations: self.color_durations(),
-                color_terminated: self.color_terminated(),
-            },
-        }
+    fn target_addr(&self) -> color_eyre::Result<Option<Uri>> {
+        let uri = self
+            .default_target_addr
+            .as_ref()
+            .map(|addr| addr.parse::<Uri>())
+            .transpose()
+            .wrap_err_with(|| {
+                format!(
+                    "failed to parse target address {:?} as URI",
+                    self.default_target_addr
+                )
+            })?;
+        Ok(uri)
     }
 
-    fn from_view_options(view_options: ViewOptions) -> Self {
-        Self {
-            charset: Some(CharsetConfig {
-                lang: view_options.lang,
-                ascii_only: view_options.ascii_only,
-            }),
-            colors: Some(ColorsConfig {
-                enabled: view_options.no_colors.map(Not::not),
-                truecolor: view_options.truecolor,
-                palette: view_options.palette,
-                enable: Some(view_options.toggles),
-            }),
-        }
+    fn env_filter(&self) -> color_eyre::Result<Option<tracing_subscriber::EnvFilter>> {
+        let env_filter = self
+            .log
+            .as_ref()
+            .map(|directive| directive.parse::<tracing_subscriber::EnvFilter>())
+            .transpose()
+            .wrap_err_with(|| format!("failed to parse log filter {:?}", self.log))?;
+        Ok(env_filter)
+    }
+
+    fn retain_for(&self) -> Option<RetainFor> {
+        self.retention
     }
 
     fn no_colors(&self) -> Option<bool> {
@@ -439,6 +502,53 @@ impl ConfigFile {
         self.colors
             .as_ref()
             .and_then(|config| config.enable.map(|toggles| toggles.color_terminated()))
+    }
+}
+
+impl From<Config> for ConfigFile {
+    fn from(config: Config) -> Self {
+        Self {
+            default_target_addr: config.target_addr.map(|addr| addr.to_string()),
+            log: config.env_filter.map(|filter| filter.to_string()),
+            retention: config.retain_for,
+            charset: Some(CharsetConfig {
+                lang: config.view_options.lang,
+                ascii_only: config.view_options.ascii_only,
+            }),
+            colors: Some(ColorsConfig {
+                enabled: config.view_options.no_colors.map(Not::not),
+                truecolor: config.view_options.truecolor,
+                palette: config.view_options.palette,
+                enable: Some(config.view_options.toggles),
+            }),
+        }
+    }
+}
+
+impl TryFrom<ConfigFile> for Config {
+    type Error = color_eyre::eyre::Error;
+
+    fn try_from(value: ConfigFile) -> Result<Self, Self::Error> {
+        Ok(Config {
+            target_addr: value.target_addr()?,
+            env_filter: value.env_filter()?,
+            retain_for: value.retain_for(),
+            view_options: ViewOptions {
+                no_colors: value.no_colors(),
+                lang: value
+                    .charset
+                    .as_ref()
+                    .and_then(|config| config.lang.clone()),
+                ascii_only: value.charset.as_ref().and_then(|config| config.ascii_only),
+                truecolor: value.colors.as_ref().and_then(|config| config.truecolor),
+                palette: value.colors.as_ref().and_then(|config| config.palette),
+                toggles: ColorToggles {
+                    color_durations: value.color_durations(),
+                    color_terminated: value.color_terminated(),
+                },
+            },
+            subcmd: None,
+        })
     }
 }
 
