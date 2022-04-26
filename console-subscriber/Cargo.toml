@@ -25,8 +25,9 @@ keywords = [
 ]
 
 [features]
-default = []
+default = ["env-filter"]
 parking_lot = ["parking_lot_crate", "tracing-subscriber/parking_lot"]
+env-filter = ["tracing-subscriber/env-filter"]
 
 [dependencies]
 
@@ -38,7 +39,7 @@ console-api = { version = "0.2.0", path = "../console-api", features = ["transpo
 tonic = { version = "0.7", features = ["transport"] }
 tracing-core = "0.1.24"
 tracing = "0.1.26"
-tracing-subscriber = { version = "0.3.0", default-features = false, features = ["fmt", "registry"] }
+tracing-subscriber = { version = "0.3.11", default-features = false, features = ["fmt", "registry"] }
 futures = { version = "0.3", default-features = false }
 hdrhistogram = { version = "7.3.0", default-features = false, features = ["serialization"] }
 # The parking_lot dependency is renamed, because we want our `parking_lot`

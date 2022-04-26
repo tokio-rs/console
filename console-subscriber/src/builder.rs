@@ -8,7 +8,7 @@ use std::{
 use tokio::runtime;
 use tracing::Subscriber;
 use tracing_subscriber::{
-    filter::{FilterFn, LevelFilter, Targets},
+    filter::{self, FilterFn},
     layer::{Layer, SubscriberExt},
     prelude::*,
     registry::LookupSpan,
@@ -268,6 +268,13 @@ impl Builder {
     /// | `TOKIO_CONSOLE_RECORD_PATH`         | The file path to save a recording                                         | None              |
     /// | `RUST_LOG`                          | Configures what events are logged events. See [`Targets`] for details.    | "error"           |
     ///
+    /// If the "env-filter" crate feature flag is enabled, the `RUST_LOG`
+    /// environment variable will be parsed using the [`EnvFilter`] type from
+    /// `tracing-subscriber. If the "env-filter" feature is **not** enabled, the
+    /// [`Targets`] filter is used instead. The `EnvFilter` type accepts all the
+    /// same syntax as `Targets`, but with the added ability to filter dynamically
+    /// on span field values. See the documentation for those types for details.
+    ///
     /// # Further customization
     ///
     /// To add additional layers or replace the format layer, replace
@@ -286,10 +293,16 @@ impl Builder {
     /// ```
     ///
     /// [`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/filter/struct.Targets.html
+    /// [`EnvFilter`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/filter/struct.EnvFilter.html
     pub fn init(self) {
+        #[cfg(feature = "env-filter")]
+        type Filter = filter::EnvFilter;
+        #[cfg(not(feature = "env-filter"))]
+        type Filter = filter::Targets;
+
         let fmt_filter = std::env::var(&self.filter_env_var)
             .ok()
-            .and_then(|log_filter| match log_filter.parse::<Targets>() {
+            .and_then(|log_filter| match log_filter.parse::<Filter>() {
                 Ok(targets) => Some(targets),
                 Err(e) => {
                     eprintln!(
@@ -299,7 +312,11 @@ impl Builder {
                     None
                 }
             })
-            .unwrap_or_else(|| Targets::default().with_default(LevelFilter::ERROR));
+            .unwrap_or_else(|| {
+                "error"
+                    .parse::<Filter>()
+                    .expect("`error` filter should always parse successfully")
+            });
 
         let console_layer = self.spawn();
 
@@ -456,6 +473,13 @@ impl Builder {
 /// | `TOKIO_CONSOLE_RECORD_PATH`         | The file path to save a recording                                         | None              |
 /// | `RUST_LOG`                          | Configures what events are logged events. See [`Targets`] for details.    | "error"           |
 ///
+/// If the "env-filter" crate feature flag is enabled, the `RUST_LOG`
+/// environment variable will be parsed using the [`EnvFilter`] type from
+/// `tracing-subscriber. If the "env-filter" feature is **not** enabled, the
+/// [`Targets`] filter is used instead. The `EnvFilter` type accepts all the
+/// same syntax as `Targets`, but with the added ability to filter dynamically
+/// on span field values. See the documentation for those types for details.
+///
 /// # Further customization
 ///
 /// To add additional layers or replace the format layer, replace
@@ -479,7 +503,9 @@ impl Builder {
 ///
 /// ConsoleLayer::builder().with_default_env().init();
 /// ```
+///
 /// [`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/filter/struct.Targets.html
+/// [`EnvFilter`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/filter/struct.EnvFilter.html
 pub fn init() {
     ConsoleLayer::builder().with_default_env().init();
 }
