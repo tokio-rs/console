@@ -1,5 +1,6 @@
 use crate::view::Palette;
 use clap::{ArgGroup, Parser as Clap, Subcommand, ValueHint};
+use clap_complete::shells::Shell;
 use color_eyre::eyre::WrapErr;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -95,6 +96,17 @@ pub enum OptionalCmd {
     ///     $ tokio-console gen-config > console.toml
     ///
     GenConfig,
+
+    /// Generate shell completions
+    ///
+    /// It should be saved in expected directory, depending on the shell used
+    ///
+    ///     $ tokio-console gen-completion zsh > $FPATH/_tokio_console
+    ///
+    GenCompletion {
+        #[clap(arg_enum)]
+        shell: Shell,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]

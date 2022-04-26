@@ -2,6 +2,8 @@ use color_eyre::{eyre::eyre, Help, SectionExt};
 use console_api::tasks::TaskDetails;
 use state::State;
 
+use clap::IntoApp;
+use clap_complete::generate;
 use futures::stream::StreamExt;
 use tokio::sync::{mpsc, watch};
 use tui::{
@@ -31,6 +33,12 @@ async fn main() -> color_eyre::Result<()> {
         // Generate a default config file and exit.
         let toml = args.gen_config_file()?;
         println!("{}", toml);
+        return Ok(());
+    }
+
+    if let Some(config::OptionalCmd::GenCompletion { shell }) = args.subcmd {
+        let mut app = config::Config::command();
+        generate(shell, &mut app, "tokio-console", &mut std::io::stdout());
         return Ok(());
     }
 
