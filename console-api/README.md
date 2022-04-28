@@ -96,7 +96,7 @@ console project.
 ## Supported Rust Versions
 
 The Tokio console is built against the latest stable release. The minimum
-supported version is 1.56. The current Tokio console version is not guaranteed
+supported version is 1.58. The current Tokio console version is not guaranteed
 to build on Rust versions earlier than the minimum supported version.
 
 ## License
