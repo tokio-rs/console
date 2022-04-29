@@ -31,13 +31,16 @@ pub struct Config {
 
     /// Log level filter for the console's internal diagnostics.
     ///
-    /// The console will log to stderr if a log level filter is provided. Since
-    /// the console application runs interactively, stderr should generally be
-    /// redirected to a file to avoid interfering with the console's text output.
     ///
     /// [default: off]
     #[clap(long = "log", env = "RUST_LOG")]
     pub(crate) env_filter: Option<tracing_subscriber::EnvFilter>,
+
+    /// Path to a directory to write the console's internal logs to.
+    ///
+    /// [default: /tmp/tokio-console/logs]
+    #[clap(long = "log-dir", value_hint = ValueHint::DirPath)]
+    pub(crate) log_directory: Option<PathBuf>,
 
     #[clap(flatten)]
     pub(crate) view_options: ViewOptions,
@@ -179,6 +182,7 @@ pub struct ColorToggles {
 struct ConfigFile {
     default_target_addr: Option<String>,
     log: Option<String>,
+    log_directory: Option<PathBuf>,
     retention: Option<RetainFor>,
     charset: Option<CharsetConfig>,
     colors: Option<ColorsConfig>,
@@ -283,6 +287,7 @@ impl Config {
 
     fn merge_with(self, other: Self) -> Self {
         Self {
+            log_directory: other.log_directory.or(self.log_directory),
             target_addr: other.target_addr.or(self.target_addr),
             env_filter: other.env_filter.or(self.env_filter),
             retain_for: other.retain_for.or(self.retain_for),
@@ -297,6 +302,7 @@ impl Default for Config {
         Self {
             target_addr: Some(default_target_addr()),
             env_filter: Some(tracing_subscriber::EnvFilter::new("off")),
+            log_directory: Some(["/", "tmp", "tokio-console", "logs"].iter().collect()),
             retain_for: Some(RetainFor(Some(Duration::from_secs(6)))),
             view_options: ViewOptions::default(),
             subcmd: None,
@@ -510,6 +516,7 @@ impl From<Config> for ConfigFile {
         Self {
             default_target_addr: config.target_addr.map(|addr| addr.to_string()),
             log: config.env_filter.map(|filter| filter.to_string()),
+            log_directory: config.log_directory,
             retention: config.retain_for,
             charset: Some(CharsetConfig {
                 lang: config.view_options.lang,
@@ -528,10 +535,11 @@ impl From<Config> for ConfigFile {
 impl TryFrom<ConfigFile> for Config {
     type Error = color_eyre::eyre::Error;
 
-    fn try_from(value: ConfigFile) -> Result<Self, Self::Error> {
+    fn try_from(mut value: ConfigFile) -> Result<Self, Self::Error> {
         Ok(Config {
             target_addr: value.target_addr()?,
             env_filter: value.env_filter()?,
+            log_directory: value.log_directory.take(),
             retain_for: value.retain_for(),
             view_options: ViewOptions {
                 no_colors: value.no_colors(),
