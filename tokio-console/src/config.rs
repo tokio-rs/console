@@ -31,6 +31,11 @@ pub struct Config {
 
     /// Log level filter for the console's internal diagnostics.
     ///
+    /// Logs are written to a new file at the path given by the `--log-dir`
+    /// argument (or its default value), or to the system journal if
+    /// `systemd-journald` support is enabled.
+    ///
+    /// If this is set to 'off' or is not set, no logs will be written.
     ///
     /// [default: off]
     #[clap(long = "log", env = "RUST_LOG")]
@@ -681,6 +686,8 @@ mod tests {
     }
 
     #[test]
+    // The example output includes paths, so skip this test on windows. :/
+    #[cfg_attr(windows, ignore)]
     fn toml_example_changed() {
         // Override env vars that may effect the defaults.
         clobber_env_vars();
