@@ -232,8 +232,13 @@ impl Config {
     }
 
     pub fn trace_init(&mut self) -> color_eyre::Result<()> {
-        let filter = std::mem::take(&mut self.env_filter);
         use tracing_subscriber::prelude::*;
+        let filter = match self.env_filter.take() {
+            // if logging is totally disabled, don't bother even constructing
+            // the subscriber
+            None => return Ok(()),
+            Some(filter) => filter,
+        };
 
         // If we're on a Linux distro with journald, try logging to the system
         // journal so we don't interfere with text output.
@@ -247,13 +252,41 @@ impl Config {
         #[cfg(not(all(feature = "tracing-journald", target_os = "linux")))]
         let should_fmt = true;
 
-        // Otherwise, log to stderr and rely on the user redirecting output.
+        // Otherwise, log to a file.
         let fmt = if should_fmt {
-            Some(
-                tracing_subscriber::fmt::layer()
-                    .with_writer(std::io::stderr)
-                    .with_ansi(atty::is(atty::Stream::Stderr)),
-            )
+            let dir = self
+                .log_directory
+                .take()
+                .unwrap_or_else(default_log_directory);
+
+            // first ensure that the log directory exists
+            fs::create_dir_all(&dir)
+                .with_context(|| format!("creating log directory '{}'", dir.display()))?;
+            color_eyre::eyre::ensure!(
+                dir.is_dir(),
+                "log directory path '{}' is not a directory",
+                dir.display()
+            );
+
+            // now, open a log file
+            let now = std::time::SystemTime::now();
+            // format the current time in a way that's appropriate for a
+            // filename (strip the `:` character, as it is an invalid filename
+            // char on windows)
+            let filename =
+                format!("{}.log", humantime::format_rfc3339_seconds(now)).replace(':', "");
+            let path = dir.join(filename);
+            let file = fs::File::options()
+                .create_new(true)
+                .write(true)
+                .open(&path)
+                .with_context(|| format!("creating log file '{}'", path.display()))?;
+
+            // finally, construct a `fmt` layer to write to that log file
+            let fmt = tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(file);
+            Some(fmt)
         } else {
             None
         };
@@ -302,7 +335,7 @@ impl Default for Config {
         Self {
             target_addr: Some(default_target_addr()),
             env_filter: Some(tracing_subscriber::EnvFilter::new("off")),
-            log_directory: Some(["/", "tmp", "tokio-console", "logs"].iter().collect()),
+            log_directory: Some(default_log_directory()),
             retain_for: Some(RetainFor(Some(Duration::from_secs(6)))),
             view_options: ViewOptions::default(),
             subcmd: None,
@@ -314,6 +347,10 @@ fn default_target_addr() -> Uri {
     "http://127.0.0.1:6669"
         .parse::<Uri>()
         .expect("default target address should be a valid URI")
+}
+
+fn default_log_directory() -> PathBuf {
+    ["/", "tmp", "tokio-console", "logs"].iter().collect()
 }
 
 // === impl ViewOptions ===
@@ -479,9 +516,14 @@ impl ConfigFile {
     }
 
     fn env_filter(&self) -> color_eyre::Result<Option<tracing_subscriber::EnvFilter>> {
-        let env_filter = self
-            .log
-            .as_ref()
+        let filter_str = self.log.as_deref();
+
+        // If logging is totally disabled, may as well bail completely.
+        if filter_str == Some("off") {
+            return Ok(None);
+        }
+
+        let env_filter = filter_str
             .map(|directive| directive.parse::<tracing_subscriber::EnvFilter>())
             .transpose()
             .wrap_err_with(|| format!("failed to parse log filter {:?}", self.log))?;
