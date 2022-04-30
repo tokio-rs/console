@@ -1,3 +1,12 @@
+<a name=""></a>
+##  (2022-04-30)
+
+
+#### Features
+
+
+*  add support for `EnvFilter` in `Builder::init` (#337) ([1fe84b72](1fe84b72))
+
 <a name="0.1.4"></a>
 ## 0.1.4  (2022-04-11)
 
