@@ -32,13 +32,19 @@ OPTIONS:
         --log <ENV_FILTER>
             Log level filter for the console's internal diagnostics.
             
-            The console will log to stderr if a log level filter is provided. Since the console
-            application runs interactively, stderr should generally be redirected to a file to avoid
-            interfering with the console's text output.
+            Logs are written to a new file at the path given by the `--log-dir` argument (or its
+            default value), or to the system journal if `systemd-journald` support is enabled.
+            
+            If this is set to 'off' or is not set, no logs will be written.
             
             [default: off]
             
             [env: RUST_LOG=]
+
+        --log-dir <LOG_DIRECTORY>
+            Path to a directory to write the console's internal logs to.
+            
+            [default: /tmp/tokio-console/logs]
 
         --no-colors <no-colors>
             Disable ANSI colors entirely
