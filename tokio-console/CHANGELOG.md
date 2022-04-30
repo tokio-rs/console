@@ -1,3 +1,17 @@
+<a name="0.1.5"></a>
+## 0.1.5 (2022-04-30)
+
+
+#### Bug Fixes
+
+*  always log to a file instead of `stderr` (#340) ([ef39b9a6](ef39b9a6), closes [#339](339))
+
+#### Features
+
+*  add missing configurations to config file (#334) ([472ff52e](472ff52e), closes [#331](331))
+*  emit a parse error a config file contains unknown fields (#330) ([3a67d476](3a67d476))
+
+
 <a name="0.1.4"></a>
 ## 0.1.4 (2022-04-13)
 
