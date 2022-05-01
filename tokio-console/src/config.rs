@@ -130,8 +130,8 @@ impl Serialize for RetainFor {
 #[clap(group = ArgGroup::new("colors").conflicts_with("no-colors"))]
 pub struct ViewOptions {
     /// Disable ANSI colors entirely.
-    #[clap(name = "no-colors", long = "no-colors")]
-    no_colors: Option<bool>,
+    #[clap(name = "no-colors", long = "no-colors", takes_value = false)]
+    no_colors: bool,
 
     /// Overrides the terminal's default language.
     #[clap(long = "lang", env = "LANG")]
@@ -377,7 +377,7 @@ impl ViewOptions {
     /// - Checking the `terminfo` database via `tput`
     pub(crate) fn determine_palette(&self) -> Palette {
         // Did the user explicitly disable colors?
-        if self.no_colors.unwrap_or(true) {
+        if self.no_colors {
             tracing::debug!("colors explicitly disabled by `--no-colors`");
             return Palette::NoColors;
         }
@@ -420,7 +420,7 @@ impl ViewOptions {
 
     fn merge_with(self, command_line: ViewOptions) -> Self {
         Self {
-            no_colors: command_line.no_colors.or(self.no_colors),
+            no_colors: command_line.no_colors || self.no_colors,
             lang: command_line.lang.or(self.lang),
             ascii_only: command_line.ascii_only.or(self.ascii_only),
             truecolor: command_line.truecolor.or(self.truecolor),
@@ -442,7 +442,7 @@ impl ViewOptions {
 impl Default for ViewOptions {
     fn default() -> Self {
         Self {
-            no_colors: Some(false),
+            no_colors: false,
             lang: Some("en_us.UTF8".to_string()),
             ascii_only: Some(false),
             truecolor: Some(true),
@@ -570,7 +570,7 @@ impl From<Config> for ConfigFile {
                 ascii_only: config.view_options.ascii_only,
             }),
             colors: Some(ColorsConfig {
-                enabled: config.view_options.no_colors.map(Not::not),
+                enabled: Some(!config.view_options.no_colors),
                 truecolor: config.view_options.truecolor,
                 palette: config.view_options.palette,
                 enable: Some(config.view_options.toggles),
@@ -589,7 +589,7 @@ impl TryFrom<ConfigFile> for Config {
             log_directory: value.log_directory.take(),
             retain_for: value.retain_for(),
             view_options: ViewOptions {
-                no_colors: value.no_colors(),
+                no_colors: value.no_colors().unwrap_or(false),
                 lang: value
                     .charset
                     .as_ref()

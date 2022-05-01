@@ -270,7 +270,7 @@ dependencies = [
 
 [[package]]
 name = "console-subscriber"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "console-api",
  "crossbeam-channel",
@@ -1430,7 +1430,7 @@ dependencies = [
 
 [[package]]
 name = "tokio-console"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "atty",
  "clap",
