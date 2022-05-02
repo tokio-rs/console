@@ -99,7 +99,11 @@ pub enum OptionalCmd {
 
     /// Generate shell completions
     ///
-    /// It should be saved in expected directory, depending on the shell used
+    /// The completion script will be written to stdout.
+    /// The completion script should be saved in the shell's completion directory.
+    /// This depends on which shell is in use.
+    ///
+    /// For example, using zsh:
     ///
     ///     $ tokio-console gen-completion zsh > $FPATH/_tokio_console
     ///
