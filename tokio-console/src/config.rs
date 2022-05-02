@@ -108,6 +108,8 @@ pub enum OptionalCmd {
     ///     $ tokio-console gen-completion zsh > ~/.zsh_functions/_tokio_console
     ///
     GenCompletion {
+        #[clap(name = "install", long = "install")]
+        install: bool,
         #[clap(arg_enum)]
         shell: Shell,
     },

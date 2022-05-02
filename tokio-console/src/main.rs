@@ -3,7 +3,8 @@ use console_api::tasks::TaskDetails;
 use state::State;
 
 use clap::IntoApp;
-use clap_complete::generate;
+use clap_complete::{generate, Shell};
+use color_eyre::eyre::WrapErr;
 use futures::stream::StreamExt;
 use tokio::sync::{mpsc, watch};
 use tui::{
@@ -36,10 +37,8 @@ async fn main() -> color_eyre::Result<()> {
             println!("{}", toml);
             return Ok(());
         }
-        Some(config::OptionalCmd::GenCompletion { shell }) => {
-            let mut app = config::Config::command();
-            generate(shell, &mut app, "tokio-console", &mut std::io::stdout());
-            return Ok(());
+        Some(config::OptionalCmd::GenCompletion { install, shell }) => {
+            return gen_completion(install, shell);
         }
         None => {}
     }
@@ -223,4 +222,25 @@ async fn watch_details_stream(
             },
         }
     }
+}
+
+fn gen_completion(install: bool, shell: Shell) -> color_eyre::Result<()> {
+    let mut app = config::Config::command();
+    let mut buf: Box<dyn std::io::Write> = if install {
+        let mut home_dir = dirs::home_dir()
+            .ok_or_else(|| color_eyre::eyre::eyre!("fail to find home directory"))?;
+        match shell {
+            Shell::Zsh => {
+                home_dir.push(".zsh_functions/_tokio_console");
+                let f = std::fs::File::create(&home_dir)
+                    .wrap_err_with(|| format!("fail to open {}", home_dir.display()))?;
+                Box::new(std::io::BufWriter::new(f))
+            }
+            _ => color_eyre::eyre::bail!("Not support to install completion script on {}", shell),
+        }
+    } else {
+        Box::new(std::io::stdout())
+    };
+    generate(shell, &mut app, "tokio-console", &mut buf);
+    return Ok(());
 }
