@@ -105,7 +105,7 @@ pub enum OptionalCmd {
     ///
     /// For example, using zsh:
     ///
-    ///     $ tokio-console gen-completion zsh > $FPATH/_tokio_console
+    ///     $ tokio-console gen-completion zsh > ~/.zsh_functions/_tokio_console
     ///
     GenCompletion {
         #[clap(arg_enum)]
