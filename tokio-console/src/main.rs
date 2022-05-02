@@ -29,17 +29,19 @@ mod warnings;
 async fn main() -> color_eyre::Result<()> {
     let mut args = config::Config::parse()?;
 
-    if args.subcmd == Some(config::OptionalCmd::GenConfig) {
-        // Generate a default config file and exit.
-        let toml = args.gen_config_file()?;
-        println!("{}", toml);
-        return Ok(());
-    }
-
-    if let Some(config::OptionalCmd::GenCompletion { shell }) = args.subcmd {
-        let mut app = config::Config::command();
-        generate(shell, &mut app, "tokio-console", &mut std::io::stdout());
-        return Ok(());
+    match args.subcmd {
+        Some(config::OptionalCmd::GenConfig) => {
+            // Generate a default config file and exit.
+            let toml = args.gen_config_file()?;
+            println!("{}", toml);
+            return Ok(());
+        }
+        Some(config::OptionalCmd::GenCompletion { shell }) => {
+            let mut app = config::Config::command();
+            generate(shell, &mut app, "tokio-console", &mut std::io::stdout());
+            return Ok(());
+        }
+        None => {}
     }
 
     let retain_for = args.retain_for();
