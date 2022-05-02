@@ -242,5 +242,5 @@ fn gen_completion(install: bool, shell: Shell) -> color_eyre::Result<()> {
         Box::new(std::io::stdout())
     };
     generate(shell, &mut app, "tokio-console", &mut buf);
-    return Ok(());
+    Ok(())
 }
