@@ -46,7 +46,7 @@ OPTIONS:
             
             [default: /tmp/tokio-console/logs]
 
-        --no-colors <no-colors>
+        --no-colors
             Disable ANSI colors entirely
 
         --no-duration-colors <COLOR_DURATIONS>
