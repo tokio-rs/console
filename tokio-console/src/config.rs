@@ -1,6 +1,6 @@
 use crate::view::Palette;
-use clap::{ArgGroup, Parser as Clap, Subcommand, ValueHint};
-use clap_complete::shells::Shell;
+use clap::{ArgGroup, IntoApp, Parser as Clap, Subcommand, ValueHint};
+use clap_complete::Shell;
 use color_eyre::eyre::WrapErr;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -588,6 +588,21 @@ impl ConfigPath {
             }
         }
     }
+}
+
+/// Generete completion scripts for each specified shell.
+pub fn gen_completion(install: bool, shell: Shell) -> color_eyre::Result<()> {
+    let mut app = Config::command();
+    let mut buf: Box<dyn std::io::Write> = if install {
+        color_eyre::eyre::bail!(
+            "Automatically installing completion scripts is not currently supported on {}",
+            shell
+        )
+    } else {
+        Box::new(std::io::stdout())
+    };
+    clap_complete::generate(shell, &mut app, "tokio-console", &mut buf);
+    Ok(())
 }
 
 #[cfg(test)]

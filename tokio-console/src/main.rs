@@ -2,8 +2,6 @@ use color_eyre::{eyre::eyre, Help, SectionExt};
 use console_api::tasks::TaskDetails;
 use state::State;
 
-use clap::IntoApp;
-use clap_complete::Shell;
 use futures::stream::StreamExt;
 use tokio::sync::{mpsc, watch};
 use tui::{
@@ -37,7 +35,7 @@ async fn main() -> color_eyre::Result<()> {
             return Ok(());
         }
         Some(config::OptionalCmd::GenCompletion { install, shell }) => {
-            return gen_completion(install, shell);
+            return config::gen_completion(install, shell);
         }
         None => {}
     }
@@ -221,17 +219,4 @@ async fn watch_details_stream(
             },
         }
     }
-}
-
-fn gen_completion(install: bool, shell: Shell) -> color_eyre::Result<()> {
-    let mut app = config::Config::command();
-    let mut buf: Box<dyn std::io::Write> = if install {
-        match shell {
-            _ => color_eyre::eyre::bail!("Not support to install completion script on {}", shell),
-        }
-    } else {
-        Box::new(std::io::stdout())
-    };
-    clap_complete::generate(shell, &mut app, "tokio-console", &mut buf);
-    Ok(())
 }
