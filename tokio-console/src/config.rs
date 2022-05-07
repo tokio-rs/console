@@ -102,11 +102,6 @@ pub enum OptionalCmd {
     /// The completion script will be written to stdout.
     /// The completion script should be saved in the shell's completion directory.
     /// This depends on which shell is in use.
-    ///
-    /// For example, using zsh:
-    ///
-    ///     $ tokio-console gen-completion zsh > ~/.zsh_functions/_tokio_console
-    ///
     GenCompletion {
         #[clap(name = "install", long = "install")]
         install: bool,
