@@ -227,15 +227,7 @@ async fn watch_details_stream(
 fn gen_completion(install: bool, shell: Shell) -> color_eyre::Result<()> {
     let mut app = config::Config::command();
     let mut buf: Box<dyn std::io::Write> = if install {
-        let mut home_dir = dirs::home_dir()
-            .ok_or_else(|| color_eyre::eyre::eyre!("fail to find home directory"))?;
         match shell {
-            Shell::Zsh => {
-                home_dir.push(".zsh_functions/_tokio_console");
-                let f = std::fs::File::create(&home_dir)
-                    .wrap_err_with(|| format!("fail to open {}", home_dir.display()))?;
-                Box::new(std::io::BufWriter::new(f))
-            }
             _ => color_eyre::eyre::bail!("Not support to install completion script on {}", shell),
         }
     } else {
