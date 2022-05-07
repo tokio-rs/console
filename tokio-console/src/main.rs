@@ -3,8 +3,7 @@ use console_api::tasks::TaskDetails;
 use state::State;
 
 use clap::IntoApp;
-use clap_complete::{generate, Shell};
-use color_eyre::eyre::WrapErr;
+use clap_complete::Shell;
 use futures::stream::StreamExt;
 use tokio::sync::{mpsc, watch};
 use tui::{
@@ -233,6 +232,6 @@ fn gen_completion(install: bool, shell: Shell) -> color_eyre::Result<()> {
     } else {
         Box::new(std::io::stdout())
     };
-    generate(shell, &mut app, "tokio-console", &mut buf);
+    clap_complete::generate(shell, &mut app, "tokio-console", &mut buf);
     Ok(())
 }
