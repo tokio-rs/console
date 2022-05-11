@@ -30,16 +30,17 @@ parking_lot = ["parking_lot_crate", "tracing-subscriber/parking_lot"]
 env-filter = ["tracing-subscriber/env-filter"]
 
 [dependencies]
-
+once_cell = "1"
 crossbeam-utils = "0.8.7"
 tokio = { version = "^1.15", features = ["sync", "time", "macros", "tracing"] }
 tokio-stream = "0.1"
 thread_local = "1.1.3"
 console-api = { version = "0.2.0", path = "../console-api", features = ["transport"] }
 tonic = { version = "0.7", features = ["transport"] }
-tracing-core = "0.1.24"
+tracing-core = "0.1.29"
 tracing = "0.1.26"
 tracing-subscriber = { version = "0.3.11", default-features = false, features = ["fmt", "registry"] }
+tracing-causality = { version = "0.1.0" }
 futures = { version = "0.3", default-features = false }
 hdrhistogram = { version = "7.3.0", default-features = false, features = ["serialization"] }
 # The parking_lot dependency is renamed, because we want our `parking_lot`
@@ -55,6 +56,7 @@ crossbeam-channel = "0.5"
 
 [dev-dependencies]
 tokio = { version = "^1.7", features = ["full", "rt-multi-thread"] }
+tracing = "0.1.26"
 futures = "0.3"
 
 [package.metadata.docs.rs]

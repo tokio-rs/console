@@ -186,7 +186,7 @@ impl View {
                 let now = state
                     .last_updated_at()
                     .expect("task view implies we've received an update");
-                view.render(&self.styles, frame, area, now);
+                view.render(&self.styles, frame, area, now, state);
             }
             ViewState::ResourceInstance(ref mut view) => {
                 view.render(&self.styles, frame, area, state);

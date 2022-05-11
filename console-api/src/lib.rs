@@ -4,6 +4,8 @@
 pub mod async_ops;
 /// Represents unique id's and Rust source locations.
 mod common;
+/// Represents updates to the causality tree.
+pub mod consequences;
 /// Represents interactions between the console-subscriber and a console client observing it.
 pub mod instrument;
 /// Represents updates to the resources in an async runtime.

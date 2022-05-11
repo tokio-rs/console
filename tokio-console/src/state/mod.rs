@@ -10,7 +10,7 @@ use std::{
     cmp::Ordering,
     collections::hash_map::{Entry, HashMap},
     convert::{TryFrom, TryInto},
-    fmt,
+    fmt::{self, Display},
     io::Cursor,
     rc::Rc,
     time::{Duration, SystemTime},
@@ -24,12 +24,13 @@ use tui::{
 pub mod async_ops;
 pub mod resources;
 pub mod tasks;
+pub mod trace;
 
 pub(crate) type DetailsRef = Rc<RefCell<Option<Details>>>;
 
 #[derive(Default, Debug)]
 pub(crate) struct State {
-    metas: HashMap<u64, Metadata>,
+    pub(crate) metas: HashMap<u64, Metadata>,
     last_updated_at: Option<SystemTime>,
     temporality: Temporality,
     tasks_state: TasksState,
@@ -48,9 +49,19 @@ pub(crate) enum Visibility {
 #[derive(Debug)]
 pub(crate) struct Metadata {
     field_names: Vec<InternedStr>,
-    target: InternedStr,
+    pub(crate) name: InternedStr,
+    pub(crate) target: InternedStr,
+    pub(crate) location: Location,
     id: u64,
     //TODO: add more metadata as needed
+}
+
+#[derive(Debug, Default, Eq, PartialEq)]
+pub(crate) struct Location {
+    file: Option<InternedStr>,
+    module_path: Option<InternedStr>,
+    line: Option<u32>,
+    column: Option<u32>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -218,16 +229,41 @@ impl State {
 
     pub(crate) fn update_task_details(&mut self, update: proto::tasks::TaskDetails) {
         if let Some(id) = update.task_id {
-            let details = Details {
-                span_id: id.id,
-                poll_times_histogram: update.poll_times_histogram.and_then(|data| {
-                    hdrhistogram::serialization::Deserializer::new()
-                        .deserialize(&mut Cursor::new(&data))
-                        .ok()
-                }),
+            let span_id = id.id;
+            let task_id = self.tasks_state.ids.id_for(span_id);
+            let task_ref = self.tasks_state.task(task_id).unwrap();
+            let task_ref = task_ref.upgrade().unwrap();
+            let meta_id = task_ref.borrow().meta_id();
+            let poll_times_histogram = update.poll_times_histogram.and_then(|data| {
+                hdrhistogram::serialization::Deserializer::new()
+                    .deserialize(&mut Cursor::new(&data))
+                    .ok()
+            });
+            let details = self.current_task_details.take();
+            let mut fresh = Details {
+                span_id,
+                poll_times_histogram,
+                causality: details.and_then(|details| details.causality),
             };
 
-            *self.current_task_details.borrow_mut() = Some(details);
+            if let None = fresh.causality {
+                fresh.causality = Some(tracing_causality::Trace::with_root(
+                    tracing_causality::Span {
+                        id: tracing::Id::from_u64(span_id),
+                        metadata: meta_id,
+                    },
+                ));
+            }
+
+            for causal_update in update.causality {
+                for update in trace::updates_from_pb(causal_update.update.unwrap()) {
+                    if let Some(trace) = fresh.causality {
+                        fresh.causality = trace.apply(update);
+                    }
+                }
+            }
+
+            let _ = self.current_task_details.borrow_mut().insert(fresh);
         }
     }
 
@@ -264,9 +300,47 @@ impl Metadata {
                 .into_iter()
                 .map(|n| strings.string(n))
                 .collect(),
+            name: strings.string(pb.name),
             target: strings.string(pb.target),
+            location: pb
+                .location
+                .map(|pb| Location::from_proto(pb, strings))
+                .unwrap_or_default(),
             id,
         }
+    }
+}
+
+// === impl Location ===
+impl Location {
+    fn from_proto(pb: proto::Location, strings: &mut intern::Strings) -> Self {
+        Self {
+            file: pb.file.map(|s| strings.string(s)),
+            module_path: pb.module_path.map(|s| strings.string(s)),
+            line: pb.line,
+            column: pb.column,
+        }
+    }
+}
+
+impl Display for Location {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(file) = &self.file {
+            write!(f, "{file}")?;
+        } else if let Some(module_path) = &self.module_path {
+            write!(f, "{module_path}")?;
+        } else {
+            return write!(f, "Location Unknown");
+        }
+
+        if let Some(line) = self.line {
+            write!(f, ":{line}")?;
+            if let Some(column) = self.column {
+                write!(f, ":{column}")?;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -497,7 +571,7 @@ impl Attribute {
     }
 }
 
-// === impl Ids ===
+// === impl Ids ===a
 
 impl Ids {
     pub(crate) fn id_for(&mut self, span_id: u64) -> u64 {

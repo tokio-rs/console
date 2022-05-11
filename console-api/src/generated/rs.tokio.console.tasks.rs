@@ -46,6 +46,9 @@ pub struct TaskDetails {
     /// HdrHistogram.rs `Histogram` serialized to binary in the V2 format
     #[prost(bytes="vec", optional, tag="3")]
     pub poll_times_histogram: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
+    /// What the task is currently busy doing.
+    #[prost(message, repeated, tag="4")]
+    pub causality: ::prost::alloc::vec::Vec<super::consequences::Causality>,
 }
 /// Data recorded when a new task is spawned.
 #[derive(Clone, PartialEq, ::prost::Message)]

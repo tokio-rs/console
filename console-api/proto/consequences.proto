@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package rs.tokio.console.consequences;
+
+import "common.proto";
+
+message Causality {
+    oneof update {
+        Extant extant = 1;
+        OpenDirect open_direct = 2;
+        NewIndirect new_indirect = 3;
+        CloseDirect close_direct = 4;
+        CloseIndirect close_indirect = 5;
+        CloseCyclic close_cyclic = 6;
+    }
+}
+
+message Span {
+    common.SpanId span_id = 1;
+    common.MetaId metadata_id = 2;
+}
+
+message Extant {
+    Span cause = 1;
+    repeated Span direct_consequences = 2;
+    repeated Span indirect_consequences = 3;
+}
+
+message OpenDirect {
+    Span cause = 1;
+    Span direct_consequences = 2;
+}
+
+message NewIndirect {
+    Span cause = 1;
+    Span indirect_consequences = 3;
+}
+
+message CloseDirect {
+    Span span = 1;
+    optional Span direct_cause = 2;
+}
+
+message CloseIndirect {
+    Span span = 1;
+    repeated Span indirect_causes = 3;
+}
+
+message CloseCyclic {
+    Span span = 1;
+    optional Span direct_cause = 2;
+    repeated Span indirect_causes = 3;
+}

@@ -8,7 +8,7 @@ use std::{
 use tokio::runtime;
 use tracing::Subscriber;
 use tracing_subscriber::{
-    filter::{self, FilterFn},
+    filter,
     layer::{Layer, SubscriberExt},
     prelude::*,
     registry::LookupSpan,
@@ -318,10 +318,8 @@ impl Builder {
                     .expect("`error` filter should always parse successfully")
             });
 
-        let console_layer = self.spawn();
-
         tracing_subscriber::registry()
-            .with(console_layer)
+            .with(self.spawn())
             .with(tracing_subscriber::fmt::layer().with_filter(fmt_filter))
             .init();
     }
@@ -384,26 +382,11 @@ impl Builder {
     #[must_use = "a `Layer` must be added to a `tracing::Subscriber` in order to be used"]
     pub fn spawn<S>(self) -> impl Layer<S>
     where
-        S: Subscriber + for<'a> LookupSpan<'a>,
+        S: Subscriber + for<'s> LookupSpan<'s>,
     {
-        fn console_filter(meta: &tracing::Metadata<'_>) -> bool {
-            // events will have *targets* beginning with "runtime"
-            if meta.is_event() {
-                return meta.target().starts_with("runtime") || meta.target().starts_with("tokio");
-            }
-
-            // spans will have *names* beginning with "runtime". for backwards
-            // compatibility with older Tokio versions, enable anything with the `tokio`
-            // target as well.
-            meta.name().starts_with("runtime.") || meta.target().starts_with("tokio")
-        }
-
         let self_trace = self.self_trace;
 
         let (layer, server) = self.build();
-        let filter =
-            FilterFn::new(console_filter as for<'r, 's> fn(&'r tracing::Metadata<'s>) -> bool);
-        let layer = layer.with_filter(filter);
 
         thread::Builder::new()
             .name("console_subscriber".into())
@@ -570,9 +553,9 @@ pub fn init() {
 #[must_use = "a `Layer` must be added to a `tracing::Subscriber`in order to be used"]
 pub fn spawn<S>() -> impl Layer<S>
 where
-    S: Subscriber + for<'a> LookupSpan<'a>,
+    S: Subscriber + for<'s> LookupSpan<'s>,
 {
-    ConsoleLayer::builder().with_default_env().spawn::<S>()
+    ConsoleLayer::builder().with_default_env().spawn()
 }
 
 fn duration_from_env(var_name: &str) -> Option<Duration> {

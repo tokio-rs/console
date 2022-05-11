@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 static HELP: &str = r#"
 Example console-instrumented app
@@ -15,7 +15,19 @@ OPTIONS:
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    console_subscriber::init();
+    use tracing_subscriber::prelude::*;
+
+    // initialize an underlying `Registry`
+    let registry = Arc::new(tracing_subscriber::registry());
+
+    // spawn the console server in the background,
+    // returning a `Layer`:
+    let console_layer = console_subscriber::spawn(registry.clone());
+
+    // build a `Subscriber` by combining layers with the
+    // `registry`:
+    registry.with(console_layer).init();
+
     // spawn optional extras from CLI args
     // skip first which is command name
     for opt in std::env::args().skip(1) {

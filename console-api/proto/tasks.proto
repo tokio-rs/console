@@ -4,6 +4,7 @@ package rs.tokio.console.tasks;
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
+import "consequences.proto";
 import "common.proto";
 
 // A task state update.
@@ -49,6 +50,9 @@ message TaskDetails {
 
     // HdrHistogram.rs `Histogram` serialized to binary in the V2 format
     optional bytes poll_times_histogram = 3;
+
+    // What the task is currently busy doing.
+    repeated consequences.Causality causality = 4;
 }
 
 // Data recorded when a new task is spawned.

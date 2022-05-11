@@ -14,6 +14,7 @@ use std::{
     rc::{Rc, Weak},
     time::{Duration, SystemTime},
 };
+use tracing_causality::Trace;
 use tui::{style::Color, text::Span};
 
 #[derive(Default, Debug)]
@@ -25,10 +26,11 @@ pub(crate) struct TasksState {
     dropped_events: u64,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct Details {
     pub(crate) span_id: u64,
     pub(crate) poll_times_histogram: Option<Histogram<u64>>,
+    pub(crate) causality: Option<Trace<u64>>,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -66,6 +68,7 @@ pub(crate) struct Task {
     ///
     /// This is used when requesting a task details stream.
     span_id: u64,
+    meta_id: u64,
     short_desc: InternedStr,
     formatted_fields: Vec<Vec<Span<'static>>>,
     stats: TaskStats,
@@ -176,6 +179,7 @@ impl TasksState {
                 name,
                 num,
                 span_id,
+                meta_id,
                 short_desc,
                 formatted_fields,
                 stats,
@@ -246,6 +250,10 @@ impl Task {
 
     pub(crate) fn span_id(&self) -> u64 {
         self.span_id
+    }
+
+    pub(crate) fn meta_id(&self) -> u64 {
+        self.meta_id
     }
 
     pub(crate) fn target(&self) -> &str {

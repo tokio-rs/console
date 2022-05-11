@@ -2,7 +2,7 @@ use crate::{
     input,
     state::{
         tasks::{Details, Task},
-        DetailsRef,
+        DetailsRef, State,
     },
     util::Percentage,
     view::{
@@ -12,6 +12,7 @@ use crate::{
 };
 use std::{
     cell::RefCell,
+    fmt,
     rc::Rc,
     time::{Duration, SystemTime},
 };
@@ -41,6 +42,7 @@ impl TaskView {
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
         now: SystemTime,
+        state: &mut State,
     ) {
         // Rows with the following info:
         // - Task main attributes
@@ -66,7 +68,7 @@ impl TaskView {
             })
             .collect();
 
-        let (controls_area, stats_area, poll_dur_area, fields_area, warnings_area) =
+        let (controls_area, stats_area, poll_dur_area, fields_area, stack_area, warnings_area) =
             if warnings.is_empty() {
                 let chunks = Layout::default()
                     .direction(layout::Direction::Vertical)
@@ -79,12 +81,14 @@ impl TaskView {
                             // poll duration
                             layout::Constraint::Length(9),
                             // fields
-                            layout::Constraint::Percentage(60),
+                            layout::Constraint::Length(3),
+                            // stack
+                            layout::Constraint::Percentage(50),
                         ]
                         .as_ref(),
                     )
                     .split(area);
-                (chunks[0], chunks[1], chunks[2], chunks[3], None)
+                (chunks[0], chunks[1], chunks[2], chunks[3], chunks[4], None)
             } else {
                 let chunks = Layout::default()
                     .direction(layout::Direction::Vertical)
@@ -99,13 +103,22 @@ impl TaskView {
                             // poll duration
                             layout::Constraint::Length(9),
                             // fields
-                            layout::Constraint::Percentage(60),
+                            layout::Constraint::Length(3),
+                            // stack
+                            layout::Constraint::Percentage(50),
                         ]
                         .as_ref(),
                     )
                     .split(area);
 
-                (chunks[0], chunks[2], chunks[3], chunks[4], Some(chunks[1]))
+                (
+                    chunks[0],
+                    chunks[2],
+                    chunks[3],
+                    chunks[4],
+                    chunks[5],
+                    Some(chunks[1]),
+                )
             };
 
         let stats_area = Layout::default()
@@ -254,6 +267,13 @@ impl TaskView {
         let task_widget = Paragraph::new(overview).block(styles.border_block().title("Task"));
         let wakers_widget = Paragraph::new(waker_stats).block(styles.border_block().title("Waker"));
         let fields_widget = Paragraph::new(fields).block(styles.border_block().title("Fields"));
+        let stack_widget = Paragraph::new(
+            details
+                .map(|details| details.make_stack_widget(styles, state))
+                .unwrap_or_default(),
+        )
+        .wrap(tui::widgets::Wrap { trim: true })
+        .block(styles.border_block().title("Stack"));
         let percentiles_widget = Paragraph::new(
             details
                 .map(|details| details.make_percentiles_widget(styles))
@@ -265,6 +285,7 @@ impl TaskView {
         frame.render_widget(task_widget, stats_area[0]);
         frame.render_widget(wakers_widget, stats_area[1]);
         frame.render_widget(fields_widget, fields_area);
+        frame.render_widget(stack_widget, stack_area);
         frame.render_widget(percentiles_widget, percentiles_area);
     }
 }
@@ -332,6 +353,21 @@ impl Details {
         text.extend(percentiles);
         text
     }
+
+    /// Render the consequences as an ascii tree.
+    fn make_stack_widget(&self, styles: &view::Styles, state: &State) -> Text<'static> {
+        // XXX(jswrenn): also implement an ASCII-only rendering mode
+        let mut buf = String::new();
+        if let Some(causality) = self.causality.as_ref() {
+            let root = causality.root().clone();
+            display(&mut buf, styles, state, causality, &root, true, "").unwrap();
+        } else {
+            buf.push_str(
+                "An unexpected error prevents us from showing consequences for this task.",
+            );
+        }
+        Text::from(buf)
+    }
 }
 
 fn dur(styles: &view::Styles, dur: std::time::Duration) -> Span<'static> {
@@ -340,4 +376,57 @@ fn dur(styles: &view::Styles, dur: std::time::Duration) -> Span<'static> {
     // there a way to just give TUI a `fmt::Debug` implementation, or does it
     // have to be given a string in order to do layout stuff?
     styles.time_units(format!("{:.prec$?}", dur, prec = DUR_PRECISION))
+}
+
+fn display<W: fmt::Write>(
+    mut f: &mut W,
+    styles: &view::Styles,
+    state: &State,
+    tree: &tracing_causality::Trace<u64>,
+    root: &tracing_causality::Span<u64>,
+    is_last: bool,
+    prefix: &str,
+) -> fmt::Result {
+    let metadata = state.metas.get(&root.metadata);
+
+    let name = metadata
+        .map(|meta| format!("{}", meta.name.to_string()))
+        .unwrap_or(format!("{:?}", root));
+
+    let location = metadata
+        .map(|meta| format!(" ({})", meta.location))
+        .unwrap_or("".to_string());
+
+    let root_fmt = format!("{}{}", name, location);
+
+    let current;
+    let next;
+
+    if is_last {
+        let pipes = if styles.utf8 { "└─" } else { "`-" };
+        current = format!("{prefix}{pipes}\u{a0}{root_fmt}");
+        next = format!("{}\u{a0}\u{a0}\u{a0}", prefix);
+    } else {
+        let pipes = if styles.utf8 { "├─" } else { "|-" };
+        current = format!("{prefix}{pipes}\u{a0}{root_fmt}");
+        next = format!("{}│\u{a0}\u{a0}", prefix);
+    }
+
+    writeln!(&mut f, "{}", {
+        let mut current = current.chars();
+        current.next().unwrap();
+        current.next().unwrap();
+        &current.as_str()
+    })?;
+
+    if let Some(consequences) = tree.consequences(root) {
+        let direct = consequences.iter_direct();
+        let len = direct.len();
+        for (i, consequence) in direct.enumerate() {
+            let is_last = i == len - 1;
+            display(f, styles, state, tree, &consequence, is_last, &next)?;
+        }
+    }
+
+    Ok(())
 }

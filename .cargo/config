@@ -1,2 +1,4 @@
+paths = ["/home/jswrenn/projects/tracing"]
+
 [build]
 rustflags = ["--cfg", "tokio_unstable"]
