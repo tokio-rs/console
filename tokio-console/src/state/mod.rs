@@ -11,7 +11,6 @@ use std::{
     collections::hash_map::{Entry, HashMap},
     convert::{TryFrom, TryInto},
     fmt,
-    io::Cursor,
     rc::Rc,
     time::{Duration, SystemTime},
 };
@@ -22,6 +21,7 @@ use tui::{
 };
 
 pub mod async_ops;
+pub mod histogram;
 pub mod resources;
 pub mod tasks;
 
@@ -220,11 +220,10 @@ impl State {
         if let Some(id) = update.task_id {
             let details = Details {
                 span_id: id.id,
-                poll_times_histogram: update.poll_times_histogram.and_then(|data| {
-                    hdrhistogram::serialization::Deserializer::new()
-                        .deserialize(&mut Cursor::new(&data))
-                        .ok()
-                }),
+                poll_times_histogram: update
+                    .poll_times_histogram
+                    .as_ref()
+                    .and_then(histogram::DurationHistogram::from_poll_durations),
             };
 
             *self.current_task_details.borrow_mut() = Some(details);

@@ -1,12 +1,14 @@
 use crate::{
     intern::{self, InternedStr},
-    state::{format_location, pb_duration, Field, Ids, Metadata, Visibility},
+    state::{
+        format_location, histogram::DurationHistogram, pb_duration, Field, Ids, Metadata,
+        Visibility,
+    },
     util::Percentage,
     view,
     warnings::Linter,
 };
 use console_api as proto;
-use hdrhistogram::Histogram;
 use std::{
     cell::RefCell,
     collections::HashMap,
@@ -28,7 +30,7 @@ pub(crate) struct TasksState {
 #[derive(Debug, Default)]
 pub(crate) struct Details {
     pub(crate) span_id: u64,
-    pub(crate) poll_times_histogram: Option<Histogram<u64>>,
+    pub(crate) poll_times_histogram: Option<DurationHistogram>,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -234,7 +236,7 @@ impl Details {
         self.span_id
     }
 
-    pub(crate) fn poll_times_histogram(&self) -> Option<&Histogram<u64>> {
+    pub(crate) fn poll_times_histogram(&self) -> Option<&DurationHistogram> {
         self.poll_times_histogram.as_ref()
     }
 }
