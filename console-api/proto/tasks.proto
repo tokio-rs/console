@@ -47,8 +47,18 @@ message TaskDetails {
     // The timestamp for when the update to the task took place.
     google.protobuf.Timestamp now = 2;
 
-    // HdrHistogram.rs `Histogram` serialized to binary in the V2 format
-    optional bytes poll_times_histogram = 3;
+    // A histogram of task poll durations.
+    //
+    // This is either:
+    // - the raw binary representation of a HdrHistogram.rs `Histogram`
+    //   serialized to binary in the V2 format (legacy)
+    // - a binary histogram plus details on outliers (current)
+    oneof poll_times_histogram {
+        // HdrHistogram.rs `Histogram` serialized to binary in the V2 format
+        bytes legacy_histogram = 3;
+        // A histogram plus additional data.
+        DurationHistogram histogram = 4;
+    }
 }
 
 // Data recorded when a new task is spawned.
@@ -120,4 +130,22 @@ message Stats {
     common.PollStats poll_stats = 7;
     // The total number of times this task has woken itself.
     uint64 self_wakes = 8;
+}
+
+
+message DurationHistogram {
+
+    // HdrHistogram.rs `Histogram` serialized to binary in the V2 format
+    bytes raw_histogram = 1;
+
+    // The histogram's maximum value.
+    uint64 max_value = 2;
+
+    // The number of outliers which have exceeded the histogram's maximum value.
+    uint64 high_outliers = 3;
+
+    // The highest recorded outlier. This is only present if `high_outliers` is
+    // greater than zero.
+    optional uint64 highest_outlier = 4;
+
 }

@@ -42,6 +42,12 @@ pub struct Builder {
 
     /// Whether to trace events coming from the subscriber thread
     self_trace: bool,
+
+    /// The maximum value for the task poll duration histogram.
+    ///
+    /// Any polls exceeding this duration will be clamped to this value. Higher
+    /// values will result in more memory usage.
+    pub(super) poll_duration_max: Duration,
 }
 
 impl Default for Builder {
@@ -51,6 +57,7 @@ impl Default for Builder {
             client_buffer_capacity: ConsoleLayer::DEFAULT_CLIENT_BUFFER_CAPACITY,
             publish_interval: ConsoleLayer::DEFAULT_PUBLISH_INTERVAL,
             retention: ConsoleLayer::DEFAULT_RETENTION,
+            poll_duration_max: ConsoleLayer::DEFAULT_POLL_DURATION_MAX,
             server_addr: SocketAddr::new(Server::DEFAULT_IP, Server::DEFAULT_PORT),
             recording_path: None,
             filter_env_var: "RUST_LOG".to_string(),
@@ -176,6 +183,22 @@ impl Builder {
     pub fn filter_env_var(self, filter_env_var: impl Into<String>) -> Self {
         Self {
             filter_env_var: filter_env_var.into(),
+            ..self
+        }
+    }
+
+    /// Sets the maximum value for task poll duration histograms.
+    ///
+    /// Any poll durations exceeding this value will be clamped down to this
+    /// duration and recorded as an outlier.
+    ///
+    /// By default, this is [one second]. Higher values will increase per-task
+    /// memory usage.
+    ///
+    /// [one second]: ConsoleLayer::DEFAULT_POLL_DURATION_MAX
+    pub fn poll_duration_histogram_max(self, max: Duration) -> Self {
+        Self {
+            poll_duration_max: max,
             ..self
         }
     }

@@ -41,6 +41,9 @@ pub(crate) struct HistogramMetadata {
     pub(crate) max_bucket: u64,
     /// The value of the bucket with the smallest quantity
     pub(crate) min_bucket: u64,
+    /// Number of high outliers, if any
+    pub(crate) high_outliers: u64,
+    pub(crate) highest_outlier: Option<Duration>,
 }
 
 impl<'a> Default for MiniHistogram<'a> {
@@ -95,13 +98,19 @@ impl<'a> Widget for MiniHistogram<'a> {
             min_qty_label,
         );
 
+        let legend_height = if self.metadata.high_outliers > 0 {
+            2
+        } else {
+            1
+        };
+
         // Shrink the bars area by 1 row from the bottom
         // and `y_axis_label_width` columns from the left.
         let bars_area = Rect {
             x: inner_area.x + y_axis_label_width,
             y: inner_area.y,
             width: inner_area.width - y_axis_label_width,
-            height: inner_area.height - 1,
+            height: inner_area.height - legend_height,
         };
         self.render_bars(bars_area, buf);
     }
@@ -117,27 +126,47 @@ impl<'a> MiniHistogram<'a> {
         max_qty_label: String,
         min_qty_label: String,
     ) {
+        // If there are outliers, display a note
+        let labels_pos = if self.metadata.high_outliers > 0 {
+            let outliers = format!(
+                "{} outliers (highest: {:?})",
+                self.metadata.high_outliers,
+                self.metadata
+                    .highest_outlier
+                    .expect("if there are outliers, the highest should be set")
+            );
+            buf.set_string(
+                area.right() - outliers.len() as u16,
+                area.bottom() - 1,
+                &outliers,
+                Style::default(),
+            );
+            2
+        } else {
+            1
+        };
+
         // top left: max quantity
         buf.set_string(area.left(), area.top(), &max_qty_label, Style::default());
         // bottom left: 0 aligned to right
         let zero_label = format!("{:>width$}", &min_qty_label, width = max_qty_label.len());
         buf.set_string(
             area.left(),
-            area.bottom() - 2,
+            area.bottom() - labels_pos,
             &zero_label,
             Style::default(),
         );
         // bottom left below the chart: min time
         buf.set_string(
             area.left() + max_qty_label.len() as u16,
-            area.bottom() - 1,
+            area.bottom() - labels_pos,
             &min_record_label,
             Style::default(),
         );
         // bottom right: max time
         buf.set_string(
             area.right() - max_record_label.len() as u16,
-            area.bottom() - 1,
+            area.bottom() - labels_pos,
             &max_record_label,
             Style::default(),
         );

@@ -43,9 +43,32 @@ pub struct TaskDetails {
     /// The timestamp for when the update to the task took place.
     #[prost(message, optional, tag="2")]
     pub now: ::core::option::Option<::prost_types::Timestamp>,
-    /// HdrHistogram.rs `Histogram` serialized to binary in the V2 format
-    #[prost(bytes="vec", optional, tag="3")]
-    pub poll_times_histogram: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
+    /// A histogram of task poll durations.
+    ///
+    /// This is either:
+    /// - the raw binary representation of a HdrHistogram.rs `Histogram`
+    ///   serialized to binary in the V2 format (legacy)
+    /// - a binary histogram plus details on outliers (current)
+    #[prost(oneof="task_details::PollTimesHistogram", tags="3, 4")]
+    pub poll_times_histogram: ::core::option::Option<task_details::PollTimesHistogram>,
+}
+/// Nested message and enum types in `TaskDetails`.
+pub mod task_details {
+    /// A histogram of task poll durations.
+    ///
+    /// This is either:
+    /// - the raw binary representation of a HdrHistogram.rs `Histogram`
+    ///   serialized to binary in the V2 format (legacy)
+    /// - a binary histogram plus details on outliers (current)
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum PollTimesHistogram {
+        /// HdrHistogram.rs `Histogram` serialized to binary in the V2 format
+        #[prost(bytes, tag="3")]
+        LegacyHistogram(::prost::alloc::vec::Vec<u8>),
+        /// A histogram plus additional data.
+        #[prost(message, tag="4")]
+        Histogram(super::DurationHistogram),
+    }
 }
 /// Data recorded when a new task is spawned.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -132,4 +155,20 @@ pub struct Stats {
     /// The total number of times this task has woken itself.
     #[prost(uint64, tag="8")]
     pub self_wakes: u64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DurationHistogram {
+    /// HdrHistogram.rs `Histogram` serialized to binary in the V2 format
+    #[prost(bytes="vec", tag="1")]
+    pub raw_histogram: ::prost::alloc::vec::Vec<u8>,
+    /// The histogram's maximum value.
+    #[prost(uint64, tag="2")]
+    pub max_value: u64,
+    /// The number of outliers which have exceeded the histogram's maximum value.
+    #[prost(uint64, tag="3")]
+    pub high_outliers: u64,
+    /// The highest recorded outlier. This is only present if `high_outliers` is
+    /// greater than zero.
+    #[prost(uint64, optional, tag="4")]
+    pub highest_outlier: ::core::option::Option<u64>,
 }
