@@ -1,10 +1,10 @@
 [package]
 name = "tokio-console"
-version = "0.1.4"
+version = "0.1.5"
 license = "MIT"
 repository = "https://github.com/tokio-rs/console"
 edition = "2021"
-rust-version = "1.56.0"
+rust-version = "1.58.0"
 authors = ["Eliza Weisman <eliza@buoyant.io>", "Tokio Contributors <team@tokio.rs>",]
 readme = "README.md"
 homepage = "https://github.com/tokio-rs/console/tree/main/tokio-console" 
@@ -27,7 +27,7 @@ keywords = [
 
 [dependencies]
 atty = "0.2"
-console-api = { version = "0.2.0", path = "../console-api", features = ["transport"] }
+console-api = { version = "0.3.0", path = "../console-api", features = ["transport"] }
 clap = { version = "3", features = ["cargo", "derive", "env"] }
 tokio = { version = "1", features = ["full", "rt-multi-thread"] }
 tonic = { version = "0.7", features = ["transport"] }

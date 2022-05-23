@@ -114,6 +114,11 @@ pub struct ConsoleLayer {
     /// Used to anchor monotonic timestamps to a base `SystemTime`, to produce a
     /// timestamp that can be sent over the wire or recorded to JSON.
     base_time: stats::TimeAnchor,
+
+    /// Maximum value for the poll time histogram.
+    ///
+    /// By default, this is one second.
+    max_poll_duration_nanos: u64,
 }
 
 /// A gRPC [`Server`] that implements the [`tokio-console` wire format][wire].
@@ -263,6 +268,7 @@ impl ConsoleLayer {
             ?config.server_addr,
             ?config.recording_path,
             ?config.filter_env_var,
+            ?config.poll_duration_max,
             ?base_time,
             "configured console subscriber"
         );
@@ -299,6 +305,7 @@ impl ConsoleLayer {
             async_op_state_update_callsites: Callsites::default(),
             recorder,
             base_time,
+            max_poll_duration_nanos: config.poll_duration_max.as_nanos() as u64,
         };
         (layer, server)
     }
@@ -345,6 +352,14 @@ impl ConsoleLayer {
     ///
     /// [environment variable]: `Builder::with_default_env`
     pub const DEFAULT_RETENTION: Duration = Duration::from_secs(60 * 60);
+
+    /// The default maximum value for task poll duration histograms.
+    ///
+    /// Any poll duration exceeding this will be clamped to this value. By
+    /// default, the maximum poll duration is one second.
+    ///
+    /// See also [`Builder::poll_duration_histogram_max`].
+    pub const DEFAULT_POLL_DURATION_MAX: Duration = Duration::from_secs(1);
 
     fn is_spawn(&self, meta: &'static Metadata<'static>) -> bool {
         self.spawn_callsites.contains(meta)
@@ -548,7 +563,7 @@ where
                 fields: record::SerializeFields(fields.clone()),
             });
             if let Some(stats) = self.send_stats(&self.shared.dropped_tasks, move || {
-                let stats = Arc::new(stats::TaskStats::new(at));
+                let stats = Arc::new(stats::TaskStats::new(self.max_poll_duration_nanos, at));
                 let event = Event::Spawn {
                     id: id.clone(),
                     stats: stats.clone(),

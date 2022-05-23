@@ -326,7 +326,7 @@ impl Aggregator {
                 && subscription.update(&proto::tasks::TaskDetails {
                     task_id: Some(id.clone().into()),
                     now,
-                    poll_times_histogram: stats.serialize_histogram(),
+                    poll_times_histogram: Some(stats.poll_duration_histogram()),
                 })
             {
                 self.details_watchers
@@ -373,7 +373,7 @@ impl Aggregator {
                 let details = proto::tasks::TaskDetails {
                     task_id: Some(id.clone().into()),
                     now: Some(self.base_time.to_timestamp(Instant::now())),
-                    poll_times_histogram: task_stats.serialize_histogram(),
+                    poll_times_histogram: Some(task_stats.poll_duration_histogram()),
                 };
                 watchers.retain(|watch| watch.update(&details));
                 !watchers.is_empty()

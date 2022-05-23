@@ -32,13 +32,21 @@ pub struct Config {
 
     /// Log level filter for the console's internal diagnostics.
     ///
-    /// The console will log to stderr if a log level filter is provided. Since
-    /// the console application runs interactively, stderr should generally be
-    /// redirected to a file to avoid interfering with the console's text output.
+    /// Logs are written to a new file at the path given by the `--log-dir`
+    /// argument (or its default value), or to the system journal if
+    /// `systemd-journald` support is enabled.
+    ///
+    /// If this is set to 'off' or is not set, no logs will be written.
     ///
     /// [default: off]
     #[clap(long = "log", env = "RUST_LOG")]
     pub(crate) env_filter: Option<tracing_subscriber::EnvFilter>,
+
+    /// Path to a directory to write the console's internal logs to.
+    ///
+    /// [default: /tmp/tokio-console/logs]
+    #[clap(long = "log-dir", value_hint = ValueHint::DirPath)]
+    pub(crate) log_directory: Option<PathBuf>,
 
     #[clap(flatten)]
     pub(crate) view_options: ViewOptions,
@@ -135,8 +143,8 @@ impl Serialize for RetainFor {
 #[clap(group = ArgGroup::new("colors").conflicts_with("no-colors"))]
 pub struct ViewOptions {
     /// Disable ANSI colors entirely.
-    #[clap(name = "no-colors", long = "no-colors")]
-    no_colors: Option<bool>,
+    #[clap(name = "no-colors", long = "no-colors", takes_value = false)]
+    no_colors: bool,
 
     /// Overrides the terminal's default language.
     #[clap(long = "lang", env = "LANG")]
@@ -192,6 +200,7 @@ pub struct ColorToggles {
 struct ConfigFile {
     default_target_addr: Option<String>,
     log: Option<String>,
+    log_directory: Option<PathBuf>,
     retention: Option<RetainFor>,
     charset: Option<CharsetConfig>,
     colors: Option<ColorsConfig>,
@@ -241,8 +250,13 @@ impl Config {
     }
 
     pub fn trace_init(&mut self) -> color_eyre::Result<()> {
-        let filter = std::mem::take(&mut self.env_filter);
         use tracing_subscriber::prelude::*;
+        let filter = match self.env_filter.take() {
+            // if logging is totally disabled, don't bother even constructing
+            // the subscriber
+            None => return Ok(()),
+            Some(filter) => filter,
+        };
 
         // If we're on a Linux distro with journald, try logging to the system
         // journal so we don't interfere with text output.
@@ -256,13 +270,41 @@ impl Config {
         #[cfg(not(all(feature = "tracing-journald", target_os = "linux")))]
         let should_fmt = true;
 
-        // Otherwise, log to stderr and rely on the user redirecting output.
+        // Otherwise, log to a file.
         let fmt = if should_fmt {
-            Some(
-                tracing_subscriber::fmt::layer()
-                    .with_writer(std::io::stderr)
-                    .with_ansi(atty::is(atty::Stream::Stderr)),
-            )
+            let dir = self
+                .log_directory
+                .take()
+                .unwrap_or_else(default_log_directory);
+
+            // first ensure that the log directory exists
+            fs::create_dir_all(&dir)
+                .with_context(|| format!("creating log directory '{}'", dir.display()))?;
+            color_eyre::eyre::ensure!(
+                dir.is_dir(),
+                "log directory path '{}' is not a directory",
+                dir.display()
+            );
+
+            // now, open a log file
+            let now = std::time::SystemTime::now();
+            // format the current time in a way that's appropriate for a
+            // filename (strip the `:` character, as it is an invalid filename
+            // char on windows)
+            let filename =
+                format!("{}.log", humantime::format_rfc3339_seconds(now)).replace(':', "");
+            let path = dir.join(filename);
+            let file = fs::File::options()
+                .create_new(true)
+                .write(true)
+                .open(&path)
+                .with_context(|| format!("creating log file '{}'", path.display()))?;
+
+            // finally, construct a `fmt` layer to write to that log file
+            let fmt = tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(file);
+            Some(fmt)
         } else {
             None
         };
@@ -296,6 +338,7 @@ impl Config {
 
     fn merge_with(self, other: Self) -> Self {
         Self {
+            log_directory: other.log_directory.or(self.log_directory),
             target_addr: other.target_addr.or(self.target_addr),
             env_filter: other.env_filter.or(self.env_filter),
             retain_for: other.retain_for.or(self.retain_for),
@@ -310,6 +353,7 @@ impl Default for Config {
         Self {
             target_addr: Some(default_target_addr()),
             env_filter: Some(tracing_subscriber::EnvFilter::new("off")),
+            log_directory: Some(default_log_directory()),
             retain_for: Some(RetainFor(Some(Duration::from_secs(6)))),
             view_options: ViewOptions::default(),
             subcmd: None,
@@ -321,6 +365,10 @@ fn default_target_addr() -> Uri {
     "http://127.0.0.1:6669"
         .parse::<Uri>()
         .expect("default target address should be a valid URI")
+}
+
+fn default_log_directory() -> PathBuf {
+    ["/", "tmp", "tokio-console", "logs"].iter().collect()
 }
 
 // === impl ViewOptions ===
@@ -342,7 +390,7 @@ impl ViewOptions {
     /// - Checking the `terminfo` database via `tput`
     pub(crate) fn determine_palette(&self) -> Palette {
         // Did the user explicitly disable colors?
-        if self.no_colors.unwrap_or(true) {
+        if self.no_colors {
             tracing::debug!("colors explicitly disabled by `--no-colors`");
             return Palette::NoColors;
         }
@@ -385,7 +433,7 @@ impl ViewOptions {
 
     fn merge_with(self, command_line: ViewOptions) -> Self {
         Self {
-            no_colors: command_line.no_colors.or(self.no_colors),
+            no_colors: command_line.no_colors || self.no_colors,
             lang: command_line.lang.or(self.lang),
             ascii_only: command_line.ascii_only.or(self.ascii_only),
             truecolor: command_line.truecolor.or(self.truecolor),
@@ -407,7 +455,7 @@ impl ViewOptions {
 impl Default for ViewOptions {
     fn default() -> Self {
         Self {
-            no_colors: Some(false),
+            no_colors: false,
             lang: Some("en_us.UTF8".to_string()),
             ascii_only: Some(false),
             truecolor: Some(true),
@@ -486,9 +534,14 @@ impl ConfigFile {
     }
 
     fn env_filter(&self) -> color_eyre::Result<Option<tracing_subscriber::EnvFilter>> {
-        let env_filter = self
-            .log
-            .as_ref()
+        let filter_str = self.log.as_deref();
+
+        // If logging is totally disabled, may as well bail completely.
+        if filter_str == Some("off") {
+            return Ok(None);
+        }
+
+        let env_filter = filter_str
             .map(|directive| directive.parse::<tracing_subscriber::EnvFilter>())
             .transpose()
             .wrap_err_with(|| format!("failed to parse log filter {:?}", self.log))?;
@@ -523,13 +576,14 @@ impl From<Config> for ConfigFile {
         Self {
             default_target_addr: config.target_addr.map(|addr| addr.to_string()),
             log: config.env_filter.map(|filter| filter.to_string()),
+            log_directory: config.log_directory,
             retention: config.retain_for,
             charset: Some(CharsetConfig {
                 lang: config.view_options.lang,
                 ascii_only: config.view_options.ascii_only,
             }),
             colors: Some(ColorsConfig {
-                enabled: config.view_options.no_colors.map(Not::not),
+                enabled: Some(!config.view_options.no_colors),
                 truecolor: config.view_options.truecolor,
                 palette: config.view_options.palette,
                 enable: Some(config.view_options.toggles),
@@ -541,13 +595,14 @@ impl From<Config> for ConfigFile {
 impl TryFrom<ConfigFile> for Config {
     type Error = color_eyre::eyre::Error;
 
-    fn try_from(value: ConfigFile) -> Result<Self, Self::Error> {
+    fn try_from(mut value: ConfigFile) -> Result<Self, Self::Error> {
         Ok(Config {
             target_addr: value.target_addr()?,
             env_filter: value.env_filter()?,
+            log_directory: value.log_directory.take(),
             retain_for: value.retain_for(),
             view_options: ViewOptions {
-                no_colors: value.no_colors(),
+                no_colors: value.no_colors().unwrap_or(false),
                 lang: value
                     .charset
                     .as_ref()
@@ -659,6 +714,8 @@ mod tests {
     }
 
     #[test]
+    // The example output includes paths, so skip this test on windows. :/
+    #[cfg_attr(windows, ignore)]
     fn toml_example_changed() {
         // Override env vars that may effect the defaults.
         clobber_env_vars();

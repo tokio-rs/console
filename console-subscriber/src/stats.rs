@@ -1,8 +1,8 @@
 use crate::{attribute, sync::Mutex, ToProto};
 use crossbeam_utils::atomic::AtomicCell;
 use hdrhistogram::{
+    self,
     serialization::{Serializer, V2Serializer},
-    Histogram,
 };
 use std::cmp;
 use std::sync::{
@@ -65,7 +65,7 @@ pub(crate) struct TaskStats {
     self_wakes: AtomicUsize,
 
     /// Poll durations and other stats.
-    poll_stats: PollStats,
+    poll_stats: PollStats<Histogram>,
 }
 
 /// Stats associated with an async operation.
@@ -85,7 +85,7 @@ pub(crate) struct AsyncOpStats {
     pub(crate) stats: ResourceStats,
 
     /// Poll durations and other stats.
-    poll_stats: PollStats,
+    poll_stats: PollStats<()>,
 }
 
 /// Stats associated with a resource.
@@ -107,21 +107,33 @@ struct TaskTimestamps {
 }
 
 #[derive(Debug, Default)]
-struct PollStats {
+struct PollStats<H> {
     /// The number of polls in progress
     current_polls: AtomicUsize,
     /// The total number of polls
     polls: AtomicUsize,
-    timestamps: Mutex<PollTimestamps>,
+    timestamps: Mutex<PollTimestamps<H>>,
 }
 
 #[derive(Debug, Default)]
-struct PollTimestamps {
+struct PollTimestamps<H> {
     first_poll: Option<Instant>,
     last_poll_started: Option<Instant>,
     last_poll_ended: Option<Instant>,
     busy_time: Duration,
-    histogram: Option<Histogram<u64>>,
+    histogram: H,
+}
+
+#[derive(Debug)]
+struct Histogram {
+    histogram: hdrhistogram::Histogram<u64>,
+    max: u64,
+    outliers: u64,
+    max_outlier: Option<u64>,
+}
+
+trait RecordPoll {
+    fn record_poll_duration(&mut self, duration: Duration);
 }
 
 impl TimeAnchor {
@@ -145,10 +157,7 @@ impl TimeAnchor {
 }
 
 impl TaskStats {
-    pub(crate) fn new(created_at: Instant) -> Self {
-        // significant figures should be in the [0-5] range and memory usage
-        // grows exponentially with higher a sigfig
-        let poll_times_histogram = Histogram::<u64>::new(2).unwrap();
+    pub(crate) fn new(poll_duration_max: u64, created_at: Instant) -> Self {
         Self {
             is_dirty: AtomicBool::new(true),
             is_dropped: AtomicBool::new(false),
@@ -156,10 +165,14 @@ impl TaskStats {
             timestamps: Mutex::new(TaskTimestamps::default()),
             poll_stats: PollStats {
                 timestamps: Mutex::new(PollTimestamps {
-                    histogram: Some(poll_times_histogram),
-                    ..Default::default()
+                    histogram: Histogram::new(poll_duration_max),
+                    first_poll: None,
+                    last_poll_started: None,
+                    last_poll_ended: None,
+                    busy_time: Duration::new(0, 0),
                 }),
-                ..Default::default()
+                current_polls: AtomicUsize::new(0),
+                polls: AtomicUsize::new(0),
             },
             wakes: AtomicUsize::new(0),
             waker_clones: AtomicUsize::new(0),
@@ -228,18 +241,14 @@ impl TaskStats {
         self.make_dirty();
     }
 
+    pub(crate) fn poll_duration_histogram(&self) -> proto::tasks::task_details::PollTimesHistogram {
+        let hist = self.poll_stats.timestamps.lock().histogram.to_proto();
+        proto::tasks::task_details::PollTimesHistogram::Histogram(hist)
+    }
+
     #[inline]
     fn make_dirty(&self) {
         self.is_dirty.swap(true, AcqRel);
-    }
-
-    pub(crate) fn serialize_histogram(&self) -> Option<Vec<u8>> {
-        let poll_timestamps = self.poll_stats.timestamps.lock();
-        let histogram = poll_timestamps.histogram.as_ref()?;
-        let mut serializer = V2Serializer::new();
-        let mut buf = Vec::new();
-        serializer.serialize(histogram, &mut buf).ok()?;
-        Some(buf)
     }
 }
 
@@ -456,7 +465,7 @@ impl ToProto for ResourceStats {
 
 // === impl PollStats ===
 
-impl PollStats {
+impl<H: RecordPoll> PollStats<H> {
     fn start_poll(&self, at: Instant) {
         if self.current_polls.fetch_add(1, AcqRel) == 0 {
             // We are starting the first poll
@@ -503,18 +512,13 @@ impl PollStats {
         };
 
         // if we have a poll time histogram, add the timestamp
-        if let Some(ref mut histogram) = timestamps.histogram {
-            let elapsed_ns = elapsed.as_nanos().try_into().unwrap_or(u64::MAX);
-            histogram
-                .record(elapsed_ns)
-                .expect("failed to record histogram for some kind of reason");
-        }
+        timestamps.histogram.record_poll_duration(elapsed);
 
         timestamps.busy_time += elapsed;
     }
 }
 
-impl ToProto for PollStats {
+impl<H> ToProto for PollStats<H> {
     type Output = proto::PollStats;
 
     fn to_proto(&self, base_time: &TimeAnchor) -> Self::Output {
@@ -555,5 +559,58 @@ impl<T: ToProto> ToProto for Arc<T> {
     type Output = T::Output;
     fn to_proto(&self, base_time: &TimeAnchor) -> T::Output {
         T::to_proto(self, base_time)
+    }
+}
+
+// === impl Histogram ===
+
+impl Histogram {
+    fn new(max: u64) -> Self {
+        // significant figures should be in the [0-5] range and memory usage
+        // grows exponentially with higher a sigfig
+        let histogram = hdrhistogram::Histogram::new_with_max(max, 2).unwrap();
+        Self {
+            histogram,
+            max,
+            max_outlier: None,
+            outliers: 0,
+        }
+    }
+
+    fn to_proto(&self) -> proto::tasks::DurationHistogram {
+        let mut serializer = V2Serializer::new();
+        let mut raw_histogram = Vec::new();
+        serializer
+            .serialize(&self.histogram, &mut raw_histogram)
+            .expect("histogram failed to serialize");
+        proto::tasks::DurationHistogram {
+            raw_histogram,
+            max_value: self.max,
+            high_outliers: self.outliers,
+            highest_outlier: self.max_outlier,
+        }
+    }
+}
+
+impl RecordPoll for Histogram {
+    fn record_poll_duration(&mut self, duration: Duration) {
+        let mut duration_ns = duration.as_nanos() as u64;
+
+        // clamp the duration to the histogram's max value
+        if duration_ns > self.max {
+            self.outliers += 1;
+            self.max_outlier = cmp::max(self.max_outlier, Some(duration_ns));
+            duration_ns = self.max;
+        }
+
+        self.histogram
+            .record(duration_ns)
+            .expect("duration has already been clamped to histogram max value")
+    }
+}
+
+impl RecordPoll for () {
+    fn record_poll_duration(&mut self, _: Duration) {
+        // do nothing
     }
 }
