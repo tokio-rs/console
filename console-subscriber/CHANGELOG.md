@@ -1,5 +1,18 @@
-<a name=""></a>
-##  (2022-04-30)
+<a name="0.1.6"></a>
+## 0.1.6 (2022-05-23)
+
+
+#### Features
+
+*  add `Builder::poll_duration_histogram_max` (#351) ([a966feb3](a966feb3))
+
+#### Bug Fixes
+
+*  fix memory leak from resizing histograms (#351) ([32dd3376](32dd3376), closes [#350](350))
+
+
+<a name="0.1.5"></a>
+## 0.1.5 (2022-04-30)
 
 
 #### Features
