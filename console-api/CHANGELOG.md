@@ -1,4 +1,17 @@
-<a name=""></a>
+<a name="0.3.0"></a>
+## 0.3.0 (2022-05-23)
+
+
+#### Features
+
+*  add optional histogram outlier details (#351) ([46115913](46115913))
+
+#### Breaking Changes
+
+*   add optional histogram outlier details (#351) ([46115913](46115913))
+
+
+<a name="0.2.0"></a>
 ## 0.2.0 (2022-04-08)
 
 
