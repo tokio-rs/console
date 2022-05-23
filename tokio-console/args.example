@@ -95,6 +95,8 @@ OPTIONS:
             Print version information
 
 SUBCOMMANDS:
+    gen-completion
+            Generate shell completions
     gen-config
             Generate a `console.toml` config file with the default configuration values, overridden
             by any provided command-line arguments
