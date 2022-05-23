@@ -187,6 +187,22 @@ impl Builder {
         }
     }
 
+    /// Sets the maximum value for task poll duration histograms.
+    ///
+    /// Any poll durations exceeding this value will be clamped down to this
+    /// duration and recorded as an outlier.
+    ///
+    /// By default, this is [one second]. Higher values will increase per-task
+    /// memory usage.
+    ///
+    /// [one second]: ConsoleLayer::DEFAULT_POLL_DURATION_MAX
+    pub fn poll_duration_histogram_max(self, max: Duration) -> Self {
+        Self {
+            poll_duration_max: max,
+            ..self
+        }
+    }
+
     /// Sets whether tasks, resources, and async ops from the console
     /// subscriber thread are recorded.
     ///
