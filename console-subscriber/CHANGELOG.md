@@ -4,11 +4,11 @@
 
 #### Features
 
-* **subscriber:**  add `Builder::poll_duration_histogram_max` (#351) ([a966feb3](a966feb3))
+*  add `Builder::poll_duration_histogram_max` (#351) ([a966feb3](a966feb3))
 
 #### Bug Fixes
 
-* **subscriber:**  fix memory leak from resizing histograms (#351) ([32dd3376](32dd3376), closes [#350](350))
+*  fix memory leak from resizing histograms (#351) ([32dd3376](32dd3376), closes [#350](350))
 
 
 <a name="0.1.5"></a>
