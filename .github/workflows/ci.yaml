@@ -54,10 +54,14 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [stable]
-        # Make 1.58 MSRV due to <=1.57 failing to build console-api due to a bug
-        # with cargo version resolution.
         include:
+          # Make 1.58 MSRV due to <=1.57 failing to build console-api due to a bug
+          # with cargo version resolution.
           - rust: 1.58.0
+            os: ubuntu-latest
+          # Try to build on the latest nightly. This job is allowed to fail, but
+          # it's useful to help catch bugs in upcoming Rust versions.
+          - rust: nightly
             os: ubuntu-latest
     steps:
       - name: Checkout sources
