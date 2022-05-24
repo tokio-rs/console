@@ -1,3 +1,17 @@
+<a name="0.1.6"></a>
+## 0.1.6 (2022-05-24)
+
+
+#### Bug Fixes
+
+*  default `--no_colors` to `false` (#344) ([e58352fe](e58352fe))
+
+#### Features
+
+*  add subcommand to gen shell completions (#336) ([df4d4683](df4d4683))
+*  display outliers in histogram view (#351) ([dec891ff](dec891ff))
+
+
 <a name="0.1.5"></a>
 ## 0.1.5 (2022-04-30)
 

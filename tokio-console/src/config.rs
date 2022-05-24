@@ -1,5 +1,6 @@
 use crate::view::Palette;
-use clap::{ArgGroup, Parser as Clap, Subcommand, ValueHint};
+use clap::{ArgGroup, IntoApp, Parser as Clap, Subcommand, ValueHint};
+use clap_complete::Shell;
 use color_eyre::eyre::WrapErr;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -103,6 +104,18 @@ pub enum OptionalCmd {
     ///     $ tokio-console gen-config > console.toml
     ///
     GenConfig,
+
+    /// Generate shell completions
+    ///
+    /// The completion script will be written to stdout.
+    /// The completion script should be saved in the shell's completion directory.
+    /// This depends on which shell is in use.
+    GenCompletion {
+        #[clap(name = "install", long = "install")]
+        install: bool,
+        #[clap(arg_enum)]
+        shell: Shell,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -630,6 +643,21 @@ impl ConfigPath {
             }
         }
     }
+}
+
+/// Generete completion scripts for each specified shell.
+pub fn gen_completion(install: bool, shell: Shell) -> color_eyre::Result<()> {
+    let mut app = Config::command();
+    let mut buf: Box<dyn std::io::Write> = if install {
+        color_eyre::eyre::bail!(
+            "Automatically installing completion scripts is not currently supported on {}",
+            shell
+        )
+    } else {
+        Box::new(std::io::stdout())
+    };
+    clap_complete::generate(shell, &mut app, "tokio-console", &mut buf);
+    Ok(())
 }
 
 #[cfg(test)]
