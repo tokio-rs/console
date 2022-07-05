@@ -1,5 +1,9 @@
 use crate::intern::{self, InternedStr};
-use crate::state::{format_location, Attribute, Field, Ids, Metadata, Visibility};
+use crate::state::{
+    format_location,
+    id::{Id, Ids},
+    Attribute, Field, Metadata, Visibility,
+};
 use crate::view;
 use console_api as proto;
 use std::{
@@ -13,8 +17,8 @@ use tui::{style::Color, text::Span};
 
 #[derive(Default, Debug)]
 pub(crate) struct ResourcesState {
-    resources: HashMap<u64, Rc<RefCell<Resource>>>,
-    pub(crate) ids: Ids,
+    resources: HashMap<Id<Resource>, Rc<RefCell<Resource>>>,
+    pub(crate) ids: Ids<Resource>,
     new_resources: Vec<ResourceRef>,
     dropped_events: u64,
 }
@@ -41,7 +45,7 @@ pub(crate) struct Resource {
     ///
     /// This is NOT the `tracing::span::Id` for the resource's `tracing` span on the
     /// remote.
-    num: u64,
+    num: Id<Resource>,
     /// The `tracing::span::Id` on the remote process for this resource's span.
     ///
     /// This is used when requesting a resource details stream.
@@ -119,7 +123,7 @@ impl ResourcesState {
         self.new_resources.drain(..)
     }
 
-    pub(crate) fn resource(&self, id: u64) -> Option<ResourceRef> {
+    pub(crate) fn resource(&self, id: Id<Resource>) -> Option<ResourceRef> {
         self.resources.get(&id).map(Rc::downgrade)
     }
 
@@ -131,11 +135,12 @@ impl ResourcesState {
         update: proto::resources::ResourceUpdate,
         visibility: Visibility,
     ) {
-        let parents: HashMap<u64, ResourceRef> = update
+        let parents: HashMap<Id<Resource>, ResourceRef> = update
             .new_resources
             .iter()
             .filter_map(|resource| {
-                let parent_id = resource.parent_resource_id?.id;
+                let span_id = resource.parent_resource_id?.id;
+                let parent_id = self.ids.id_for(span_id);
                 let parent = self.resource(parent_id)?;
                 Some((parent_id, parent))
             })
@@ -196,7 +201,7 @@ impl ResourcesState {
             let parent_id = strings.string(
                 parent_id
                     .as_ref()
-                    .map(u64::to_string)
+                    .map(Id::<Resource>::to_string)
                     .unwrap_or_else(|| "n/a".to_string()),
             );
 
@@ -262,7 +267,7 @@ impl ResourcesState {
 }
 
 impl Resource {
-    pub(crate) fn id(&self) -> u64 {
+    pub(crate) fn id(&self) -> Id<Resource> {
         self.num
     }
 

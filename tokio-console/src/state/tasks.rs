@@ -1,8 +1,10 @@
 use crate::{
     intern::{self, InternedStr},
     state::{
-        format_location, histogram::DurationHistogram, pb_duration, Field, Ids, Metadata,
-        Visibility,
+        format_location,
+        histogram::DurationHistogram,
+        id::{Id, Ids},
+        pb_duration, Field, Metadata, Visibility,
     },
     util::Percentage,
     view,
@@ -20,8 +22,8 @@ use tui::{style::Color, text::Span};
 
 #[derive(Default, Debug)]
 pub(crate) struct TasksState {
-    tasks: HashMap<u64, Rc<RefCell<Task>>>,
-    pub(crate) ids: Ids,
+    tasks: HashMap<Id<Task>, Rc<RefCell<Task>>>,
+    pub(crate) ids: Ids<Task>,
     new_tasks: Vec<TaskRef>,
     pub(crate) linters: Vec<Linter<Task>>,
     dropped_events: u64,
@@ -63,7 +65,7 @@ pub(crate) struct Task {
     ///
     /// This is NOT the `tracing::span::Id` for the task's tracing span on the
     /// remote.
-    num: u64,
+    num: Id<Task>,
     /// The `tracing::span::Id` on the remote process for this task's span.
     ///
     /// This is used when requesting a task details stream.
@@ -222,7 +224,7 @@ impl TasksState {
         self.linters.iter().filter(|linter| linter.count() > 0)
     }
 
-    pub(crate) fn task(&self, id: u64) -> Option<TaskRef> {
+    pub(crate) fn task(&self, id: Id<Task>) -> Option<TaskRef> {
         self.tasks.get(&id).map(Rc::downgrade)
     }
 
@@ -242,7 +244,7 @@ impl Details {
 }
 
 impl Task {
-    pub(crate) fn id(&self) -> u64 {
+    pub(crate) fn id(&self) -> Id<Task> {
         self.num
     }
 
