@@ -1,6 +1,12 @@
 use crate::{
     intern::{self, InternedStr},
-    state::{pb_duration, Attribute, Field, Ids, Metadata, Visibility},
+    state::{
+        id::{Id, Ids},
+        pb_duration,
+        resources::Resource,
+        tasks::Task,
+        Attribute, Field, Metadata, Visibility,
+    },
     view,
 };
 use console_api as proto;
@@ -15,8 +21,8 @@ use tui::text::Span;
 
 #[derive(Default, Debug)]
 pub(crate) struct AsyncOpsState {
-    async_ops: HashMap<u64, Rc<RefCell<AsyncOp>>>,
-    ids: Ids,
+    async_ops: HashMap<Id<AsyncOp>, Rc<RefCell<AsyncOp>>>,
+    ids: Ids<AsyncOp>,
     new_async_ops: Vec<AsyncOpRef>,
     dropped_events: u64,
 }
@@ -35,9 +41,9 @@ pub(crate) enum SortBy {
 
 #[derive(Debug)]
 pub(crate) struct AsyncOp {
-    num: u64,
+    num: Id<AsyncOp>,
     parent_id: InternedStr,
-    resource_id: u64,
+    resource_id: Id<Resource>,
     meta_id: u64,
     source: InternedStr,
     stats: AsyncOpStats,
@@ -56,7 +62,7 @@ struct AsyncOpStats {
     last_poll_ended: Option<SystemTime>,
     idle: Option<Duration>,
     total: Option<Duration>,
-    task_id: Option<u64>,
+    task_id: Option<Id<Task>>,
     task_id_str: InternedStr,
     formatted_attributes: Vec<Vec<Span<'static>>>,
 }
@@ -129,8 +135,8 @@ impl AsyncOpsState {
         strings: &mut intern::Strings,
         metas: &HashMap<u64, Metadata>,
         update: proto::async_ops::AsyncOpUpdate,
-        resource_ids: &mut Ids,
-        task_ids: &mut Ids,
+        resource_ids: &mut Ids<Resource>,
+        task_ids: &mut Ids<Task>,
         visibility: Visibility,
     ) {
         let mut stats_update = update.stats_update;
@@ -227,7 +233,7 @@ impl AsyncOpsState {
 }
 
 impl AsyncOp {
-    pub(crate) fn id(&self) -> u64 {
+    pub(crate) fn id(&self) -> Id<AsyncOp> {
         self.num
     }
 
@@ -235,11 +241,11 @@ impl AsyncOp {
         &self.parent_id
     }
 
-    pub(crate) fn resource_id(&self) -> u64 {
+    pub(crate) fn resource_id(&self) -> Id<Resource> {
         self.resource_id
     }
 
-    pub(crate) fn task_id(&self) -> Option<u64> {
+    pub(crate) fn task_id(&self) -> Option<Id<Task>> {
         self.stats.task_id
     }
 
@@ -294,7 +300,7 @@ impl AsyncOpStats {
         meta: &Metadata,
         styles: &view::Styles,
         strings: &mut intern::Strings,
-        task_ids: &mut Ids,
+        task_ids: &mut Ids<Task>,
     ) -> Self {
         let mut pb = pb;
 
@@ -328,7 +334,7 @@ impl AsyncOpStats {
         let task_id_str = strings.string(
             task_id
                 .as_ref()
-                .map(u64::to_string)
+                .map(Id::<Task>::to_string)
                 .unwrap_or_else(|| "n/a".to_string()),
         );
         Self {

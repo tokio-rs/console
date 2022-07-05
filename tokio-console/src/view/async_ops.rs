@@ -1,7 +1,8 @@
 use crate::{
     state::{
         async_ops::{AsyncOp, SortBy},
-        State,
+        resources::Resource,
+        Id, State,
     },
     view::{
         self, bold,
@@ -22,7 +23,7 @@ pub(crate) struct AsyncOpsTable {}
 
 pub(crate) struct AsyncOpsTableCtx {
     pub(crate) initial_render: bool,
-    pub(crate) resource_id: u64,
+    pub(crate) resource_id: Id<Resource>,
 }
 
 impl TableList<9> for AsyncOpsTable {

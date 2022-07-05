@@ -8,7 +8,7 @@ use console_api as proto;
 use std::{
     cell::RefCell,
     cmp::Ordering,
-    collections::hash_map::{Entry, HashMap},
+    collections::HashMap,
     convert::{TryFrom, TryInto},
     fmt,
     rc::Rc,
@@ -22,8 +22,11 @@ use tui::{
 
 pub mod async_ops;
 pub mod histogram;
+pub mod id;
 pub mod resources;
 pub mod tasks;
+
+pub(crate) use self::id::Id;
 
 pub(crate) type DetailsRef = Rc<RefCell<Option<Details>>>;
 
@@ -78,12 +81,6 @@ enum Temporality {
 pub(crate) struct Attribute {
     field: Field,
     unit: Option<String>,
-}
-
-#[derive(Debug)]
-pub(crate) struct Ids {
-    next: u64,
-    map: HashMap<u64, u64>,
 }
 
 impl State {
@@ -493,31 +490,6 @@ impl Attribute {
             formatted.push(elems)
         }
         formatted
-    }
-}
-
-// === impl Ids ===
-
-impl Ids {
-    pub(crate) fn id_for(&mut self, span_id: u64) -> u64 {
-        match self.map.entry(span_id) {
-            Entry::Occupied(entry) => *entry.get(),
-            Entry::Vacant(entry) => {
-                let id = self.next;
-                entry.insert(id);
-                self.next = self.next.wrapping_add(1);
-                id
-            }
-        }
-    }
-}
-
-impl Default for Ids {
-    fn default() -> Self {
-        Self {
-            next: 1,
-            map: Default::default(),
-        }
     }
 }
 
