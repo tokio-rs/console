@@ -1,25 +1,22 @@
 use crate::intern::{self, InternedStr};
 use crate::state::{
     format_location,
-    id::{Id, Ids},
+    store::{self, Id, SpanId, Store},
     Attribute, Field, Metadata, Visibility,
 };
 use crate::view;
 use console_api as proto;
 use std::{
-    cell::RefCell,
     collections::HashMap,
     convert::{TryFrom, TryInto},
-    rc::{Rc, Weak},
+    rc::Rc,
     time::{Duration, SystemTime},
 };
 use tui::{style::Color, text::Span};
 
 #[derive(Default, Debug)]
 pub(crate) struct ResourcesState {
-    resources: HashMap<Id<Resource>, Rc<RefCell<Resource>>>,
-    pub(crate) ids: Ids<Resource>,
-    new_resources: Vec<ResourceRef>,
+    resources: Store<Resource>,
     dropped_events: u64,
 }
 
@@ -45,11 +42,11 @@ pub(crate) struct Resource {
     ///
     /// This is NOT the `tracing::span::Id` for the resource's `tracing` span on the
     /// remote.
-    num: Id<Resource>,
+    id: Id<Resource>,
     /// The `tracing::span::Id` on the remote process for this resource's span.
     ///
     /// This is used when requesting a resource details stream.
-    span_id: u64,
+    span_id: SpanId,
     id_str: InternedStr,
     parent: InternedStr,
     parent_id: InternedStr,
@@ -62,7 +59,7 @@ pub(crate) struct Resource {
     visibility: TypeVisibility,
 }
 
-pub(crate) type ResourceRef = Weak<RefCell<Resource>>;
+pub(crate) type ResourceRef = store::Ref<Resource>;
 
 #[derive(Debug)]
 struct ResourceStats {
@@ -79,10 +76,11 @@ impl Default for SortBy {
 }
 
 impl SortBy {
-    pub fn sort(&self, now: SystemTime, resources: &mut [Weak<RefCell<Resource>>]) {
+    pub fn sort(&self, now: SystemTime, resources: &mut [ResourceRef]) {
         match self {
-            Self::Rid => resources
-                .sort_unstable_by_key(|resource| resource.upgrade().map(|r| r.borrow().num)),
+            Self::Rid => {
+                resources.sort_unstable_by_key(|resource| resource.upgrade().map(|r| r.borrow().id))
+            }
             Self::Kind => resources.sort_unstable_by_key(|resource| {
                 resource.upgrade().map(|r| r.borrow().kind.clone())
             }),
@@ -120,11 +118,11 @@ impl view::SortBy for SortBy {
 
 impl ResourcesState {
     pub(crate) fn take_new_resources(&mut self) -> impl Iterator<Item = ResourceRef> + '_ {
-        self.new_resources.drain(..)
+        self.resources.take_new_items()
     }
 
-    pub(crate) fn resource(&self, id: Id<Resource>) -> Option<ResourceRef> {
-        self.resources.get(&id).map(Rc::downgrade)
+    pub(crate) fn ids_mut(&mut self) -> &mut store::Ids<Resource> {
+        self.resources.ids_mut()
     }
 
     pub(crate) fn update_resources(
@@ -139,109 +137,101 @@ impl ResourcesState {
             .new_resources
             .iter()
             .filter_map(|resource| {
-                let span_id = resource.parent_resource_id?.id;
-                let parent_id = self.ids.id_for(span_id);
-                let parent = self.resource(parent_id)?;
-                Some((parent_id, parent))
+                let parent_id = resource.parent_resource_id?.id;
+                let parent = self.resources.get_by_span(parent_id)?;
+                Some((parent.borrow().id, Rc::downgrade(parent)))
             })
             .collect();
 
         let mut stats_update = update.stats_update;
-        let new_list = &mut self.new_resources;
-        if matches!(visibility, Visibility::Show) {
-            new_list.clear();
-        }
-
-        let new_resources = update.new_resources.into_iter().filter_map(|resource| {
-            if resource.id.is_none() {
-                tracing::warn!(?resource, "skipping resource with no id");
-            }
-
-            let meta_id = match resource.metadata.as_ref() {
-                Some(id) => id.id,
-                None => {
-                    tracing::warn!(?resource, "resource has no metadata ID, skipping");
-                    return None;
+        self.resources
+            .insert_with(visibility, update.new_resources, |ids, resource| {
+                if resource.id.is_none() {
+                    tracing::warn!(?resource, "skipping resource with no id");
                 }
-            };
-            let meta = match metas.get(&meta_id) {
-                Some(meta) => meta,
-                None => {
-                    tracing::warn!(?resource, meta_id, "no metadata for resource, skipping");
-                    return None;
-                }
-            };
-            let kind = match kind_from_proto(resource.kind?, strings) {
-                Ok(kind) => kind,
-                Err(err) => {
-                    tracing::warn!(%err, "resource kind cannot be parsed");
-                    return None;
-                }
-            };
 
-            let span_id = resource.id?.id;
-            let stats =
-                ResourceStats::from_proto(stats_update.remove(&span_id)?, meta, styles, strings);
+                let meta_id = match resource.metadata.as_ref() {
+                    Some(id) => id.id,
+                    None => {
+                        tracing::warn!(?resource, "resource has no metadata ID, skipping");
+                        return None;
+                    }
+                };
+                let meta = match metas.get(&meta_id) {
+                    Some(meta) => meta,
+                    None => {
+                        tracing::warn!(?resource, meta_id, "no metadata for resource, skipping");
+                        return None;
+                    }
+                };
+                let kind = match kind_from_proto(resource.kind?, strings) {
+                    Ok(kind) => kind,
+                    Err(err) => {
+                        tracing::warn!(%err, "resource kind cannot be parsed");
+                        return None;
+                    }
+                };
 
-            let num = self.ids.id_for(span_id);
-            let parent_id = resource.parent_resource_id.map(|id| self.ids.id_for(id.id));
+                let span_id = resource.id?.id;
+                let stats = ResourceStats::from_proto(
+                    stats_update.remove(&span_id)?,
+                    meta,
+                    styles,
+                    strings,
+                );
 
-            let parent = strings.string(match parent_id {
-                Some(id) => parents
-                    .get(&id)
-                    .and_then(|r| r.upgrade())
-                    .map(|r| {
-                        let r = r.borrow();
-                        format!("{} ({}::{})", r.id(), r.target(), r.concrete_type())
-                    })
-                    .unwrap_or_else(|| id.to_string()),
-                None => "n/a".to_string(),
+                let id = ids.id_for(span_id);
+                let parent_id = resource.parent_resource_id.map(|id| ids.id_for(id.id));
+
+                let parent = strings.string(match parent_id {
+                    Some(id) => parents
+                        .get(&id)
+                        .and_then(|r| r.upgrade())
+                        .map(|r| {
+                            let r = r.borrow();
+                            format!("{} ({}::{})", r.id(), r.target(), r.concrete_type())
+                        })
+                        .unwrap_or_else(|| id.to_string()),
+                    None => "n/a".to_string(),
+                });
+
+                let parent_id = strings.string(
+                    parent_id
+                        .as_ref()
+                        .map(Id::<Resource>::to_string)
+                        .unwrap_or_else(|| "n/a".to_string()),
+                );
+
+                let location = format_location(resource.location);
+                let visibility = if resource.is_internal {
+                    TypeVisibility::Internal
+                } else {
+                    TypeVisibility::Public
+                };
+
+                let resource = Resource {
+                    id,
+                    span_id,
+                    id_str: strings.string(id.to_string()),
+                    parent,
+                    parent_id,
+                    kind,
+                    stats,
+                    target: meta.target.clone(),
+                    concrete_type: strings.string(resource.concrete_type),
+                    meta_id,
+                    location,
+                    visibility,
+                };
+                Some((id, resource))
             });
-
-            let parent_id = strings.string(
-                parent_id
-                    .as_ref()
-                    .map(Id::<Resource>::to_string)
-                    .unwrap_or_else(|| "n/a".to_string()),
-            );
-
-            let location = format_location(resource.location);
-            let visibility = if resource.is_internal {
-                TypeVisibility::Internal
-            } else {
-                TypeVisibility::Public
-            };
-
-            let resource = Resource {
-                num,
-                span_id,
-                id_str: strings.string(num.to_string()),
-                parent,
-                parent_id,
-                kind,
-                stats,
-                target: meta.target.clone(),
-                concrete_type: strings.string(resource.concrete_type),
-                meta_id,
-                location,
-                visibility,
-            };
-            let resource = Rc::new(RefCell::new(resource));
-            new_list.push(Rc::downgrade(&resource));
-            Some((num, resource))
-        });
 
         self.dropped_events += update.dropped_events;
 
-        self.resources.extend(new_resources);
-
-        for (span_id, stats) in stats_update {
-            let num = self.ids.id_for(span_id);
-            if let Some(resource) = self.resources.get_mut(&num) {
-                let mut r = resource.borrow_mut();
-                if let Some(meta) = metas.get(&r.meta_id) {
-                    r.stats = ResourceStats::from_proto(stats, meta, styles, strings);
-                }
+        for (stats, mut resource) in self.resources.updated(stats_update) {
+            if let Some(meta) = metas.get(&resource.meta_id) {
+                tracing::trace!(?resource, ?stats, "processing stats update for");
+                resource.stats = ResourceStats::from_proto(stats, meta, styles, strings);
             }
         }
     }
@@ -268,7 +258,7 @@ impl ResourcesState {
 
 impl Resource {
     pub(crate) fn id(&self) -> Id<Resource> {
-        self.num
+        self.id
     }
 
     pub(crate) fn span_id(&self) -> u64 {

@@ -22,11 +22,11 @@ use tui::{
 
 pub mod async_ops;
 pub mod histogram;
-pub mod id;
 pub mod resources;
+pub mod store;
 pub mod tasks;
 
-pub(crate) use self::id::Id;
+pub(crate) use self::store::Id;
 
 pub(crate) type DetailsRef = Rc<RefCell<Option<Details>>>;
 
@@ -162,8 +162,8 @@ impl State {
                 &mut self.strings,
                 &self.metas,
                 async_ops_update,
-                &mut self.resources_state.ids,
-                &mut self.tasks_state.ids,
+                self.resources_state.ids_mut(),
+                self.tasks_state.ids_mut(),
                 visibility,
             )
         }
