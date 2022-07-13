@@ -1,9 +1,9 @@
 use crate::{
     intern::{self, InternedStr},
     state::{
-        id::{Id, Ids},
         pb_duration,
         resources::Resource,
+        store::{self, Id, Store},
         tasks::Task,
         Attribute, Field, Metadata, Visibility,
     },
@@ -21,9 +21,7 @@ use tui::text::Span;
 
 #[derive(Default, Debug)]
 pub(crate) struct AsyncOpsState {
-    async_ops: HashMap<Id<AsyncOp>, Rc<RefCell<AsyncOp>>>,
-    ids: Ids<AsyncOp>,
-    new_async_ops: Vec<AsyncOpRef>,
+    async_ops: Store<AsyncOp>,
     dropped_events: u64,
 }
 
@@ -41,7 +39,7 @@ pub(crate) enum SortBy {
 
 #[derive(Debug)]
 pub(crate) struct AsyncOp {
-    num: Id<AsyncOp>,
+    id: Id<AsyncOp>,
     parent_id: InternedStr,
     resource_id: Id<Resource>,
     meta_id: u64,
@@ -49,7 +47,7 @@ pub(crate) struct AsyncOp {
     stats: AsyncOpStats,
 }
 
-pub(crate) type AsyncOpRef = Weak<RefCell<AsyncOp>>;
+pub(crate) type AsyncOpRef = store::Ref<AsyncOp>;
 
 #[derive(Debug)]
 struct AsyncOpStats {
@@ -76,7 +74,7 @@ impl Default for SortBy {
 impl SortBy {
     pub fn sort(&self, now: SystemTime, ops: &mut [Weak<RefCell<AsyncOp>>]) {
         match self {
-            Self::Aid => ops.sort_unstable_by_key(|ao| ao.upgrade().map(|a| a.borrow().num)),
+            Self::Aid => ops.sort_unstable_by_key(|ao| ao.upgrade().map(|a| a.borrow().id)),
             Self::Task => ops.sort_unstable_by_key(|ao| ao.upgrade().map(|a| a.borrow().task_id())),
             Self::Source => {
                 ops.sort_unstable_by_key(|ao| ao.upgrade().map(|a| a.borrow().source.clone()))
@@ -118,7 +116,7 @@ impl view::SortBy for SortBy {
 impl AsyncOpsState {
     /// Returns any new async ops for a resource that were added since the last async ops update.
     pub(crate) fn take_new_async_ops(&mut self) -> impl Iterator<Item = AsyncOpRef> + '_ {
-        self.new_async_ops.drain(..)
+        self.async_ops.take_new_items()
     }
 
     /// Returns all async ops.
@@ -135,77 +133,66 @@ impl AsyncOpsState {
         strings: &mut intern::Strings,
         metas: &HashMap<u64, Metadata>,
         update: proto::async_ops::AsyncOpUpdate,
-        resource_ids: &mut Ids<Resource>,
-        task_ids: &mut Ids<Task>,
+        resource_ids: &mut store::Ids<Resource>,
+        task_ids: &mut store::Ids<Task>,
         visibility: Visibility,
     ) {
         let mut stats_update = update.stats_update;
-        let new_list = &mut self.new_async_ops;
-        if matches!(visibility, Visibility::Show) {
-            new_list.clear();
-        }
 
-        let new_async_ops = update.new_async_ops.into_iter().filter_map(|async_op| {
-            if async_op.id.is_none() {
-                tracing::warn!(?async_op, "skipping async op with no id");
-            }
-
-            let meta_id = match async_op.metadata.as_ref() {
-                Some(id) => id.id,
-                None => {
-                    tracing::warn!(?async_op, "async op has no metadata ID, skipping");
-                    return None;
+        self.async_ops
+            .insert_with(visibility, update.new_async_ops, |ids, async_op| {
+                if async_op.id.is_none() {
+                    tracing::warn!(?async_op, "skipping async op with no id");
                 }
-            };
-            let meta = match metas.get(&meta_id) {
-                Some(meta) => meta,
-                None => {
-                    tracing::warn!(?async_op, meta_id, "no metadata for async op, skipping");
-                    return None;
-                }
-            };
 
-            let span_id = async_op.id?.id;
-            let stats = AsyncOpStats::from_proto(
-                stats_update.remove(&span_id)?,
-                meta,
-                styles,
-                strings,
-                task_ids,
-            );
+                let meta_id = match async_op.metadata.as_ref() {
+                    Some(id) => id.id,
+                    None => {
+                        tracing::warn!(?async_op, "async op has no metadata ID, skipping");
+                        return None;
+                    }
+                };
+                let meta = match metas.get(&meta_id) {
+                    Some(meta) => meta,
+                    None => {
+                        tracing::warn!(?async_op, meta_id, "no metadata for async op, skipping");
+                        return None;
+                    }
+                };
 
-            let num = self.ids.id_for(span_id);
-            let resource_id = resource_ids.id_for(async_op.resource_id?.id);
-            let parent_id = match async_op.parent_async_op_id {
-                Some(id) => strings.string(format!("{}", self.ids.id_for(id.id))),
-                None => strings.string("n/a".to_string()),
-            };
+                let span_id = async_op.id?.id;
+                let stats = AsyncOpStats::from_proto(
+                    stats_update.remove(&span_id)?,
+                    meta,
+                    styles,
+                    strings,
+                    task_ids,
+                );
 
-            let source = strings.string(async_op.source);
+                let id = ids.id_for(span_id);
+                let resource_id = resource_ids.id_for(async_op.resource_id?.id);
+                let parent_id = match async_op.parent_async_op_id {
+                    Some(id) => strings.string(format!("{}", ids.id_for(id.id))),
+                    None => strings.string("n/a".to_string()),
+                };
 
-            let async_op = AsyncOp {
-                num,
-                parent_id,
-                resource_id,
-                meta_id,
-                source,
-                stats,
-            };
-            let async_op = Rc::new(RefCell::new(async_op));
-            new_list.push(Rc::downgrade(&async_op));
-            Some((num, async_op))
-        });
+                let source = strings.string(async_op.source);
 
-        self.async_ops.extend(new_async_ops);
+                let async_op = AsyncOp {
+                    id,
+                    parent_id,
+                    resource_id,
+                    meta_id,
+                    source,
+                    stats,
+                };
+                Some((id, async_op))
+            });
 
-        for (span_id, stats) in stats_update {
-            let num = self.ids.id_for(span_id);
-            if let Some(async_op) = self.async_ops.get_mut(&num) {
-                let mut async_op = async_op.borrow_mut();
-                if let Some(meta) = metas.get(&async_op.meta_id) {
-                    async_op.stats =
-                        AsyncOpStats::from_proto(stats, meta, styles, strings, task_ids);
-                }
+        for (stats, mut async_op) in self.async_ops.updated(stats_update) {
+            if let Some(meta) = metas.get(&async_op.meta_id) {
+                tracing::trace!(?async_op, ?stats, "processing stats update for");
+                async_op.stats = AsyncOpStats::from_proto(stats, meta, styles, strings, task_ids);
             }
         }
 
@@ -234,7 +221,7 @@ impl AsyncOpsState {
 
 impl AsyncOp {
     pub(crate) fn id(&self) -> Id<AsyncOp> {
-        self.num
+        self.id
     }
 
     pub(crate) fn parent_id(&self) -> &str {
@@ -300,7 +287,7 @@ impl AsyncOpStats {
         meta: &Metadata,
         styles: &view::Styles,
         strings: &mut intern::Strings,
-        task_ids: &mut Ids<Task>,
+        task_ids: &mut store::Ids<Task>,
     ) -> Self {
         let mut pb = pb;
 
