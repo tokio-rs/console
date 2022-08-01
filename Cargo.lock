@@ -239,15 +239,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cmake"
-version = "0.1.48"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8ad8cef104ac57b68b89df3208164d228503abbdce70f6880ffa3d970e7443a"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "color-eyre"
 version = "0.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -277,7 +268,7 @@ dependencies = [
 
 [[package]]
 name = "console-api"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "prost",
  "prost-types",
@@ -1069,9 +1060,9 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bd5316aa8f5c82add416dfbc25116b84b748a21153f512917e8143640a71bbd"
+checksum = "399c3c31cdec40583bb68f0b18403400d01ec4289c383aa047560439952c4dd7"
 dependencies = [
  "bytes",
  "prost-derive",
@@ -1079,13 +1070,11 @@ dependencies = [
 
 [[package]]
 name = "prost-build"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "328f9f29b82409216decb172d81e936415d21245befa79cd34c3f29d87d1c50b"
+checksum = "d49d928704208aba2cb1fb022ce1a319bdedcb03caf51ddf82734fa903407762"
 dependencies = [
  "bytes",
- "cfg-if",
- "cmake",
  "heck",
  "itertools",
  "lazy_static",
@@ -1101,9 +1090,9 @@ dependencies = [
 
 [[package]]
 name = "prost-derive"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df35198f0777b75e9ff669737c6da5136b59dba33cf5a010a6d1cc4d56defc6f"
+checksum = "7345d5f0e08c0536d7ac7229952590239e77abf0a0100a1b1d890add6ea96364"
 dependencies = [
  "anyhow",
  "itertools",
@@ -1114,9 +1103,9 @@ dependencies = [
 
 [[package]]
 name = "prost-types"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "926681c118ae6e512a3ccefd4abbe5521a14f4cc1e207356d4d00c0b7f2006fd"
+checksum = "d30bc806a29b347314be074ff0608ef8e547286e8ea68b061a2fe55689edc01f"
 dependencies = [
  "bytes",
  "prost",
@@ -1528,9 +1517,9 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a1a361140b1af3f548e0a5105126b3fc737542f6cd4947b66419c80be07db22"
+checksum = "498f271adc46acce75d66f639e4d35b31b2394c295c82496727dafa16d465dd2"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -1560,9 +1549,9 @@ dependencies = [
 
 [[package]]
 name = "tonic-build"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d17087af5c80e5d5fc8ba9878e60258065a0a757e35efe7a05b7904bece1943"
+checksum = "2fbcd2800e34e743b9ae795867d5f77b535d3a3be69fd731e39145719752df8c"
 dependencies = [
  "prettyplease",
  "proc-macro2",
@@ -1910,3 +1899,11 @@ name = "windows_x86_64_msvc"
 version = "0.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d19538ccc21819d01deaf88d6a17eae6596a12e9aafdbb97916fb49896d89de9"
+
+[[package]]
+name = "xtask"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "tonic-build",
+]

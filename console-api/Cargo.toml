@@ -1,6 +1,6 @@
 [package]
 name = "console-api"
-version = "0.3.0"
+version = "0.4.0"
 license = "MIT"
 edition = "2021"
 rust-version = "1.58.0"
@@ -29,17 +29,17 @@ keywords = [
 transport = ["tonic-build/transport", "tonic/transport"]
 
 [dependencies]
-tonic = { version = "0.7", default-features = false, features = [
+tonic = { version = "0.8", default-features = false, features = [
     "prost",
     "codegen",
     "transport",
 ] }
-prost = "0.10"
-prost-types = "0.10"
+prost = "0.11"
+prost-types = "0.11"
 tracing-core = "0.1.17"
 
 [dev-dependencies]
-tonic-build = { version = "0.7", default-features = false, features = [
+tonic-build = { version = "0.8", default-features = false, features = [
     "prost", "transport"
 ] }
 
