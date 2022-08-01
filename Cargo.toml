@@ -2,6 +2,7 @@
 members = [
     "tokio-console",
     "console-subscriber",
-    "console-api"
+    "console-api",
+    "xtask"
 ]
 resolver = "2"
