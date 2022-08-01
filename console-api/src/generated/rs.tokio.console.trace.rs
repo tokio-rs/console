@@ -1,81 +1,81 @@
-/// Start watching trace events with the provided filter.
+///  Start watching trace events with the provided filter.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct WatchRequest {
-    /// Specifies which trace events should be streamed.
+    ///  Specifies which trace events should be streamed.
     #[prost(string, tag="1")]
     pub filter: ::prost::alloc::string::String,
 }
-/// A trace event
+///  A trace event
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TraceEvent {
-    /// A trace event
+    ///  A trace event
     #[prost(oneof="trace_event::Event", tags="1, 2, 3, 4, 5, 6")]
     pub event: ::core::option::Option<trace_event::Event>,
 }
 /// Nested message and enum types in `TraceEvent`.
 pub mod trace_event {
-    /// `RegisterThreads` signals that a new thread was registered.
+    ///  `RegisterThreads` signals that a new thread was registered.
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct RegisterThreads {
-        /// `names` maps the registered thread id's to their associated name.
+        ///  `names` maps the registered thread id's to their associated name.
         #[prost(map="uint64, string", tag="1")]
         pub names: ::std::collections::HashMap<u64, ::prost::alloc::string::String>,
     }
-    /// `Enter` signals that a span was entered.
+    ///  `Enter` signals that a span was entered.
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Enter {
-        /// `span_id` identifies the span that was entered.
+        ///  `span_id` identifies the span that was entered.
         #[prost(message, optional, tag="1")]
         pub span_id: ::core::option::Option<super::super::common::SpanId>,
-        /// `thread_id` identifies who entered the span.
+        ///  `thread_id` identifies who entered the span.
         #[prost(uint64, tag="2")]
         pub thread_id: u64,
-        /// `at` identifies when the span was entered.
+        ///  `at` identifies when the span was entered.
         #[prost(message, optional, tag="3")]
         pub at: ::core::option::Option<::prost_types::Timestamp>,
     }
-    /// `Exit` signals that a span was exited.
+    ///  `Exit` signals that a span was exited.
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Exit {
-        /// `span_id` identifies the span that was exited.
+        ///  `span_id` identifies the span that was exited.
         #[prost(message, optional, tag="1")]
         pub span_id: ::core::option::Option<super::super::common::SpanId>,
-        /// `thread_id` identifies who exited the span.
+        ///  `thread_id` identifies who exited the span.
         #[prost(uint64, tag="2")]
         pub thread_id: u64,
-        /// `at` identifies when the span was exited.
+        ///  `at` identifies when the span was exited.
         #[prost(message, optional, tag="3")]
         pub at: ::core::option::Option<::prost_types::Timestamp>,
     }
-    /// `Close` signals that a span was closed.
+    ///  `Close` signals that a span was closed.
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Close {
-        /// `span_id` identifies the span that was closed.
+        ///  `span_id` identifies the span that was closed.
         #[prost(message, optional, tag="1")]
         pub span_id: ::core::option::Option<super::super::common::SpanId>,
-        /// `at` identifies when the span was closed.
+        ///  `at` identifies when the span was closed.
         #[prost(message, optional, tag="2")]
         pub at: ::core::option::Option<::prost_types::Timestamp>,
     }
-    /// A trace event
+    ///  A trace event
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Event {
-        /// A new thread was registered.
+        ///  A new thread was registered.
         #[prost(message, tag="1")]
         RegisterThread(RegisterThreads),
-        /// A new span metadata was registered.
+        ///  A new span metadata was registered.
         #[prost(message, tag="2")]
         RegisterMetadata(super::super::common::RegisterMetadata),
-        /// A span was created.
+        ///  A span was created.
         #[prost(message, tag="3")]
         NewSpan(super::super::common::Span),
-        /// A span was entered.
+        ///  A span was entered.
         #[prost(message, tag="4")]
         EnterSpan(Enter),
-        /// A span was exited.
+        ///  A span was exited.
         #[prost(message, tag="5")]
         ExitSpan(Exit),
-        /// A span was closed.
+        ///  A span was closed.
         #[prost(message, tag="6")]
         CloseSpan(Close),
     }
@@ -84,6 +84,7 @@ pub mod trace_event {
 pub mod trace_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
+    use tonic::codegen::http::Uri;
     /// Allows observers to stream trace events for a given `WatchRequest` filter.
     #[derive(Debug, Clone)]
     pub struct TraceClient<T> {
@@ -104,11 +105,15 @@ pub mod trace_client {
     where
         T: tonic::client::GrpcService<tonic::body::BoxBody>,
         T::Error: Into<StdError>,
-        T::ResponseBody: Default + Body<Data = Bytes> + Send + 'static,
+        T::ResponseBody: Body<Data = Bytes> + Send + 'static,
         <T::ResponseBody as Body>::Error: Into<StdError> + Send,
     {
         pub fn new(inner: T) -> Self {
             let inner = tonic::client::Grpc::new(inner);
+            Self { inner }
+        }
+        pub fn with_origin(inner: T, origin: Uri) -> Self {
+            let inner = tonic::client::Grpc::with_origin(inner, origin);
             Self { inner }
         }
         pub fn with_interceptor<F>(
@@ -117,6 +122,7 @@ pub mod trace_client {
         ) -> TraceClient<InterceptedService<T, F>>
         where
             F: tonic::service::Interceptor,
+            T::ResponseBody: Default,
             T: tonic::codegen::Service<
                 http::Request<tonic::body::BoxBody>,
                 Response = http::Response<
@@ -129,19 +135,19 @@ pub mod trace_client {
         {
             TraceClient::new(InterceptedService::new(inner, interceptor))
         }
-        /// Compress requests with `gzip`.
+        /// Compress requests with the given encoding.
         ///
         /// This requires the server to support it otherwise it might respond with an
         /// error.
         #[must_use]
-        pub fn send_gzip(mut self) -> Self {
-            self.inner = self.inner.send_gzip();
+        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.inner = self.inner.send_compressed(encoding);
             self
         }
-        /// Enable decompressing responses with `gzip`.
+        /// Enable decompressing responses.
         #[must_use]
-        pub fn accept_gzip(mut self) -> Self {
-            self.inner = self.inner.accept_gzip();
+        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.inner = self.inner.accept_compressed(encoding);
             self
         }
         /// Produces a stream of trace events for the given filter.
@@ -192,8 +198,8 @@ pub mod trace_server {
     #[derive(Debug)]
     pub struct TraceServer<T: Trace> {
         inner: _Inner<T>,
-        accept_compression_encodings: (),
-        send_compression_encodings: (),
+        accept_compression_encodings: EnabledCompressionEncodings,
+        send_compression_encodings: EnabledCompressionEncodings,
     }
     struct _Inner<T>(Arc<T>);
     impl<T: Trace> TraceServer<T> {
@@ -216,6 +222,18 @@ pub mod trace_server {
             F: tonic::service::Interceptor,
         {
             InterceptedService::new(Self::new(inner), interceptor)
+        }
+        /// Enable decompressing requests with the given encoding.
+        #[must_use]
+        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.accept_compression_encodings.enable(encoding);
+            self
+        }
+        /// Compress responses with the given encoding, if the client supports it.
+        #[must_use]
+        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.send_compression_encodings.enable(encoding);
+            self
         }
     }
     impl<T, B> tonic::codegen::Service<http::Request<B>> for TraceServer<T>
@@ -310,7 +328,7 @@ pub mod trace_server {
             write!(f, "{:?}", self.0)
         }
     }
-    impl<T: Trace> tonic::transport::NamedService for TraceServer<T> {
+    impl<T: Trace> tonic::server::NamedService for TraceServer<T> {
         const NAME: &'static str = "rs.tokio.console.trace.Trace";
     }
 }
