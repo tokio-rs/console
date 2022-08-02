@@ -75,6 +75,11 @@ jobs:
           override: true
       - uses: Swatinem/rust-cache@v1
 
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run cargo test (API)
         uses: actions-rs/cargo@v1
         with:
