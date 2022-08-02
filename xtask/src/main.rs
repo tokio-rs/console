@@ -59,6 +59,5 @@ fn gen_proto() -> Result<(), Box<dyn std::error::Error>> {
         .compile(iface_files, &[proto_dir])?;
 
     eprintln!("protos regenerated!");
-
     Ok(())
 }
