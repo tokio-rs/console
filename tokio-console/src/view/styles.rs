@@ -47,7 +47,7 @@ impl Styles {
         }
     }
 
-    pub fn error_init(&self) -> color_eyre::Result<()> {
+    pub fn error_init(&self, cfg: &crate::config::Config) -> color_eyre::Result<()> {
         use color_eyre::{
             config::{HookBuilder, Theme},
             ErrorKind,
@@ -55,7 +55,6 @@ impl Styles {
 
         let mut builder = HookBuilder::new()
             .issue_url(concat!(env!("CARGO_PKG_REPOSITORY"), "/issues/new"))
-            .add_issue_metadata("version", env!("CARGO_PKG_VERSION"))
             .issue_filter(|kind| match kind {
                 // Only suggest reporting GitHub issues for panics, not for
                 // errors, so people don't open GitHub issues for stuff like not
@@ -69,7 +68,10 @@ impl Styles {
             //
             // this includes `std::rt`, `color_eyre`'s own frames, and
             // `tokio::runtime` & friends.
-            .add_default_filters();
+            .add_default_filters()
+            .add_issue_metadata("version", env!("CARGO_PKG_VERSION"));
+        // Add all the config values to the GitHub issue metadata
+        builder = cfg.add_issue_metadata(builder);
 
         if self.palette == Palette::NoColors {
             // disable colors in error reports
