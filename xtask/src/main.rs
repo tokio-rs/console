@@ -38,6 +38,7 @@ fn gen_proto() -> Result<()> {
     };
 
     let proto_dir = api_dir.join("proto");
+    let proto_ext = std::ffi::OsStr::new("proto");
     let proto_files = fs::read_dir(&proto_dir).with_context(|| format!("failed to read protobuf directory `{}`", proto_dir.display()))?
         .filter_map(|entry| {
             (|| {
@@ -45,7 +46,13 @@ fn gen_proto() -> Result<()> {
                 if entry.file_type()?.is_dir() {
                     return Ok(None);
                 }
-                Ok(Some(entry.path()))
+
+                let path = entry.path();
+                if path.extension() != Some(proto_ext) {
+                    return Ok(None);
+                }
+
+                Ok(Some(path))
             })()
             .transpose()
         })
@@ -55,7 +62,7 @@ fn gen_proto() -> Result<()> {
 
     tonic_build::configure()
         .build_client(true)
-        .build_server(true)git
+        .build_server(true)
         .emit_rerun_if_changed(false)
         .protoc_arg("--experimental_allow_proto3_optional")
         .out_dir(&out_dir)

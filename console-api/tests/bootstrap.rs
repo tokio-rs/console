@@ -4,6 +4,7 @@ use std::{fs, path::PathBuf, process::Command};
 fn bootstrap() {
     let root_dir = PathBuf::from(std::env!("CARGO_MANIFEST_DIR"));
     let proto_dir = root_dir.join("proto");
+    let proto_ext = std::ffi::OsStr::new("proto");
     let proto_files = fs::read_dir(&proto_dir).and_then(|dir| {
         dir.filter_map(|entry| {
             (|| {
@@ -11,7 +12,13 @@ fn bootstrap() {
                 if entry.file_type()?.is_dir() {
                     return Ok(None);
                 }
-                Ok(Some(entry.path()))
+
+                let path = entry.path();
+                if path.extension() != Some(proto_ext) {
+                    return Ok(None);
+                }
+
+                Ok(Some(path))
             })()
             .transpose()
         })
