@@ -26,6 +26,13 @@ mod warnings;
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     let mut args = config::Config::parse()?;
+    // initialize error handling first, in case panics occur while setting up
+    // other stuff.
+    let styles = view::Styles::from_config(args.view_options.clone());
+    styles.error_init()?;
+
+    args.trace_init()?;
+    tracing::debug!(?args.target_addr, ?args.view_options);
 
     match args.subcmd {
         Some(config::OptionalCmd::GenConfig) => {
@@ -40,16 +47,10 @@ async fn main() -> color_eyre::Result<()> {
         None => {}
     }
 
-    let retain_for = args.retain_for();
-    args.trace_init()?;
-    tracing::debug!(?args.target_addr, ?args.view_options);
-
     let target = args.target_addr();
     tracing::info!(?target, "using target addr");
 
-    let styles = view::Styles::from_config(args.view_options);
-    styles.error_init()?;
-
+    let retain_for = args.retain_for();
     let (mut terminal, _cleanup) = term::init_crossterm()?;
     terminal.clear()?;
     let mut conn = conn::Connection::new(target);
