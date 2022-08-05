@@ -532,7 +532,13 @@ impl<H> ToProto for PollStats<H> {
             last_poll_ended: timestamps
                 .last_poll_ended
                 .map(|at| base_time.to_timestamp(at)),
-            busy_time: Some(timestamps.busy_time.into()),
+            busy_time: Some(timestamps.busy_time.try_into().unwrap_or_else(|error| {
+                eprintln!(
+                    "failed to convert busy time to protobuf duration: {}",
+                    error
+                );
+                Default::default()
+            })),
         }
     }
 }
