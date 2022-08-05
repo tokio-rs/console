@@ -1,6 +1,9 @@
 use clap::Parser;
+use color_eyre::{
+    eyre::{ensure, WrapErr},
+    Result,
+};
 use std::{fs, path::PathBuf};
-use color_eyre::{Result, eyre::{ensure, WrapErr}};
 
 /// tokio-console dev tasks
 #[derive(Debug, clap::Parser)]
@@ -39,7 +42,13 @@ fn gen_proto() -> Result<()> {
 
     let proto_dir = api_dir.join("proto");
     let proto_ext = std::ffi::OsStr::new("proto");
-    let proto_files = fs::read_dir(&proto_dir).with_context(|| format!("failed to read protobuf directory `{}`", proto_dir.display()))?
+    let proto_files = fs::read_dir(&proto_dir)
+        .with_context(|| {
+            format!(
+                "failed to read protobuf directory `{}`",
+                proto_dir.display()
+            )
+        })?
         .filter_map(|entry| {
             (|| {
                 let entry = entry?;
