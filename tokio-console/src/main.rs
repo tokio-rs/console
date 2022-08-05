@@ -29,7 +29,7 @@ async fn main() -> color_eyre::Result<()> {
     // initialize error handling first, in case panics occur while setting up
     // other stuff.
     let styles = view::Styles::from_config(args.view_options.clone());
-    styles.error_init()?;
+    styles.error_init(&args)?;
 
     args.trace_init()?;
     tracing::debug!(?args.target_addr, ?args.view_options);

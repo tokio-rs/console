@@ -330,6 +330,42 @@ impl Config {
             .clone()
     }
 
+    pub(crate) fn add_issue_metadata(
+        &self,
+        mut builder: color_eyre::config::HookBuilder,
+    ) -> color_eyre::config::HookBuilder {
+        macro_rules! add_issue_metadata {
+            ($self:ident, $builder:ident =>
+                $(
+                    $($name:ident).+
+                ),+
+                $(,)?
+            ) => {
+                $(
+                    $builder = $builder.add_issue_metadata(concat!("config", $(".", stringify!($name)),+), format!("`{:?}`", $self$(.$name)+));
+                )*
+            }
+        }
+
+        add_issue_metadata! {
+            self, builder =>
+                subcmd,
+                target_addr,
+                env_filter,
+                log_directory,
+                retain_for,
+                view_options.no_colors,
+                view_options.lang,
+                view_options.ascii_only,
+                view_options.truecolor,
+                view_options.palette,
+                view_options.toggles.color_durations,
+                view_options.toggles.color_terminated,
+        }
+
+        builder
+    }
+
     fn from_path(config_path: ConfigPath) -> color_eyre::Result<Option<Self>> {
         ConfigFile::from_path(config_path)?
             .map(|config| config.try_into())
