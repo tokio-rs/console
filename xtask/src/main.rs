@@ -1,5 +1,6 @@
 use clap::Parser;
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
+use color_eyre::{Result, eyre::{ensure, WrapErr}};
 
 /// tokio-console dev tasks
 #[derive(Debug, clap::Parser)]
@@ -14,50 +15,50 @@ enum Command {
     GenProto,
 }
 
-fn main() {
-    let args = Args::parse();
-    if let Err(error) = args.cmd.run() {
-        eprintln!("{error}");
-        std::process::exit(1)
-    }
+fn main() -> Result<()> {
+    color_eyre::install()?;
+    Args::parse().cmd.run()
 }
 
 impl Command {
-    fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
+    fn run(&self) -> Result<()> {
         match self {
             Self::GenProto => gen_proto(),
         }
     }
 }
 
-fn gen_proto() -> Result<(), Box<dyn std::error::Error>> {
+fn gen_proto() -> Result<()> {
     eprintln!("generating `console-api` protos...");
 
     let api_dir = {
         let mut mydir = PathBuf::from(std::env!("CARGO_MANIFEST_DIR"));
-        assert!(mydir.pop(), "manifest path should not be relative!");
+        ensure!(mydir.pop(), "manifest path should not be relative!");
         mydir.join("console-api")
     };
 
     let proto_dir = api_dir.join("proto");
-    let out_dir = api_dir.join("src").join("generated");
+    let proto_files = fs::read_dir(&proto_dir).with_context(|| format!("failed to read protobuf directory `{}`", proto_dir.display()))?
+        .filter_map(|entry| {
+            (|| {
+                let entry = entry?;
+                if entry.file_type()?.is_dir() {
+                    return Ok(None);
+                }
+                Ok(Some(entry.path()))
+            })()
+            .transpose()
+        })
+        .collect::<Result<Vec<_>>>()?;
 
-    let iface_files = &[
-        proto_dir.join("trace.proto"),
-        proto_dir.join("common.proto"),
-        proto_dir.join("tasks.proto"),
-        proto_dir.join("instrument.proto"),
-        proto_dir.join("resources.proto"),
-        proto_dir.join("async_ops.proto"),
-    ];
+    let out_dir = api_dir.join("src").join("generated");
 
     tonic_build::configure()
         .build_client(true)
-        .build_server(true)
+        .build_server(true)git
+        .emit_rerun_if_changed(false)
         .protoc_arg("--experimental_allow_proto3_optional")
-        .out_dir(format!("{}", out_dir.display()))
-        .compile(iface_files, &[proto_dir])?;
-
-    eprintln!("protos regenerated!");
-    Ok(())
+        .out_dir(&out_dir)
+        .compile(&proto_files[..], &[proto_dir])
+        .context("failed to compile protobuf files")
 }
