@@ -63,7 +63,13 @@ impl Styles {
                 // terminated by remote hosts.
                 ErrorKind::NonRecoverable(_) => true,
                 ErrorKind::Recoverable(_) => false,
-            });
+            })
+            // filter out `color-eyre`'s default set of frames to skip from
+            // backtraces.
+            //
+            // this includes `std::rt`, `color_eyre`'s own frames, and
+            // `tokio::runtime` & friends.
+            .add_default_filters();
 
         if self.palette == Palette::NoColors {
             // disable colors in error reports
