@@ -42,6 +42,8 @@ tracing-core = "0.1.17"
 tonic-build = { version = "0.8", default-features = false, features = [
     "prost", "transport"
 ] }
+# explicit dep so we can get the version with fixed whitespace.
+prost-build = "0.11.1"
 
 [package.metadata.docs.rs]
 all-features = true

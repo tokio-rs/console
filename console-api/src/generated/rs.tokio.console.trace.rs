@@ -1,81 +1,81 @@
-///  Start watching trace events with the provided filter.
+/// Start watching trace events with the provided filter.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct WatchRequest {
-    ///  Specifies which trace events should be streamed.
+    /// Specifies which trace events should be streamed.
     #[prost(string, tag="1")]
     pub filter: ::prost::alloc::string::String,
 }
-///  A trace event
+/// A trace event
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TraceEvent {
-    ///  A trace event
+    /// A trace event
     #[prost(oneof="trace_event::Event", tags="1, 2, 3, 4, 5, 6")]
     pub event: ::core::option::Option<trace_event::Event>,
 }
 /// Nested message and enum types in `TraceEvent`.
 pub mod trace_event {
-    ///  `RegisterThreads` signals that a new thread was registered.
+    /// `RegisterThreads` signals that a new thread was registered.
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct RegisterThreads {
-        ///  `names` maps the registered thread id's to their associated name.
+        /// `names` maps the registered thread id's to their associated name.
         #[prost(map="uint64, string", tag="1")]
         pub names: ::std::collections::HashMap<u64, ::prost::alloc::string::String>,
     }
-    ///  `Enter` signals that a span was entered.
+    /// `Enter` signals that a span was entered.
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Enter {
-        ///  `span_id` identifies the span that was entered.
+        /// `span_id` identifies the span that was entered.
         #[prost(message, optional, tag="1")]
         pub span_id: ::core::option::Option<super::super::common::SpanId>,
-        ///  `thread_id` identifies who entered the span.
+        /// `thread_id` identifies who entered the span.
         #[prost(uint64, tag="2")]
         pub thread_id: u64,
-        ///  `at` identifies when the span was entered.
+        /// `at` identifies when the span was entered.
         #[prost(message, optional, tag="3")]
         pub at: ::core::option::Option<::prost_types::Timestamp>,
     }
-    ///  `Exit` signals that a span was exited.
+    /// `Exit` signals that a span was exited.
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Exit {
-        ///  `span_id` identifies the span that was exited.
+        /// `span_id` identifies the span that was exited.
         #[prost(message, optional, tag="1")]
         pub span_id: ::core::option::Option<super::super::common::SpanId>,
-        ///  `thread_id` identifies who exited the span.
+        /// `thread_id` identifies who exited the span.
         #[prost(uint64, tag="2")]
         pub thread_id: u64,
-        ///  `at` identifies when the span was exited.
+        /// `at` identifies when the span was exited.
         #[prost(message, optional, tag="3")]
         pub at: ::core::option::Option<::prost_types::Timestamp>,
     }
-    ///  `Close` signals that a span was closed.
+    /// `Close` signals that a span was closed.
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Close {
-        ///  `span_id` identifies the span that was closed.
+        /// `span_id` identifies the span that was closed.
         #[prost(message, optional, tag="1")]
         pub span_id: ::core::option::Option<super::super::common::SpanId>,
-        ///  `at` identifies when the span was closed.
+        /// `at` identifies when the span was closed.
         #[prost(message, optional, tag="2")]
         pub at: ::core::option::Option<::prost_types::Timestamp>,
     }
-    ///  A trace event
+    /// A trace event
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Event {
-        ///  A new thread was registered.
+        /// A new thread was registered.
         #[prost(message, tag="1")]
         RegisterThread(RegisterThreads),
-        ///  A new span metadata was registered.
+        /// A new span metadata was registered.
         #[prost(message, tag="2")]
         RegisterMetadata(super::super::common::RegisterMetadata),
-        ///  A span was created.
+        /// A span was created.
         #[prost(message, tag="3")]
         NewSpan(super::super::common::Span),
-        ///  A span was entered.
+        /// A span was entered.
         #[prost(message, tag="4")]
         EnterSpan(Enter),
-        ///  A span was exited.
+        /// A span was exited.
         #[prost(message, tag="5")]
         ExitSpan(Exit),
-        ///  A span was closed.
+        /// A span was closed.
         #[prost(message, tag="6")]
         CloseSpan(Close),
     }

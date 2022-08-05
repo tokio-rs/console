@@ -1,62 +1,62 @@
-///  InstrumentRequest requests the stream of updates
-///  to observe the async runtime state over time.
+/// InstrumentRequest requests the stream of updates
+/// to observe the async runtime state over time.
 ///
-///  TODO: In the future allow for the request to specify
-///  only the data that the caller cares about (i.e. only
-///  tasks but no resources)
+/// TODO: In the future allow for the request to specify
+/// only the data that the caller cares about (i.e. only
+/// tasks but no resources)
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InstrumentRequest {
 }
-///  TaskDetailsRequest requests the stream of updates about
-///  the specific task identified in the request.
+/// TaskDetailsRequest requests the stream of updates about
+/// the specific task identified in the request.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TaskDetailsRequest {
-    ///  Identifies the task for which details were requested.
+    /// Identifies the task for which details were requested.
     #[prost(message, optional, tag="1")]
     pub id: ::core::option::Option<super::common::Id>,
 }
-///  PauseRequest requests the stream of updates to pause.
+/// PauseRequest requests the stream of updates to pause.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PauseRequest {
 }
-///  ResumeRequest requests the stream of updates to resume after a pause.
+/// ResumeRequest requests the stream of updates to resume after a pause.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResumeRequest {
 }
-///  Update carries all information regarding tasks, resources, async operations
-///  and resource operations in one message. There are a couple of reasons to combine all
-///  of these into a single message:
+/// Update carries all information regarding tasks, resources, async operations
+/// and resource operations in one message. There are a couple of reasons to combine all
+/// of these into a single message:
 ///
-///  - we can use one single timestamp for all the data
-///  - we can have all the new_metadata in one place
-///  - things such as async ops and resource ops do not make sense
+/// - we can use one single timestamp for all the data
+/// - we can have all the new_metadata in one place
+/// - things such as async ops and resource ops do not make sense
 ///    on their own as they have relations to tasks and resources
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Update {
-    ///  The system time when this update was recorded.
+    /// The system time when this update was recorded.
     ///
-    ///  This is the timestamp any durations in the included `Stats` were
-    ///  calculated relative to.
+    /// This is the timestamp any durations in the included `Stats` were
+    /// calculated relative to.
     #[prost(message, optional, tag="1")]
     pub now: ::core::option::Option<::prost_types::Timestamp>,
-    ///  Task state update.
+    /// Task state update.
     #[prost(message, optional, tag="2")]
     pub task_update: ::core::option::Option<super::tasks::TaskUpdate>,
-    ///  Resource state update.
+    /// Resource state update.
     #[prost(message, optional, tag="3")]
     pub resource_update: ::core::option::Option<super::resources::ResourceUpdate>,
-    ///  Async operations state update
+    /// Async operations state update
     #[prost(message, optional, tag="4")]
     pub async_op_update: ::core::option::Option<super::async_ops::AsyncOpUpdate>,
-    ///  Any new span metadata that was registered since the last update.
+    /// Any new span metadata that was registered since the last update.
     #[prost(message, optional, tag="5")]
     pub new_metadata: ::core::option::Option<super::common::RegisterMetadata>,
 }
-///  `PauseResponse` is the value returned after a pause request.
+/// `PauseResponse` is the value returned after a pause request.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PauseResponse {
 }
-///  `ResumeResponse` is the value returned after a resume request.
+/// `ResumeResponse` is the value returned after a resume request.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResumeResponse {
 }

@@ -271,6 +271,7 @@ name = "console-api"
 version = "0.4.0"
 dependencies = [
  "prost",
+ "prost-build",
  "prost-types",
  "tonic",
  "tonic-build",
@@ -1070,9 +1071,9 @@ dependencies = [
 
 [[package]]
 name = "prost-build"
-version = "0.11.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d49d928704208aba2cb1fb022ce1a319bdedcb03caf51ddf82734fa903407762"
+checksum = "7f835c582e6bd972ba8347313300219fed5bfa52caf175298d860b61ff6069bb"
 dependencies = [
  "bytes",
  "heck",
