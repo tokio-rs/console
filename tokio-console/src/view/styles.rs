@@ -48,11 +48,23 @@ impl Styles {
     }
 
     pub fn error_init(&self) -> color_eyre::Result<()> {
-        use color_eyre::config::{HookBuilder, Theme};
+        use color_eyre::{
+            config::{HookBuilder, Theme},
+            ErrorKind,
+        };
 
         let mut builder = HookBuilder::new()
             .issue_url(concat!(env!("CARGO_PKG_REPOSITORY"), "/issues/new"))
-            .add_issue_metadata("version", env!("CARGO_PKG_VERSION"));
+            .add_issue_metadata("version", env!("CARGO_PKG_VERSION"))
+            .issue_filter(|kind| match kind {
+                // Only suggest reporting GitHub issues for panics, not for
+                // errors, so people don't open GitHub issues for stuff like not
+                // being able to find a config file or connections being
+                // terminated by remote hosts.
+                ErrorKind::NonRecoverable(_) => true,
+                ErrorKind::Recoverable(_) => false,
+            });
+
         if self.palette == Palette::NoColors {
             // disable colors in error reports
             builder = builder.theme(Theme::new());
