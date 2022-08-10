@@ -1,3 +1,13 @@
+<a name="0.1.7"></a>
+## 0.1.7 (2022-08-10)
+
+
+#### Features
+
+*  Update `tonic` to `0.8` (#364) ([40e2f6fd](40e2f6fd))
+*  Update `console-api` to `0.4` (#364) ([40e2f6fd](40e2f6fd))
+
+
 <a name="0.1.6"></a>
 ## 0.1.6 (2022-05-23)
 
