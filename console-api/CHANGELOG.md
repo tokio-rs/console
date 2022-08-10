@@ -1,3 +1,16 @@
+<a name="0.4.0"></a>
+## 0.4.0 (2022-08-10)
+
+
+#### Breaking Changes
+
+*  Update `tonic` to `0.8` (#364) ([40e2f6fd](40e2f6fd))
+
+#### Features
+
+*  Update `tonic` to `0.8` (#364) ([40e2f6fd](40e2f6fd))
+
+
 <a name="0.3.0"></a>
 ## 0.3.0 (2022-05-23)
 
