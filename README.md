@@ -167,7 +167,7 @@ the console command-line tool supports a number of additional flags to configure
 its behavior. the `-h` or `--help` flag will print a list of supported
 command-line flags and arguments:
 
-```sh
+```text
 USAGE:
     tokio-console [FLAGS] [OPTIONS] [TARGET_ADDR]
 
