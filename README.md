@@ -38,9 +38,10 @@ toolkit consists of multiple components:
   [`tracing`].
 
 * tools for **displaying and exploring diagnostic data**, implemented as gRPC
-  clients using the console wire protocol. the [`tokio-console`] crate implements an
-  **an interactive command-line tool** that consumes this data, but **other
-  implementations**, such as graphical or web-based tools, are also possible.
+  clients using the console wire protocol. the [`tokio-console`] crate
+  implements an **an interactive command-line tool** that consumes this data,
+  but **other implementations**, such as graphical or web-based tools, are
+  also possible.
 
 [gRPC]: https://grpc.io/
 [protocol buffers]: https://developers.google.com/protocol-buffers
@@ -58,7 +59,7 @@ viewing details for a single task:
 
 ![task details view](https://user-images.githubusercontent.com/2796466/129774524-288c967b-6066-4f98-973d-099b3e6a2c55.png)
 
-## on the shoulders of giants...
+## on the shoulders of giants
 
 the console is **part of a much larger effort** to improve debugging tooling for
 async Rust. **a [2019 Google Summer of Code project][gsoc] by Matthias Prechtl**
@@ -86,7 +87,9 @@ others.
 [Instruments]: https://developer.apple.com/library/archive/documentation/ToolsLanguages/Conceptual/Xcode_Overview/MeasuringPerformance.html
 [**@matprec**]: https://github.com/matprec
 [**@pnkfelix**]: https://github.com/pnkfelix
+
 ## using it
+
 ### instrumenting your program
 
 to **instrument an application using Tokio**, add a dependency on the
@@ -101,10 +104,13 @@ notes:
 
 * in order to collect task data from Tokio, **the `tokio_unstable` cfg must be
   enabled**. for example, you could build your project with
+
   ```shell
-  $ RUSTFLAGS="--cfg tokio_unstable" cargo build
+  RUSTFLAGS="--cfg tokio_unstable" cargo build
   ```
+
   or add the following to your `.cargo/config.toml` file:
+
   ```toml
   [build]
   rustflags = ["--cfg", "tokio_unstable"]
@@ -116,15 +122,15 @@ notes:
 * the `tokio` and `runtime` [`tracing` targets] must be enabled at the [`TRACE`
   level].
 
-  + if you're using the [`console_subscriber::init()`][init] or
+  * if you're using the [`console_subscriber::init()`][init] or
   [`console_subscriber::Builder`][builder] APIs, these targets are enabled
   automatically.
 
-  + if you are manually configuring the `tracing` subscriber using the
+  * if you are manually configuring the `tracing` subscriber using the
   [`EnvFilter`] or [`Targets`] filters from [`tracing-subscriber`], add
   `"tokio=trace,runtime=trace"` to your filter configuration.
 
-  + also, ensure you have not enabled any of the [compile time filter 
+  * also, ensure you have not enabled any of the [compile time filter
     features][compile_time_filters] in your `Cargo.toml`.
 
 ### running the console
@@ -132,13 +138,13 @@ notes:
 to **run the console command-line tool**, install `tokio-console` from [crates.io](https://crates.io/crates/tokio-console)
 
 ```shell
-$ cargo install --locked tokio-console
+cargo install --locked tokio-console
 ```
 
 and run locally
 
 ```shell
-$ tokio-console
+tokio-console
 ```
 
 > **alternative method:** run the tool from a local checkout of this repository
@@ -154,14 +160,14 @@ as an argument to the console (either as an `<IP>:<PORT>` or
 `<DNS_NAME>:<PORT>`). for example:
 
 ```shell
-$ cargo run -- http://my.great.console.app.local:5555
+cargo run -- http://my.great.console.app.local:5555
 ```
 
 the console command-line tool supports a number of additional flags to configure
 its behavior. the `-h` or `--help` flag will print a list of supported
 command-line flags and arguments:
 
-```
+```sh
 USAGE:
     tokio-console [FLAGS] [OPTIONS] [TARGET_ADDR]
 
@@ -240,7 +246,7 @@ OPTIONS:
             * `years`, `year`, `y` -- defined as 365.25 days [default: 6s]
 ```
 
-## for development:
+## for development
 
 the `console-subscriber/examples` directory contains **some potentially useful
 tools**:
