@@ -1,7 +1,12 @@
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-include!("generated/rs.tokio.console.common.rs");
+pub use generated::*;
+
+mod generated {
+    #![allow(warnings)]
+    include!("generated/rs.tokio.console.common.rs");
+}
 
 impl From<tracing_core::Level> for metadata::Level {
     fn from(level: tracing_core::Level) -> Self {
