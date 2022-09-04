@@ -21,19 +21,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                         .spawn(async move {
                             let _permit = acquire_sem.acquire_many(i).await.unwrap();
                             tokio::time::sleep(Duration::from_secs(i as u64 * 2)).await;
-                        }),
+                        })
+                        .unwrap(),
                 );
-                tasks.push(tokio::task::Builder::default().name(&add_task_name).spawn(
-                    async move {
-                        tokio::time::sleep(Duration::from_secs(i as u64 * 5)).await;
-                        add_sem.add_permits(i as usize);
-                    },
-                ));
+                tasks.push(
+                    tokio::task::Builder::default()
+                        .name(&add_task_name)
+                        .spawn(async move {
+                            tokio::time::sleep(Duration::from_secs(i as u64 * 5)).await;
+                            add_sem.add_permits(i as usize);
+                        })
+                        .unwrap(),
+                );
             }
 
             let all_tasks = futures::future::try_join_all(tasks);
             all_tasks.await.unwrap();
         })
+        .unwrap()
         .await?;
 
     Ok(())

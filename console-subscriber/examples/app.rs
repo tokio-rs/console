@@ -23,15 +23,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             "blocks" => {
                 tokio::task::Builder::new()
                     .name("blocks")
-                    .spawn(double_sleepy(1, 10));
+                    .spawn(double_sleepy(1, 10))
+                    .unwrap();
             }
             "coma" => {
                 tokio::task::Builder::new()
                     .name("coma")
-                    .spawn(std::future::pending::<()>());
+                    .spawn(std::future::pending::<()>())
+                    .unwrap();
             }
             "burn" => {
-                tokio::task::Builder::new().name("burn").spawn(burn(1, 10));
+                tokio::task::Builder::new()
+                    .name("burn")
+                    .spawn(burn(1, 10))
+                    .unwrap();
             }
             "help" | "-h" => {
                 eprintln!("{}", HELP);
@@ -47,10 +52,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let task1 = tokio::task::Builder::new()
         .name("task1")
-        .spawn(spawn_tasks(1, 10));
+        .spawn(spawn_tasks(1, 10))
+        .unwrap();
     let task2 = tokio::task::Builder::new()
         .name("task2")
-        .spawn(spawn_tasks(10, 30));
+        .spawn(spawn_tasks(10, 30))
+        .unwrap();
 
     let result = tokio::try_join! {
         task1,
@@ -66,7 +73,10 @@ async fn spawn_tasks(min: u64, max: u64) {
     loop {
         for i in min..max {
             tracing::trace!(i, "spawning wait task");
-            tokio::task::Builder::new().name("wait").spawn(wait(i));
+            tokio::task::Builder::new()
+                .name("wait")
+                .spawn(wait(i))
+                .unwrap();
 
             let sleep = Duration::from_secs(max) - Duration::from_secs(i);
             tracing::trace!(?sleep, "sleeping...");
