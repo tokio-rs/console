@@ -19,8 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                         .name(&task_name)
                         .spawn(async move {
                             tokio::time::sleep(Duration::from_secs(i)).await;
-                            let wait_result = c.wait().await;
-                            wait_result
+                            c.wait().await
                         })
                         .unwrap(),
                 );
