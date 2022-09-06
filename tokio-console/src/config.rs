@@ -411,7 +411,7 @@ fn default_log_directory() -> PathBuf {
 
 impl ViewOptions {
     pub fn is_utf8(&self) -> bool {
-        if !self.ascii_only.unwrap_or(true) {
+        if self.ascii_only.unwrap_or(false) {
             return false;
         }
         self.lang.as_deref().unwrap_or_default().ends_with("UTF-8")
