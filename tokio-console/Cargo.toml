@@ -7,6 +7,7 @@ edition = "2021"
 rust-version = "1.58.0"
 authors = ["Eliza Weisman <eliza@buoyant.io>", "Tokio Contributors <team@tokio.rs>",]
 readme = "README.md"
+default-run = "tokio-console"
 homepage = "https://github.com/tokio-rs/console/tree/main/tokio-console" 
 description = """
 The Tokio console: a debugger for async Rust.
