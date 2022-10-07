@@ -709,6 +709,12 @@ mod tests {
     use super::*;
 
     #[test]
+    fn verify_cli() {
+        use clap::CommandFactory;
+        Config::command().debug_assert()
+    }
+
+    #[test]
     fn args_example_changed() {
         use clap::CommandFactory;
 
