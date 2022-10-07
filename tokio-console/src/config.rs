@@ -326,9 +326,7 @@ impl Config {
     }
 
     pub(crate) fn retain_for(&self) -> Option<Duration> {
-        self.retain_for
-            .unwrap_or_default()
-            .0
+        self.retain_for.unwrap_or_default().0
     }
 
     pub(crate) fn target_addr(&self) -> Uri {
