@@ -3,9 +3,9 @@
 :balloon: Thanks for your help improving the project! We are so happy to have
 you!
 
-There are opportunities to contribute to Tokio at any level. It doesn't matter if
-you are just getting started with Rust or are the most weathered expert, we can
-use your help.
+There are opportunities to contribute to Tokio at any level. It doesn't matter
+if you are just getting started with Rust or are the most weathered expert, we
+can use your help.
 
 **No contribution is too small and all contributions are valued.**
 
@@ -20,8 +20,8 @@ not covered in this guide, please joinus!
 ## Conduct
 
 The Tokio project adheres to the [Rust Code of Conduct][coc]. This describes
-the _minimum_ behavior expected from all contributors. Instances of violations of the
-Code of Conduct can be reported by contacting the project team at
+the _minimum_ behavior expected from all contributors. Instances of violations
+of the Code of Conduct can be reported by contacting the project team at
 [moderation@tokio.rs](mailto:moderation@tokio.rs).
 
 [coc]: https://github.com/rust-lang/rust/blob/master/CODE_OF_CONDUCT.md
@@ -156,7 +156,7 @@ The provided [example application] can be used for testing UI changes:
 
 When opening pull requests that make UI changes, please include one or more
 screenshots demonstrating your change! For bug fixes, it is often also useful to
-include a screenshot showing the console *prior* to the change, in order to
+include a screenshot showing the console _prior_ to the change, in order to
 demonstrate the bug that's being fixed.
 
 #### Integration tests
@@ -178,7 +178,7 @@ for a reader to understand and actually testing the API.
 The type level example for `tokio_timer::Timeout` provides a good example of a
 documentation test:
 
-```
+```rust
 /// // import the `timeout` function, usually this is done
 /// // with `use tokio::prelude::*`
 /// use tokio::prelude::FutureExt;
@@ -204,7 +204,7 @@ documentation test:
 /// # }
 ```
 
-Given that this is a *type* level documentation test and the primary way users
+Given that this is a _type_ level documentation test and the primary way users
 of `tokio` will create an instance of `Timeout` is by using
 `FutureExt::timeout`, this is how the documentation test is structured.
 
@@ -215,7 +215,7 @@ easiest way to execute a future from a test.
 If this were a documentation test for the `Timeout::new` function, then the
 example would explicitly use `Timeout::new`. For example:
 
-```
+```rust
 /// use tokio::timer::Timeout;
 /// use futures::Future;
 /// use futures::sync::oneshot;
@@ -254,7 +254,7 @@ history**.  But also, we use the git commit messages to **generate the
 change log**.
 
 Since commits are merged by [squashing](#commit-squashing), these rules are not
-required for individual commits to a development branch. However, they *are*
+required for individual commits to a development branch. However, they _are_
 required for the final squash commit to the `main` branch. Generally, the PR
 description and title are used as the commit message for the squash commit.
 Therefore, please try to follow these rules when writing the description and
@@ -266,7 +266,7 @@ Each commit message consists of a **header**, a **body** and a
 **footer**.  The header has a special format that includes a **type**,
 an (optional) **scope** and a **subject**:
 
-```
+```sh
 <type>(<scope>): <subject>
 <BLANK LINE>
 <body>
@@ -284,6 +284,7 @@ which we use to generate changelogs.
 [clog]: https://github.com/clog-tool/clog-cli
 
 #### Type
+
 Must be one of the following:
 
 * **feat**: A new feature
@@ -334,7 +335,6 @@ is also the place to reference GitHub issues that this commit
 
 The last line of commits introducing breaking changes should be in the
 form `BREAKING CHANGE: <desc>`
-
 
 ### Opening the Pull Request
 
@@ -388,7 +388,7 @@ does not land, the submitters should come away from the experience feeling like
 their effort was not wasted or unappreciated**. Every Pull Request from a new
 contributor is an opportunity to grow the community.
 
-### Review a bit at a time.
+### Review a bit at a time
 
 Do not overwhelm new contributors.
 
@@ -407,7 +407,7 @@ Note that only **incremental** improvement is needed to land a PR. This means
 that the PR does not need to be perfect, only better than the status quo. Follow
 up PRs may be opened to continue iterating.
 
-When changes are necessary, *request* them, do not *demand* them, and **do not
+When changes are necessary, _request_ them, do not _demand_ them, and **do not
 assume that the submitter already knows how to add a test or run a benchmark**.
 
 Specific performance optimization techniques, coding styles and conventions
@@ -427,7 +427,7 @@ with the appropriate reason to keep the conversation flow concise and relevant.
 
 ### Be aware of the person behind the code
 
-Be aware that *how* you communicate requests and reviews in your feedback can
+Be aware that _how_ you communicate requests and reviews in your feedback can
 have a significant impact on the success of the Pull Request. Yes, we may land
 a particular change that makes Tokio better, but the individual might just not
 want to have anything to do with Tokio ever again. The goal is not just having
@@ -440,7 +440,7 @@ check with the contributor to see if they intend to continue the work before
 checking if they would mind if you took it over (especially if it just has nits
 left). When doing so, it is courteous to give the original contributor credit
 for the work they started (either by preserving their name and email address in
-the commit log, or by using an `Author: ` meta-data tag in the commit.
+the commit log, or by using an `Author:` meta-data tag in the commit.
 
 _Adapted from the [Node.js contributing guide][node]_.
 
@@ -458,36 +458,35 @@ targeted at maintainers. Most contributors aren't able to set these labels.
 
 The area label describes cross-cutting areas of work on the console project.
 
-- **A-instrumentation**: Related to application instrumentation (such as adding
+* **A-instrumentation**: Related to application instrumentation (such as adding
   new instrumentation to an async runtime or other library).
-- **A-warnings**: Related to warnings displayed in the console CLI. This
+* **A-warnings**: Related to warnings displayed in the console CLI. This
   includes changes that add new warnings, improve existing warnings, or
   improvements to the console's warning system as a whole.
-- **A-recording**: Related to recording and playing back console data.
+* **A-recording**: Related to recording and playing back console data.
 
 ### Crate
 
 The crate label describes what crates in the repository are involved in an issue
 or PR.
 
-- **C-api**: Related to the `console-api` crate and/or protobuf definitions.
-- **C-console**: Related to the `console` command-line application.
-- **C-subscriber**: Related to the `console-subscriber` crate.
+* **C-api**: Related to the `console-api` crate and/or protobuf definitions.
+* **C-console**: Related to the `console` command-line application.
+* **C-subscriber**: Related to the `console-subscriber` crate.
 
 ### Effort and calls for participation
 
 The effort label represents a _best guess_ for the approximate amount of effort
 that an issue will likely require. These are not always accurate! :)
 
-
-- **E-easy**: This is relatively easy. These issues are often good for newcomers
+* **E-easy**: This is relatively easy. These issues are often good for newcomers
   to the project and/or Rust beginners.
-- **E-medium**: Medium effort. This issue is expected to be relatively
+* **E-medium**: Medium effort. This issue is expected to be relatively
   straightforward, but may require a larger amount of work than `E-easy` issues,
   or require some design work.
-- **E-hard** This either involves very tricky code, is something we don't know
+* **E-hard** This either involves very tricky code, is something we don't know
    how to solve, or is difficult for some other reason.
-- **E-needs-mvce**: This bug is missing a minimal complete and verifiable
+* **E-needs-mvce**: This bug is missing a minimal complete and verifiable
    example.
 
 The "E-" prefix is the same as used in the Rust compiler repository. Some
@@ -499,14 +498,14 @@ server if you want to know how difficult an issue likely is.
 The severity label categorizes what type of issue is described by an issue, or
 what is implemented by a pull request.
 
-- **S-bug**: This is a bug in the console. If this label is added to an issue,
+* **S-bug**: This is a bug in the console. If this label is added to an issue,
   then that issue describes a bug. If this label is added to a pull request,
-  then this pull request *fixes* a bug.
-- **S-feature**: This is adding a new feature.
-- **S-performance**: Related to improving performance, either in the
+  then this pull request _fixes_ a bug.
+* **S-feature**: This is adding a new feature.
+* **S-performance**: Related to improving performance, either in the
   instrumented application or in the `console` CLI. This may be added to
   performance regressions that don't result in a crash or incorrect data, as
   well as to pull requests that implement optimizations.
-- **S-refactor**: This is a refactor. This label describes proposed or
+* **S-refactor**: This is a refactor. This label describes proposed or
   implemented changes that are related to improve code quality or set up for
   future changes, but shouldn't effect behavior, fix bugs, or add new APIs.
