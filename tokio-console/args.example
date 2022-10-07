@@ -1,6 +1,8 @@
 Commands:
   gen-config
-          Generate a `console.toml` config file with the default configuration values, overridden by any provided command-line arguments
+          Generate a `console.toml` config file with the default
+          configuration values, overridden by any provided command-line
+          arguments
   gen-completion
           Generate shell completions
   help
@@ -18,9 +20,12 @@ Options:
       --log <LOG_FILTER>
           Log level filter for the console's internal diagnostics.
           
-          Logs are written to a new file at the path given by the `--log-dir` argument (or its default value), or to the system journal if `systemd-journald` support is enabled.
+          Logs are written to a new file at the path given by the
+          `--log-dir` argument (or its default value), or to the system
+          journal if `systemd-journald` support is enabled.
           
-          If this is set to 'off' or is not set, no logs will be written.
+          If this is set to 'off' or is not set, no logs will be
+          written.
           
           [default: off]
           
@@ -47,7 +52,8 @@ Options:
       --colorterm <truecolor>
           Overrides the value of the `COLORTERM` environment variable.
           
-          If this is set to `24bit` or `truecolor`, 24-bit RGB color support will be enabled.
+          If this is set to `24bit` or `truecolor`, 24-bit RGB color
+          support will be enabled.
           
           [env: COLORTERM=truecolor]
           [possible values: 24bit, truecolor]
@@ -68,11 +74,15 @@ Options:
           [possible values: true, false]
 
       --retain-for <RETAIN_FOR>
-          How long to continue displaying completed tasks and dropped resources after they have been closed.
+          How long to continue displaying completed tasks and dropped
+          resources after they have been closed.
           
-          This accepts either a duration, parsed as a combination of time spans (such as `5days 2min 2s`), or `none` to disable removing completed tasks and dropped resources.
+          This accepts either a duration, parsed as a combination of
+          time spans (such as `5days 2min 2s`), or `none` to disable
+          removing completed tasks and dropped resources.
           
-          Each time span is an integer number followed by a suffix. Supported suffixes are:
+          Each time span is an integer number followed by a suffix.
+          Supported suffixes are:
           
           * `nsec`, `ns` -- nanoseconds
           

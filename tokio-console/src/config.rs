@@ -768,7 +768,13 @@ mod tests {
 
         let path = PathBuf::from(std::env!("CARGO_MANIFEST_DIR")).join("args.example");
 
-        let mut cmd = Config::command();
+        let mut cmd = Config::command()
+            // always use the same terminal width when generating the help text,
+            // so that the text wrapping doesn't change based on the terminal
+            // size that the test was run in.
+            // (72 chars seems to fit reasonably in the default width of
+            // RustDoc's code formatting)
+            .term_width(72);
         let mut helptext = Vec::new();
         // Format the help text to a string.
         cmd.write_long_help(&mut Cursor::new(&mut helptext))
