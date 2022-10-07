@@ -1,3 +1,5 @@
+# Security
+
 ## Report a security issue
 
 The Tokio project team welcomes security reports and is committed to providing prompt attention to security issues. Security issues should be reported privately via [security@tokio.rs](mailto:security@tokio.rs). Security issues should not be reported via the public Github Issue tracker.
