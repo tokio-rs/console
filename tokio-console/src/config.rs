@@ -1,5 +1,8 @@
 use crate::view::Palette;
-use clap::{ArgGroup, IntoApp, Parser as Clap, Subcommand, ValueHint};
+use clap::{
+    builder::{PossibleValuesParser, TypedValueParser},
+    ArgGroup, IntoApp, Parser as Clap, Subcommand, ValueHint,
+};
 use clap_complete::Shell;
 use color_eyre::eyre::WrapErr;
 use serde::{Deserialize, Serialize};
@@ -161,15 +164,14 @@ pub struct ViewOptions {
         long = "colorterm",
         name = "truecolor",
         env = "COLORTERM",
-        parse(from_str = parse_true_color),
-        possible_values = &["24bit", "truecolor"],
+        value_parser = true_color_parser(),
     )]
     truecolor: Option<bool>,
 
     /// Explicitly set which color palette to use.
     #[clap(
         long,
-        possible_values = &["8", "16", "256", "all", "off"],
+        value_parser = palette_parser(),
         group = "colors",
         conflicts_with_all = &["no-colors", "truecolor"]
     )]
@@ -504,8 +506,19 @@ impl Default for ViewOptions {
     }
 }
 
-fn parse_true_color(s: &str) -> bool {
-    let s = s.trim();
+fn true_color_parser() -> impl TypedValueParser<Value = bool> {
+    PossibleValuesParser::new(&["24bit", "truecolor"]).map(parse_true_color)
+}
+
+fn palette_parser() -> impl TypedValueParser<Value = Palette> {
+    PossibleValuesParser::new(&["8", "16", "256", "all", "off"]).map(|s| {
+        s.parse::<Palette>()
+            .expect("possible values must have validated that this is a valid `Palette`")
+    })
+}
+
+fn parse_true_color(s: impl AsRef<str>) -> bool {
+    let s = s.as_ref().trim();
     s.eq_ignore_ascii_case("truecolor") || s.eq_ignore_ascii_case("24bit")
 }
 
