@@ -121,6 +121,12 @@ pub enum OptionalCmd {
 #[derive(Debug, Clone, Copy, Deserialize)]
 struct RetainFor(Option<Duration>);
 
+impl Default for RetainFor {
+    fn default() -> Self {
+        Self(Some(Duration::from_secs(6)))
+    }
+}
+
 impl fmt::Display for RetainFor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
@@ -320,7 +326,7 @@ impl Config {
     }
 
     pub(crate) fn retain_for(&self) -> Option<Duration> {
-        self.retain_for.as_ref().and_then(|value| value.0)
+        self.retain_for.unwrap_or_default().0
     }
 
     pub(crate) fn target_addr(&self) -> Uri {
@@ -390,7 +396,7 @@ impl Default for Config {
             target_addr: Some(default_target_addr()),
             env_filter: Some(tracing_subscriber::EnvFilter::new("off")),
             log_directory: Some(default_log_directory()),
-            retain_for: Some(RetainFor(Some(Duration::from_secs(6)))),
+            retain_for: Some(RetainFor::default()),
             view_options: ViewOptions::default(),
             subcmd: None,
         }
@@ -411,7 +417,7 @@ fn default_log_directory() -> PathBuf {
 
 impl ViewOptions {
     pub fn is_utf8(&self) -> bool {
-        if !self.ascii_only.unwrap_or(true) {
+        if self.ascii_only.unwrap_or(false) {
             return false;
         }
         self.lang.as_deref().unwrap_or_default().ends_with("UTF-8")
