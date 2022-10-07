@@ -1,7 +1,7 @@
 use crate::view::Palette;
 use clap::{
     builder::{PossibleValuesParser, TypedValueParser},
-    ArgGroup, IntoApp, Parser as Clap, Subcommand, ValueHint,
+    ArgAction, ArgGroup, CommandFactory, Parser as Clap, Subcommand, ValueHint,
 };
 use clap_complete::Shell;
 use color_eyre::eyre::WrapErr;
@@ -14,6 +14,7 @@ use std::process::Command;
 use std::str::FromStr;
 use std::time::Duration;
 use tonic::transport::Uri;
+use tracing_subscriber::filter;
 
 #[derive(Clap, Debug)]
 #[clap(
@@ -43,7 +44,7 @@ pub struct Config {
     ///
     /// [default: off]
     #[clap(long = "log", env = "RUST_LOG")]
-    pub(crate) env_filter: Option<tracing_subscriber::EnvFilter>,
+    log_filter: Option<LogFilter>,
 
     /// Path to a directory to write the console's internal logs to.
     ///
@@ -116,7 +117,7 @@ pub enum OptionalCmd {
     GenCompletion {
         #[clap(name = "install", long = "install")]
         install: bool,
-        #[clap(arg_enum)]
+        #[clap(value_enum)]
         shell: Shell,
     },
 }
@@ -146,7 +147,7 @@ impl Serialize for RetainFor {
 #[clap(group = ArgGroup::new("colors").conflicts_with("no-colors"))]
 pub struct ViewOptions {
     /// Disable ANSI colors entirely.
-    #[clap(name = "no-colors", long = "no-colors", takes_value = false)]
+    #[clap(name = "no-colors", long = "no-colors", action = ArgAction::SetTrue)]
     no_colors: bool,
 
     /// Overrides the terminal's default language.
@@ -195,6 +196,9 @@ pub struct ColorToggles {
     #[serde(rename = "terminated")]
     color_terminated: Option<bool>,
 }
+
+#[derive(Clone, Debug)]
+struct LogFilter(filter::Targets);
 
 /// A sturct used to parse the toml config file
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -251,13 +255,13 @@ impl Config {
         toml::to_string_pretty(&config).map_err(Into::into)
     }
 
-    pub fn trace_init(&mut self) -> color_eyre::Result<()> {
+    pub fn trace_init(&self) -> color_eyre::Result<()> {
         use tracing_subscriber::prelude::*;
-        let filter = match self.env_filter.take() {
+        let filter = match self.log_filter.clone() {
             // if logging is totally disabled, don't bother even constructing
             // the subscriber
             None => return Ok(()),
-            Some(filter) => filter,
+            Some(LogFilter(filter)) => filter,
         };
 
         // If we're on a Linux distro with journald, try logging to the system
@@ -276,7 +280,7 @@ impl Config {
         let fmt = if should_fmt {
             let dir = self
                 .log_directory
-                .take()
+                .clone()
                 .unwrap_or_else(default_log_directory);
 
             // first ensure that the log directory exists
@@ -353,7 +357,7 @@ impl Config {
             self, builder =>
                 subcmd,
                 target_addr,
-                env_filter,
+                log_filter,
                 log_directory,
                 retain_for,
                 view_options.no_colors,
@@ -378,7 +382,7 @@ impl Config {
         Self {
             log_directory: other.log_directory.or(self.log_directory),
             target_addr: other.target_addr.or(self.target_addr),
-            env_filter: other.env_filter.or(self.env_filter),
+            log_filter: other.log_filter.or(self.log_filter),
             retain_for: other.retain_for.or(self.retain_for),
             view_options: self.view_options.merge_with(other.view_options),
             subcmd: other.subcmd.or(self.subcmd),
@@ -390,7 +394,9 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             target_addr: Some(default_target_addr()),
-            env_filter: Some(tracing_subscriber::EnvFilter::new("off")),
+            log_filter: Some(LogFilter(
+                filter::Targets::new().with_default(filter::LevelFilter::OFF),
+            )),
             log_directory: Some(default_log_directory()),
             retain_for: Some(RetainFor(Some(Duration::from_secs(6)))),
             view_options: ViewOptions::default(),
@@ -582,7 +588,7 @@ impl ConfigFile {
         Ok(uri)
     }
 
-    fn env_filter(&self) -> color_eyre::Result<Option<tracing_subscriber::EnvFilter>> {
+    fn log_filter(&self) -> color_eyre::Result<Option<LogFilter>> {
         let filter_str = self.log.as_deref();
 
         // If logging is totally disabled, may as well bail completely.
@@ -590,11 +596,11 @@ impl ConfigFile {
             return Ok(None);
         }
 
-        let env_filter = filter_str
-            .map(|directive| directive.parse::<tracing_subscriber::EnvFilter>())
+        let log_filter = filter_str
+            .map(|directive| directive.parse::<filter::Targets>().map(LogFilter))
             .transpose()
             .wrap_err_with(|| format!("failed to parse log filter {:?}", self.log))?;
-        Ok(env_filter)
+        Ok(log_filter)
     }
 
     fn retain_for(&self) -> Option<RetainFor> {
@@ -624,7 +630,7 @@ impl From<Config> for ConfigFile {
     fn from(config: Config) -> Self {
         Self {
             default_target_addr: config.target_addr.map(|addr| addr.to_string()),
-            log: config.env_filter.map(|filter| filter.to_string()),
+            log: config.log_filter.map(|filter| filter.to_string()),
             log_directory: config.log_directory,
             retention: config.retain_for,
             charset: Some(CharsetConfig {
@@ -647,7 +653,7 @@ impl TryFrom<ConfigFile> for Config {
     fn try_from(mut value: ConfigFile) -> Result<Self, Self::Error> {
         Ok(Config {
             target_addr: value.target_addr()?,
-            env_filter: value.env_filter()?,
+            log_filter: value.log_filter()?,
             log_directory: value.log_directory.take(),
             retain_for: value.retain_for(),
             view_options: ViewOptions {
@@ -709,6 +715,32 @@ pub fn gen_completion(install: bool, shell: Shell) -> color_eyre::Result<()> {
     Ok(())
 }
 
+// === impl LogFilter ===
+
+impl fmt::Display for LogFilter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut comma = false;
+        if let Some(default) = self.0.default_level() {
+            write!(f, "{}", default)?;
+            comma = true;
+        }
+
+        for (target, level) in &self.0 {
+            write!(f, "{}{}={}", if comma { "," } else { "" }, target, level)?;
+            comma = true;
+        }
+
+        Ok(())
+    }
+}
+
+impl FromStr for LogFilter {
+    type Err = filter::ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        filter::Targets::from_str(s).map(Self)
+    }
+}
 #[cfg(test)]
 mod tests {
     use std::{

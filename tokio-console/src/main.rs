@@ -25,7 +25,7 @@ mod warnings;
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
-    let mut args = config::Config::parse()?;
+    let args = config::Config::parse()?;
     // initialize error handling first, in case panics occur while setting up
     // other stuff.
     let styles = view::Styles::from_config(args.view_options.clone());

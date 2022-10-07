@@ -29,13 +29,24 @@ keywords = [
 [dependencies]
 atty = "0.2"
 console-api = { version = "0.4.0", path = "../console-api", features = ["transport"] }
-clap = { version = "3", features = ["cargo", "derive", "env"] }
+clap = { version = "4", features = [
+    # these are all enabled by default
+    "std", "color", "help", "usage", "error-context", "suggestions",
+    # auto-wrap help text to fit the terminal width
+    "wrap_help",
+    # use Cargo env vars when determining help text
+    "cargo",
+    # enable derive attributes
+    "derive",
+    # parse values from env vars
+    "env"
+] }
 tokio = { version = "1", features = ["full", "rt-multi-thread"] }
 tonic = { version = "0.8", features = ["transport"] }
 futures = "0.3"
 tui = { version = "0.16.0", default-features = false, features = ["crossterm"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3.0", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.16" }
 tracing-journald = { version = "0.2", optional = true }
 prost-types = "0.11"
 crossterm = { version = "0.20", features = ["event-stream"] }
@@ -48,4 +59,4 @@ humantime = "2.1.0"
 serde = { version = "1", features = ["derive"] }
 toml = "0.5"
 dirs = "4"
-clap_complete = "3"
+clap_complete = "4"
