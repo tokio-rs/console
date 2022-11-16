@@ -144,6 +144,12 @@ impl View {
                         self.state = ResourcesList;
                         update_kind = UpdateKind::Other;
                     }
+                    key!(Char('r')) => {
+                        self.state = ResourcesList;
+                    }
+                    key!(Char('t')) => {
+                        self.state = TasksList;
+                    }
                     _ => {
                         // otherwise pass on to view
                         view.update_input(event);
@@ -157,6 +163,12 @@ impl View {
                     key!(Esc) => {
                         self.state = TasksList;
                         update_kind = UpdateKind::ExitTaskView;
+                    }
+                    key!(Char('r')) => {
+                        self.state = ResourcesList;
+                    }
+                    key!(Char('t')) => {
+                        self.state = TasksList;
                     }
                     _ => {
                         // otherwise pass on to view
