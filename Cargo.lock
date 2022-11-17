@@ -280,7 +280,7 @@ dependencies = [
 
 [[package]]
 name = "console-subscriber"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "console-api",
  "crossbeam-channel",
