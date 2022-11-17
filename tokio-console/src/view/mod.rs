@@ -101,10 +101,12 @@ impl View {
             self.state = TasksList;
             return update_kind;
         }
+        
         if matches!(event, key!(Char('r'))) {
             self.state = ResourcesList;
             return update_kind;
         }
+        
         match self.state {
             TasksList => {
                 // The enter key changes views, so handle here since we can
