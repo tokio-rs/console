@@ -96,6 +96,15 @@ impl View {
     pub(crate) fn update_input(&mut self, event: input::Event, state: &State) -> UpdateKind {
         use ViewState::*;
         let mut update_kind = UpdateKind::Other;
+
+        if matches!(event, key!(Char('t'))) {
+            self.state = TasksList;
+            return update_kind;
+        }
+        if matches!(event, key!(Char('r'))) {
+            self.state = ResourcesList;
+            return update_kind;
+        }
         match self.state {
             TasksList => {
                 // The enter key changes views, so handle here since we can
@@ -109,9 +118,6 @@ impl View {
                                 state.task_details_ref(),
                             ));
                         }
-                    }
-                    key!(Char('r')) => {
-                        self.state = ResourcesList;
                     }
                     _ => {
                         // otherwise pass on to view
@@ -127,9 +133,6 @@ impl View {
                             self.state = ResourceInstance(self::resource::ResourceView::new(res));
                         }
                     }
-                    key!(Char('t')) => {
-                        self.state = TasksList;
-                    }
                     _ => {
                         // otherwise pass on to view
                         self.resources_list.update_input(event);
@@ -144,12 +147,6 @@ impl View {
                         self.state = ResourcesList;
                         update_kind = UpdateKind::Other;
                     }
-                    key!(Char('r')) => {
-                        self.state = ResourcesList;
-                    }
-                    key!(Char('t')) => {
-                        self.state = TasksList;
-                    }
                     _ => {
                         // otherwise pass on to view
                         view.update_input(event);
@@ -163,12 +160,6 @@ impl View {
                     key!(Esc) => {
                         self.state = TasksList;
                         update_kind = UpdateKind::ExitTaskView;
-                    }
-                    key!(Char('r')) => {
-                        self.state = ResourcesList;
-                    }
-                    key!(Char('t')) => {
-                        self.state = TasksList;
                     }
                     _ => {
                         // otherwise pass on to view
