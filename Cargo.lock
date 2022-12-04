@@ -1454,6 +1454,7 @@ dependencies = [
  "tokio",
  "toml",
  "tonic",
+ "tower",
  "tracing",
  "tracing-journald",
  "tracing-subscriber 0.3.11",
