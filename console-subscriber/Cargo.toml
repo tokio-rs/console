@@ -44,7 +44,7 @@ futures = { version = "0.3", default-features = false }
 hdrhistogram = { version = "7.3.0", default-features = false, features = ["serialization"] }
 # The parking_lot dependency is renamed, because we want our `parking_lot`
 # feature to also enable `tracing-subscriber`'s parking_lot feature flag.
-parking_lot_crate = { package = "parking_lot", version = "0.11", optional = true }
+parking_lot_crate = { package = "parking_lot", version = "0.12", optional = true }
 humantime = "2.1.0"
 prost-types = "0.11.0"
 
