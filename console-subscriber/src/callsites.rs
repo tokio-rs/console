@@ -23,7 +23,7 @@ impl<const MAX_CALLSITES: usize> Callsites<MAX_CALLSITES> {
         }
 
         let idx = self.len.fetch_add(1, Ordering::AcqRel);
-        if idx <= MAX_CALLSITES {
+        if idx < MAX_CALLSITES {
             // If there's still room in the callsites array, stick the address
             // in there.
             self.ptrs[idx]
