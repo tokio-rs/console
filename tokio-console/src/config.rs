@@ -200,7 +200,7 @@ pub struct ColorToggles {
     color_terminated: Option<bool>,
 }
 
-/// A sturct used to parse the toml config file
+/// A struct used to parse the toml config file
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct ConfigFile {
