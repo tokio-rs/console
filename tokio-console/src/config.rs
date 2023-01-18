@@ -498,7 +498,7 @@ impl Default for ViewOptions {
     fn default() -> Self {
         Self {
             no_colors: false,
-            lang: Some("en_us.UTF8".to_string()),
+            lang: Some("en_us.UTF-8".to_string()),
             ascii_only: Some(false),
             truecolor: Some(true),
             palette: Some(Palette::All),
