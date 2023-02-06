@@ -32,7 +32,7 @@ env-filter = ["tracing-subscriber/env-filter"]
 [dependencies]
 
 crossbeam-utils = "0.8.7"
-tokio = { version = "^1.15", features = ["sync", "time", "macros", "tracing"] }
+tokio = { version = "^1.21", features = ["sync", "time", "macros", "tracing"] }
 tokio-stream = "0.1"
 thread_local = "1.1.3"
 console-api = { version = "0.4.0", path = "../console-api", features = ["transport"] }
