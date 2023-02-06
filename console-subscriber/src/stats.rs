@@ -312,7 +312,7 @@ impl AsyncOpStats {
     pub(crate) fn task_id(&self) -> Option<u64> {
         let id = self.task_id.load();
         if id > 0 {
-            Some(id as u64)
+            Some(id)
         } else {
             None
         }

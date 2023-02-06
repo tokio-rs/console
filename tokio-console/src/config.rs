@@ -204,7 +204,7 @@ pub struct ColorToggles {
     color_terminated: Option<bool>,
 }
 
-/// A sturct used to parse the toml config file
+/// A struct used to parse the toml config file
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct ConfigFile {
@@ -502,7 +502,7 @@ impl Default for ViewOptions {
     fn default() -> Self {
         Self {
             no_colors: false,
-            lang: Some("en_us.UTF8".to_string()),
+            lang: Some("en_us.UTF-8".to_string()),
             ascii_only: Some(false),
             truecolor: Some(true),
             palette: Some(Palette::All),
