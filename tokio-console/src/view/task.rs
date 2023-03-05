@@ -1,6 +1,7 @@
 use crate::{
     input,
     state::{
+        histogram::DurationHistogram,
         tasks::{Details, Task},
         DetailsRef,
     },
@@ -278,43 +279,53 @@ impl Details {
     // many buckets as the width of the render area.
     fn make_chart_data(&self, width: u16) -> (Vec<u64>, HistogramMetadata) {
         self.poll_times_histogram()
-            .map(|histogram| {
-                let step_size =
-                    ((histogram.max() - histogram.min()) as f64 / width as f64).ceil() as u64 + 1;
-                // `iter_linear` panics if step_size is 0
-                let data = if step_size > 0 {
-                    let mut found_first_nonzero = false;
-                    let data: Vec<u64> = histogram
-                        .iter_linear(step_size)
-                        .filter_map(|value| {
-                            let count = value.count_since_last_iteration();
-                            // Remove the 0s from the leading side of the buckets.
-                            // Because HdrHistogram can return empty buckets depending
-                            // on its internal state, as it approximates values.
-                            if count == 0 && !found_first_nonzero {
-                                None
-                            } else {
-                                found_first_nonzero = true;
-                                Some(count)
-                            }
-                        })
-                        .collect();
-                    data
-                } else {
-                    Vec::new()
-                };
-                let max_bucket = data.iter().max().copied().unwrap_or_default();
-                let min_bucket = data.iter().min().copied().unwrap_or_default();
-                (
-                    data,
-                    HistogramMetadata {
-                        max_value: histogram.max(),
-                        min_value: histogram.min(),
-                        max_bucket,
-                        min_bucket,
-                    },
-                )
-            })
+            .map(
+                |&DurationHistogram {
+                     ref histogram,
+                     high_outliers,
+                     highest_outlier,
+                     ..
+                 }| {
+                    let step_size = ((histogram.max() - histogram.min()) as f64 / width as f64)
+                        .ceil() as u64
+                        + 1;
+                    // `iter_linear` panics if step_size is 0
+                    let data = if step_size > 0 {
+                        let mut found_first_nonzero = false;
+                        let data: Vec<u64> = histogram
+                            .iter_linear(step_size)
+                            .filter_map(|value| {
+                                let count = value.count_since_last_iteration();
+                                // Remove the 0s from the leading side of the buckets.
+                                // Because HdrHistogram can return empty buckets depending
+                                // on its internal state, as it approximates values.
+                                if count == 0 && !found_first_nonzero {
+                                    None
+                                } else {
+                                    found_first_nonzero = true;
+                                    Some(count)
+                                }
+                            })
+                            .collect();
+                        data
+                    } else {
+                        Vec::new()
+                    };
+                    let max_bucket = data.iter().max().copied().unwrap_or_default();
+                    let min_bucket = data.iter().min().copied().unwrap_or_default();
+                    (
+                        data,
+                        HistogramMetadata {
+                            max_value: histogram.max(),
+                            min_value: histogram.min(),
+                            max_bucket,
+                            min_bucket,
+                            high_outliers,
+                            highest_outlier,
+                        },
+                    )
+                },
+            )
             .unwrap_or_default()
     }
 
@@ -322,17 +333,20 @@ impl Details {
     fn make_percentiles_widget(&self, styles: &view::Styles) -> Text<'static> {
         let mut text = Text::default();
         let histogram = self.poll_times_histogram();
-        let percentiles = histogram.iter().flat_map(|histogram| {
-            let pairs = [10f64, 25f64, 50f64, 75f64, 90f64, 95f64, 99f64]
+        let percentiles =
+            histogram
                 .iter()
-                .map(move |i| (*i, histogram.value_at_percentile(*i)));
-            pairs.map(|pair| {
-                Spans::from(vec![
-                    bold(format!("p{:>2}: ", pair.0)),
-                    dur(styles, Duration::from_nanos(pair.1)),
-                ])
-            })
-        });
+                .flat_map(|&DurationHistogram { ref histogram, .. }| {
+                    let pairs = [10f64, 25f64, 50f64, 75f64, 90f64, 95f64, 99f64]
+                        .iter()
+                        .map(move |i| (*i, histogram.value_at_percentile(*i)));
+                    pairs.map(|pair| {
+                        Spans::from(vec![
+                            bold(format!("p{:>2}: ", pair.0)),
+                            dur(styles, Duration::from_nanos(pair.1)),
+                        ])
+                    })
+                });
         text.extend(percentiles);
         text
     }

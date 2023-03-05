@@ -165,6 +165,18 @@ pub mod metadata {
         /// Indicates metadata is associated with an event.
         Event = 1,
     }
+    impl Kind {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Kind::Span => "SPAN",
+                Kind::Event => "EVENT",
+            }
+        }
+    }
     /// Describes the level of verbosity of a span or event.
     ///
     /// Corresponds to `Level` in the `tracing` crate.
@@ -190,6 +202,21 @@ pub mod metadata {
         ///
         /// Designates very low priority, often extremely verbose, information.
         Trace = 4,
+    }
+    impl Level {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Level::Error => "ERROR",
+                Level::Warn => "WARN",
+                Level::Info => "INFO",
+                Level::Debug => "DEBUG",
+                Level::Trace => "TRACE",
+            }
+        }
     }
 }
 /// Contains stats about objects that can be polled. Currently these can be:

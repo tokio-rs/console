@@ -8,7 +8,7 @@ use std::{
 use tokio::runtime;
 use tracing::Subscriber;
 use tracing_subscriber::{
-    filter::{FilterFn, LevelFilter, Targets},
+    filter::{self, FilterFn},
     layer::{Layer, SubscriberExt},
     prelude::*,
     registry::LookupSpan,
@@ -42,6 +42,12 @@ pub struct Builder {
 
     /// Whether to trace events coming from the subscriber thread
     self_trace: bool,
+
+    /// The maximum value for the task poll duration histogram.
+    ///
+    /// Any polls exceeding this duration will be clamped to this value. Higher
+    /// values will result in more memory usage.
+    pub(super) poll_duration_max: Duration,
 }
 
 impl Default for Builder {
@@ -51,6 +57,7 @@ impl Default for Builder {
             client_buffer_capacity: ConsoleLayer::DEFAULT_CLIENT_BUFFER_CAPACITY,
             publish_interval: ConsoleLayer::DEFAULT_PUBLISH_INTERVAL,
             retention: ConsoleLayer::DEFAULT_RETENTION,
+            poll_duration_max: ConsoleLayer::DEFAULT_POLL_DURATION_MAX,
             server_addr: SocketAddr::new(Server::DEFAULT_IP, Server::DEFAULT_PORT),
             recording_path: None,
             filter_env_var: "RUST_LOG".to_string(),
@@ -180,6 +187,22 @@ impl Builder {
         }
     }
 
+    /// Sets the maximum value for task poll duration histograms.
+    ///
+    /// Any poll durations exceeding this value will be clamped down to this
+    /// duration and recorded as an outlier.
+    ///
+    /// By default, this is [one second]. Higher values will increase per-task
+    /// memory usage.
+    ///
+    /// [one second]: ConsoleLayer::DEFAULT_POLL_DURATION_MAX
+    pub fn poll_duration_histogram_max(self, max: Duration) -> Self {
+        Self {
+            poll_duration_max: max,
+            ..self
+        }
+    }
+
     /// Sets whether tasks, resources, and async ops from the console
     /// subscriber thread are recorded.
     ///
@@ -268,6 +291,13 @@ impl Builder {
     /// | `TOKIO_CONSOLE_RECORD_PATH`         | The file path to save a recording                                         | None              |
     /// | `RUST_LOG`                          | Configures what events are logged events. See [`Targets`] for details.    | "error"           |
     ///
+    /// If the "env-filter" crate feature flag is enabled, the `RUST_LOG`
+    /// environment variable will be parsed using the [`EnvFilter`] type from
+    /// `tracing-subscriber. If the "env-filter" feature is **not** enabled, the
+    /// [`Targets`] filter is used instead. The `EnvFilter` type accepts all the
+    /// same syntax as `Targets`, but with the added ability to filter dynamically
+    /// on span field values. See the documentation for those types for details.
+    ///
     /// # Further customization
     ///
     /// To add additional layers or replace the format layer, replace
@@ -286,10 +316,16 @@ impl Builder {
     /// ```
     ///
     /// [`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/filter/struct.Targets.html
+    /// [`EnvFilter`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/filter/struct.EnvFilter.html
     pub fn init(self) {
+        #[cfg(feature = "env-filter")]
+        type Filter = filter::EnvFilter;
+        #[cfg(not(feature = "env-filter"))]
+        type Filter = filter::Targets;
+
         let fmt_filter = std::env::var(&self.filter_env_var)
             .ok()
-            .and_then(|log_filter| match log_filter.parse::<Targets>() {
+            .and_then(|log_filter| match log_filter.parse::<Filter>() {
                 Ok(targets) => Some(targets),
                 Err(e) => {
                     eprintln!(
@@ -299,7 +335,11 @@ impl Builder {
                     None
                 }
             })
-            .unwrap_or_else(|| Targets::default().with_default(LevelFilter::ERROR));
+            .unwrap_or_else(|| {
+                "error"
+                    .parse::<Filter>()
+                    .expect("`error` filter should always parse successfully")
+            });
 
         let console_layer = self.spawn();
 
@@ -456,6 +496,13 @@ impl Builder {
 /// | `TOKIO_CONSOLE_RECORD_PATH`         | The file path to save a recording                                         | None              |
 /// | `RUST_LOG`                          | Configures what events are logged events. See [`Targets`] for details.    | "error"           |
 ///
+/// If the "env-filter" crate feature flag is enabled, the `RUST_LOG`
+/// environment variable will be parsed using the [`EnvFilter`] type from
+/// `tracing-subscriber. If the "env-filter" feature is **not** enabled, the
+/// [`Targets`] filter is used instead. The `EnvFilter` type accepts all the
+/// same syntax as `Targets`, but with the added ability to filter dynamically
+/// on span field values. See the documentation for those types for details.
+///
 /// # Further customization
 ///
 /// To add additional layers or replace the format layer, replace
@@ -479,7 +526,9 @@ impl Builder {
 ///
 /// ConsoleLayer::builder().with_default_env().init();
 /// ```
+///
 /// [`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/filter/struct.Targets.html
+/// [`EnvFilter`]: https://docs.rs/tracing-subscriber/latest/tracing-subscriber/filter/struct.EnvFilter.html
 pub fn init() {
     ConsoleLayer::builder().with_default_env().init();
 }

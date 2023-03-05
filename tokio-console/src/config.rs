@@ -1,7 +1,9 @@
 use crate::view::Palette;
-use clap::{ArgGroup, Parser as Clap, Subcommand, ValueHint};
+use clap::{ArgGroup, IntoApp, Parser as Clap, Subcommand, ValueHint};
+use clap_complete::Shell;
 use color_eyre::eyre::WrapErr;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::fs;
 use std::ops::Not;
 use std::path::PathBuf;
@@ -23,16 +25,28 @@ pub struct Config {
     /// The address of a console-enabled process to connect to.
     ///
     /// This may be an IP address and port, or a DNS name.
-    #[clap(default_value = "http://127.0.0.1:6669", value_hint = ValueHint::Url)]
-    pub(crate) target_addr: Uri,
+    ///
+    /// [default: http://127.0.0.1:6669]
+    #[clap(value_hint = ValueHint::Url)]
+    pub(crate) target_addr: Option<Uri>,
 
     /// Log level filter for the console's internal diagnostics.
     ///
-    /// The console will log to stderr if a log level filter is provided. Since
-    /// the console application runs interactively, stderr should generally be
-    /// redirected to a file to avoid interfering with the console's text output.
-    #[clap(long = "log", env = "RUST_LOG", default_value = "off")]
-    pub(crate) env_filter: tracing_subscriber::EnvFilter,
+    /// Logs are written to a new file at the path given by the `--log-dir`
+    /// argument (or its default value), or to the system journal if
+    /// `systemd-journald` support is enabled.
+    ///
+    /// If this is set to 'off' or is not set, no logs will be written.
+    ///
+    /// [default: off]
+    #[clap(long = "log", env = "RUST_LOG")]
+    pub(crate) env_filter: Option<tracing_subscriber::EnvFilter>,
+
+    /// Path to a directory to write the console's internal logs to.
+    ///
+    /// [default: /tmp/tokio-console/logs]
+    #[clap(long = "log-dir", value_hint = ValueHint::DirPath)]
+    pub(crate) log_directory: Option<PathBuf>,
 
     #[clap(flatten)]
     pub(crate) view_options: ViewOptions,
@@ -65,8 +79,10 @@ pub struct Config {
     /// * `months`, `month`, `M` -- defined as 30.44 days
     ///
     /// * `years`, `year`, `y` -- defined as 365.25 days
-    #[clap(long = "retain-for", default_value = "6s")]
-    retain_for: RetainFor,
+    ///
+    /// [default: 6s]
+    #[clap(long = "retain-for")]
+    retain_for: Option<RetainFor>,
 
     /// An optional subcommand.
     ///
@@ -88,17 +104,53 @@ pub enum OptionalCmd {
     ///     $ tokio-console gen-config > console.toml
     ///
     GenConfig,
+
+    /// Generate shell completions
+    ///
+    /// The completion script will be written to stdout.
+    /// The completion script should be saved in the shell's completion directory.
+    /// This depends on which shell is in use.
+    GenCompletion {
+        #[clap(name = "install", long = "install")]
+        install: bool,
+        #[clap(arg_enum)]
+        shell: Shell,
+    },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 struct RetainFor(Option<Duration>);
+
+impl Default for RetainFor {
+    fn default() -> Self {
+        Self(Some(Duration::from_secs(6)))
+    }
+}
+
+impl fmt::Display for RetainFor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            None => write!(f, ""),
+            Some(duration) => write!(f, "{:?}", duration),
+        }
+    }
+}
+
+impl Serialize for RetainFor {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
 
 #[derive(Clap, Debug, Clone)]
 #[clap(group = ArgGroup::new("colors").conflicts_with("no-colors"))]
 pub struct ViewOptions {
     /// Disable ANSI colors entirely.
-    #[clap(name = "no-colors", long = "no-colors")]
-    no_colors: Option<bool>,
+    #[clap(name = "no-colors", long = "no-colors", takes_value = false)]
+    no_colors: bool,
 
     /// Overrides the terminal's default language.
     #[clap(long = "lang", env = "LANG")]
@@ -148,10 +200,14 @@ pub struct ColorToggles {
     color_terminated: Option<bool>,
 }
 
-/// A sturct used to parse the toml config file
+/// A struct used to parse the toml config file
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct ConfigFile {
+    default_target_addr: Option<String>,
+    log: Option<String>,
+    log_directory: Option<PathBuf>,
+    retention: Option<RetainFor>,
     charset: Option<CharsetConfig>,
     colors: Option<ColorsConfig>,
 }
@@ -177,32 +233,36 @@ struct ColorsConfig {
 impl Config {
     /// Parse from config files and command line options.
     pub fn parse() -> color_eyre::Result<Self> {
-        let home = ViewOptions::from_config(ConfigPath::Home)?;
-        let current = ViewOptions::from_config(ConfigPath::Current)?;
+        let home = Self::from_path(ConfigPath::Home)?;
+        let current = Self::from_path(ConfigPath::Current)?;
         let base = match (home, current) {
             (None, None) => None,
             (Some(home), None) => Some(home),
             (None, Some(current)) => Some(current),
             (Some(home), Some(current)) => Some(home.merge_with(current)),
         };
-        let mut config = <Self as Clap>::parse();
-        let view_options = match base {
-            None => config.view_options,
-            Some(base) => base.merge_with(config.view_options),
+        let config = <Self as Clap>::parse();
+        let config = match base {
+            None => config,
+            Some(base) => base.merge_with(config),
         };
-        config.view_options = view_options;
         Ok(config)
     }
 
     pub fn gen_config_file(self) -> color_eyre::Result<String> {
-        let defaults = ViewOptions::default().merge_with(self.view_options);
-        let config = ConfigFile::from_view_options(defaults);
+        let defaults = Self::default().merge_with(self);
+        let config: ConfigFile = defaults.into();
         toml::to_string_pretty(&config).map_err(Into::into)
     }
 
     pub fn trace_init(&mut self) -> color_eyre::Result<()> {
-        let filter = std::mem::take(&mut self.env_filter);
         use tracing_subscriber::prelude::*;
+        let filter = match self.env_filter.take() {
+            // if logging is totally disabled, don't bother even constructing
+            // the subscriber
+            None => return Ok(()),
+            Some(filter) => filter,
+        };
 
         // If we're on a Linux distro with journald, try logging to the system
         // journal so we don't interfere with text output.
@@ -216,13 +276,41 @@ impl Config {
         #[cfg(not(all(feature = "tracing-journald", target_os = "linux")))]
         let should_fmt = true;
 
-        // Otherwise, log to stderr and rely on the user redirecting output.
+        // Otherwise, log to a file.
         let fmt = if should_fmt {
-            Some(
-                tracing_subscriber::fmt::layer()
-                    .with_writer(std::io::stderr)
-                    .with_ansi(atty::is(atty::Stream::Stderr)),
-            )
+            let dir = self
+                .log_directory
+                .take()
+                .unwrap_or_else(default_log_directory);
+
+            // first ensure that the log directory exists
+            fs::create_dir_all(&dir)
+                .with_context(|| format!("creating log directory '{}'", dir.display()))?;
+            color_eyre::eyre::ensure!(
+                dir.is_dir(),
+                "log directory path '{}' is not a directory",
+                dir.display()
+            );
+
+            // now, open a log file
+            let now = std::time::SystemTime::now();
+            // format the current time in a way that's appropriate for a
+            // filename (strip the `:` character, as it is an invalid filename
+            // char on windows)
+            let filename =
+                format!("{}.log", humantime::format_rfc3339_seconds(now)).replace(':', "");
+            let path = dir.join(filename);
+            let file = fs::File::options()
+                .create_new(true)
+                .write(true)
+                .open(&path)
+                .with_context(|| format!("creating log file '{}'", path.display()))?;
+
+            // finally, construct a `fmt` layer to write to that log file
+            let fmt = tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(file);
+            Some(fmt)
         } else {
             None
         };
@@ -238,15 +326,98 @@ impl Config {
     }
 
     pub(crate) fn retain_for(&self) -> Option<Duration> {
-        self.retain_for.0
+        self.retain_for.unwrap_or_default().0
     }
+
+    pub(crate) fn target_addr(&self) -> Uri {
+        self.target_addr
+            .as_ref()
+            .unwrap_or(&default_target_addr())
+            .clone()
+    }
+
+    pub(crate) fn add_issue_metadata(
+        &self,
+        mut builder: color_eyre::config::HookBuilder,
+    ) -> color_eyre::config::HookBuilder {
+        macro_rules! add_issue_metadata {
+            ($self:ident, $builder:ident =>
+                $(
+                    $($name:ident).+
+                ),+
+                $(,)?
+            ) => {
+                $(
+                    $builder = $builder.add_issue_metadata(concat!("config", $(".", stringify!($name)),+), format!("`{:?}`", $self$(.$name)+));
+                )*
+            }
+        }
+
+        add_issue_metadata! {
+            self, builder =>
+                subcmd,
+                target_addr,
+                env_filter,
+                log_directory,
+                retain_for,
+                view_options.no_colors,
+                view_options.lang,
+                view_options.ascii_only,
+                view_options.truecolor,
+                view_options.palette,
+                view_options.toggles.color_durations,
+                view_options.toggles.color_terminated,
+        }
+
+        builder
+    }
+
+    fn from_path(config_path: ConfigPath) -> color_eyre::Result<Option<Self>> {
+        ConfigFile::from_path(config_path)?
+            .map(|config| config.try_into())
+            .transpose()
+    }
+
+    fn merge_with(self, other: Self) -> Self {
+        Self {
+            log_directory: other.log_directory.or(self.log_directory),
+            target_addr: other.target_addr.or(self.target_addr),
+            env_filter: other.env_filter.or(self.env_filter),
+            retain_for: other.retain_for.or(self.retain_for),
+            view_options: self.view_options.merge_with(other.view_options),
+            subcmd: other.subcmd.or(self.subcmd),
+        }
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            target_addr: Some(default_target_addr()),
+            env_filter: Some(tracing_subscriber::EnvFilter::new("off")),
+            log_directory: Some(default_log_directory()),
+            retain_for: Some(RetainFor::default()),
+            view_options: ViewOptions::default(),
+            subcmd: None,
+        }
+    }
+}
+
+fn default_target_addr() -> Uri {
+    "http://127.0.0.1:6669"
+        .parse::<Uri>()
+        .expect("default target address should be a valid URI")
+}
+
+fn default_log_directory() -> PathBuf {
+    ["/", "tmp", "tokio-console", "logs"].iter().collect()
 }
 
 // === impl ViewOptions ===
 
 impl ViewOptions {
     pub fn is_utf8(&self) -> bool {
-        if !self.ascii_only.unwrap_or(true) {
+        if self.ascii_only.unwrap_or(false) {
             return false;
         }
         self.lang.as_deref().unwrap_or_default().ends_with("UTF-8")
@@ -261,7 +432,7 @@ impl ViewOptions {
     /// - Checking the `terminfo` database via `tput`
     pub(crate) fn determine_palette(&self) -> Palette {
         // Did the user explicitly disable colors?
-        if self.no_colors.unwrap_or(true) {
+        if self.no_colors {
             tracing::debug!("colors explicitly disabled by `--no-colors`");
             return Palette::NoColors;
         }
@@ -302,14 +473,9 @@ impl ViewOptions {
         self.toggles
     }
 
-    fn from_config(path: ConfigPath) -> color_eyre::Result<Option<Self>> {
-        let options = ConfigFile::from_config(path)?.map(|config| config.into_view_options());
-        Ok(options)
-    }
-
     fn merge_with(self, command_line: ViewOptions) -> Self {
         Self {
-            no_colors: command_line.no_colors.or(self.no_colors),
+            no_colors: command_line.no_colors || self.no_colors,
             lang: command_line.lang.or(self.lang),
             ascii_only: command_line.ascii_only.or(self.ascii_only),
             truecolor: command_line.truecolor.or(self.truecolor),
@@ -331,8 +497,8 @@ impl ViewOptions {
 impl Default for ViewOptions {
     fn default() -> Self {
         Self {
-            no_colors: Some(false),
-            lang: Some("en_us.UTF8".to_string()),
+            no_colors: false,
+            lang: Some("en_us.UTF-8".to_string()),
             ascii_only: Some(false),
             truecolor: Some(true),
             palette: Some(Palette::All),
@@ -379,7 +545,7 @@ impl ColorToggles {
 // === impl ColorToggles ===
 
 impl ConfigFile {
-    fn from_config(path: ConfigPath) -> color_eyre::Result<Option<Self>> {
+    fn from_path(path: ConfigPath) -> color_eyre::Result<Option<Self>> {
         let config = path
             .into_path()
             .and_then(|path| fs::read_to_string(path).ok())
@@ -394,33 +560,38 @@ impl ConfigFile {
         Ok(config)
     }
 
-    fn into_view_options(self) -> ViewOptions {
-        ViewOptions {
-            no_colors: self.no_colors(),
-            lang: self.charset.as_ref().and_then(|config| config.lang.clone()),
-            ascii_only: self.charset.as_ref().and_then(|config| config.ascii_only),
-            truecolor: self.colors.as_ref().and_then(|config| config.truecolor),
-            palette: self.colors.as_ref().and_then(|config| config.palette),
-            toggles: ColorToggles {
-                color_durations: self.color_durations(),
-                color_terminated: self.color_terminated(),
-            },
-        }
+    fn target_addr(&self) -> color_eyre::Result<Option<Uri>> {
+        let uri = self
+            .default_target_addr
+            .as_ref()
+            .map(|addr| addr.parse::<Uri>())
+            .transpose()
+            .wrap_err_with(|| {
+                format!(
+                    "failed to parse target address {:?} as URI",
+                    self.default_target_addr
+                )
+            })?;
+        Ok(uri)
     }
 
-    fn from_view_options(view_options: ViewOptions) -> Self {
-        Self {
-            charset: Some(CharsetConfig {
-                lang: view_options.lang,
-                ascii_only: view_options.ascii_only,
-            }),
-            colors: Some(ColorsConfig {
-                enabled: view_options.no_colors.map(Not::not),
-                truecolor: view_options.truecolor,
-                palette: view_options.palette,
-                enable: Some(view_options.toggles),
-            }),
+    fn env_filter(&self) -> color_eyre::Result<Option<tracing_subscriber::EnvFilter>> {
+        let filter_str = self.log.as_deref();
+
+        // If logging is totally disabled, may as well bail completely.
+        if filter_str == Some("off") {
+            return Ok(None);
         }
+
+        let env_filter = filter_str
+            .map(|directive| directive.parse::<tracing_subscriber::EnvFilter>())
+            .transpose()
+            .wrap_err_with(|| format!("failed to parse log filter {:?}", self.log))?;
+        Ok(env_filter)
+    }
+
+    fn retain_for(&self) -> Option<RetainFor> {
+        self.retention
     }
 
     fn no_colors(&self) -> Option<bool> {
@@ -439,6 +610,55 @@ impl ConfigFile {
         self.colors
             .as_ref()
             .and_then(|config| config.enable.map(|toggles| toggles.color_terminated()))
+    }
+}
+
+impl From<Config> for ConfigFile {
+    fn from(config: Config) -> Self {
+        Self {
+            default_target_addr: config.target_addr.map(|addr| addr.to_string()),
+            log: config.env_filter.map(|filter| filter.to_string()),
+            log_directory: config.log_directory,
+            retention: config.retain_for,
+            charset: Some(CharsetConfig {
+                lang: config.view_options.lang,
+                ascii_only: config.view_options.ascii_only,
+            }),
+            colors: Some(ColorsConfig {
+                enabled: Some(!config.view_options.no_colors),
+                truecolor: config.view_options.truecolor,
+                palette: config.view_options.palette,
+                enable: Some(config.view_options.toggles),
+            }),
+        }
+    }
+}
+
+impl TryFrom<ConfigFile> for Config {
+    type Error = color_eyre::eyre::Error;
+
+    fn try_from(mut value: ConfigFile) -> Result<Self, Self::Error> {
+        Ok(Config {
+            target_addr: value.target_addr()?,
+            env_filter: value.env_filter()?,
+            log_directory: value.log_directory.take(),
+            retain_for: value.retain_for(),
+            view_options: ViewOptions {
+                no_colors: value.no_colors().unwrap_or(false),
+                lang: value
+                    .charset
+                    .as_ref()
+                    .and_then(|config| config.lang.clone()),
+                ascii_only: value.charset.as_ref().and_then(|config| config.ascii_only),
+                truecolor: value.colors.as_ref().and_then(|config| config.truecolor),
+                palette: value.colors.as_ref().and_then(|config| config.palette),
+                toggles: ColorToggles {
+                    color_durations: value.color_durations(),
+                    color_terminated: value.color_terminated(),
+                },
+            },
+            subcmd: None,
+        })
     }
 }
 
@@ -465,6 +685,21 @@ impl ConfigPath {
             }
         }
     }
+}
+
+/// Generete completion scripts for each specified shell.
+pub fn gen_completion(install: bool, shell: Shell) -> color_eyre::Result<()> {
+    let mut app = Config::command();
+    let mut buf: Box<dyn std::io::Write> = if install {
+        color_eyre::eyre::bail!(
+            "Automatically installing completion scripts is not currently supported on {}",
+            shell
+        )
+    } else {
+        Box::new(std::io::stdout())
+    };
+    clap_complete::generate(shell, &mut app, "tokio-console", &mut buf);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -521,6 +756,8 @@ mod tests {
     }
 
     #[test]
+    // The example output includes paths, so skip this test on windows. :/
+    #[cfg_attr(windows, ignore)]
     fn toml_example_changed() {
         // Override env vars that may effect the defaults.
         clobber_env_vars();

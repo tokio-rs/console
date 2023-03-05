@@ -26,24 +26,31 @@ mod warnings;
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     let mut args = config::Config::parse()?;
+    // initialize error handling first, in case panics occur while setting up
+    // other stuff.
+    let styles = view::Styles::from_config(args.view_options.clone());
+    styles.error_init(&args)?;
 
-    if args.subcmd == Some(config::OptionalCmd::GenConfig) {
-        // Generate a default config file and exit.
-        let toml = args.gen_config_file()?;
-        println!("{}", toml);
-        return Ok(());
-    }
-
-    let retain_for = args.retain_for();
     args.trace_init()?;
     tracing::debug!(?args.target_addr, ?args.view_options);
 
-    let styles = view::Styles::from_config(args.view_options);
-    styles.error_init()?;
+    match args.subcmd {
+        Some(config::OptionalCmd::GenConfig) => {
+            // Generate a default config file and exit.
+            let toml = args.gen_config_file()?;
+            println!("{}", toml);
+            return Ok(());
+        }
+        Some(config::OptionalCmd::GenCompletion { install, shell }) => {
+            return config::gen_completion(install, shell);
+        }
+        None => {}
+    }
 
-    let target = args.target_addr;
+    let target = args.target_addr();
     tracing::info!(?target, "using target addr");
 
+    let retain_for = args.retain_for();
     let (mut terminal, _cleanup) = term::init_crossterm()?;
     terminal.clear()?;
     let mut conn = conn::Connection::new(target);

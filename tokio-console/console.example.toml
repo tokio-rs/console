@@ -1,3 +1,8 @@
+default_target_addr = 'http://127.0.0.1:6669/'
+log = 'off'
+log_directory = '/tmp/tokio-console/logs'
+retention = '6s'
+
 [charset]
 lang = 'en_US.UTF-8'
 ascii_only = false

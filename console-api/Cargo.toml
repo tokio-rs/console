@@ -1,9 +1,9 @@
 [package]
 name = "console-api"
-version = "0.2.0"
+version = "0.4.0"
 license = "MIT"
 edition = "2021"
-rust-version = "1.56.0"
+rust-version = "1.58.0"
 authors = ["Eliza Weisman <eliza@buoyant.io>", "Tokio Contributors <team@tokio.rs>",]
 readme = "README.md"
 repository = "https://github.com/tokio-rs/console/"
@@ -29,19 +29,21 @@ keywords = [
 transport = ["tonic-build/transport", "tonic/transport"]
 
 [dependencies]
-tonic = { version = "0.7", default-features = false, features = [
+tonic = { version = "0.8", default-features = false, features = [
     "prost",
     "codegen",
     "transport",
 ] }
-prost = "0.10"
-prost-types = "0.10"
+prost = "0.11"
+prost-types = "0.11"
 tracing-core = "0.1.17"
 
 [dev-dependencies]
-tonic-build = { version = "0.7", default-features = false, features = [
+tonic-build = { version = "0.8", default-features = false, features = [
     "prost", "transport"
 ] }
+# explicit dep so we can get the version with fixed whitespace.
+prost-build = "0.11.1"
 
 [package.metadata.docs.rs]
 all-features = true

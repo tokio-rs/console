@@ -1,3 +1,44 @@
+<a name="0.1.7"></a>
+## 0.1.8 (2022-09-04)
+
+
+#### Bug Fixes
+
+*  fix build on tokio 1.21.0 (#374) ([0106407c](0106407c))
+
+
+<a name="0.1.7"></a>
+## 0.1.7 (2022-08-10)
+
+
+#### Features
+
+*  Update `tonic` to `0.8` (#364) ([40e2f6fd](40e2f6fd))
+*  Update `console-api` to `0.4` (#364) ([40e2f6fd](40e2f6fd))
+
+
+<a name="0.1.6"></a>
+## 0.1.6 (2022-05-23)
+
+
+#### Features
+
+*  add `Builder::poll_duration_histogram_max` (#351) ([a966feb3](a966feb3))
+
+#### Bug Fixes
+
+*  fix memory leak from resizing histograms (#351) ([32dd3376](32dd3376), closes [#350](350))
+
+
+<a name="0.1.5"></a>
+## 0.1.5 (2022-04-30)
+
+
+#### Features
+
+
+*  add support for `EnvFilter` in `Builder::init` (#337) ([1fe84b72](1fe84b72))
+
 <a name="0.1.4"></a>
 ## 0.1.4  (2022-04-11)
 
