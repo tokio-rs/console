@@ -202,15 +202,15 @@ impl View {
         match self.state {
             ViewState::TasksList => {
                 self.tasks_list.render(&self.styles, frame, area, state, ());
-                help_content = HelpView::new(TableListState::<TasksTable>::render_help_content(
-                    &self.styles,
-                ));
+                help_content = HelpView::new(
+                    TableListState::<TasksTable, 11>::render_help_content(&self.styles),
+                );
             }
             ViewState::ResourcesList => {
                 self.resources_list
                     .render(&self.styles, frame, area, state, ());
                 help_content = HelpView::new(
-                    TableListState::<ResourcesTable>::render_help_content(&self.styles),
+                    TableListState::<ResourcesTable, 9>::render_help_content(&self.styles),
                 );
             }
             ViewState::TaskInstance(ref mut view) => {
