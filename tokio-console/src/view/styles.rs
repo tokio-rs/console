@@ -156,7 +156,7 @@ impl Styles {
             let hours = secs / (60 * 60);
             FormattedDuration::DaysHours(format!(
                 "{:>width$}",
-                format!(
+                format_args!(
                     "{days}d{hours:02.0}h",
                     days = hours / 24,
                     hours = hours % 24,
@@ -167,7 +167,7 @@ impl Styles {
             let mins = secs / 60;
             FormattedDuration::HoursMinutes(format!(
                 "{:>width$}",
-                format!(
+                format_args!(
                     "{hours}h{minutes:02.0}m",
                     hours = mins / 60,
                     minutes = mins % 60,
@@ -177,7 +177,7 @@ impl Styles {
         } else if secs >= 60 {
             FormattedDuration::MinutesSeconds(format!(
                 "{:>width$}",
-                format!(
+                format_args!(
                     "{minutes}m{seconds:02.0}s",
                     minutes = secs / 60,
                     seconds = secs % 60,
