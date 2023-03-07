@@ -1,5 +1,6 @@
 use crate::view::{resources::ResourcesTable, table::TableListState, tasks::TasksTable};
 use crate::{input, state::State};
+use std::num::NonZeroUsize;
 use std::{borrow::Cow, cmp};
 use tui::{
     layout,
@@ -18,7 +19,8 @@ mod tasks;
 pub(crate) use self::styles::{Palette, Styles};
 pub(crate) use self::table::SortBy;
 
-const DUR_LEN: usize = 6;
+// SAFETY: 6 is non-zero.
+const DUR_LEN: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(6) };
 // This data is only updated every second, so it doesn't make a ton of
 // sense to have a lot of precision in timestamps (and this makes sure
 // there's room for the unit!)

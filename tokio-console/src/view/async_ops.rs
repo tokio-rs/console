@@ -217,9 +217,9 @@ impl TableList<9> for AsyncOpsTable {
             parent_width.constraint(),
             task_width.constraint(),
             source_width.constraint(),
-            layout::Constraint::Length(DUR_LEN as u16),
-            layout::Constraint::Length(DUR_LEN as u16),
-            layout::Constraint::Length(DUR_LEN as u16),
+            layout::Constraint::Length(DUR_LEN.get() as u16),
+            layout::Constraint::Length(DUR_LEN.get() as u16),
+            layout::Constraint::Length(DUR_LEN.get() as u16),
             polls_width.constraint(),
             attributes_width,
         ];

@@ -1,6 +1,6 @@
 use crate::config;
 use serde::{Deserialize, Serialize};
-use std::{str::FromStr, time::Duration};
+use std::{num::NonZeroUsize, str::FromStr, time::Duration};
 use tui::{
     style::{Color, Modifier, Style},
     text::Span,
@@ -32,11 +32,21 @@ pub enum Palette {
     All,
 }
 
+/// Represents formatted time spans.
+///
+/// Distinguishing between different units allows appropriate colouring.
 enum FormattedDuration {
+    /// Days (and no minor unit), e.g. `102d`
     Days(String),
+    /// Days with hours, e.g. `12d03h`
     DaysHours(String),
+    /// Hours with minutes, e.g. `14h32m`
     HoursMinutes(String),
+    /// Minutes with seconds, e.g. `43m02s`
     MinutesSeconds(String),
+    /// The `time::Duration` debug string which uses units ranging from
+    /// picoseconds (`ps`) to seconds (`s`). May contain decimal digits
+    /// (e.g. `628.76ms`) or not (e.g. `32ns`)
     Debug(String),
 }
 
@@ -146,59 +156,21 @@ impl Styles {
         }
     }
 
-    fn duration_text(&self, dur: Duration, width: usize, prec: usize) -> FormattedDuration {
-        let secs = dur.as_secs();
-
-        if secs >= 60 * 60 * 24 * 100 {
-            let days = secs / (60 * 60 * 24);
-            FormattedDuration::Days(format!("{days:>width$}d", days = days, width = width))
-        } else if secs >= 60 * 60 * 24 {
-            let hours = secs / (60 * 60);
-            FormattedDuration::DaysHours(format!(
-                "{:>width$}",
-                format_args!(
-                    "{days}d{hours:02.0}h",
-                    days = hours / 24,
-                    hours = hours % 24,
-                ),
-                width = width
-            ))
-        } else if secs >= 60 * 60 {
-            let mins = secs / 60;
-            FormattedDuration::HoursMinutes(format!(
-                "{:>width$}",
-                format_args!(
-                    "{hours}h{minutes:02.0}m",
-                    hours = mins / 60,
-                    minutes = mins % 60,
-                ),
-                width = width
-            ))
-        } else if secs >= 60 {
-            FormattedDuration::MinutesSeconds(format!(
-                "{:>width$}",
-                format_args!(
-                    "{minutes}m{seconds:02.0}s",
-                    minutes = secs / 60,
-                    seconds = secs % 60,
-                ),
-                width = width,
-            ))
-        } else {
-            let mut text = format!("{:>width$.prec$?}", dur, width = width, prec = prec);
-
-            if !self.utf8 {
-                if let Some(mu_offset) = text.find("µs") {
-                    text.replace_range(mu_offset.., "us");
-                }
-            }
-
-            FormattedDuration::Debug(text)
-        }
-    }
-
-    pub fn time_units<'a>(&self, dur: Duration, prec: usize, width: Option<usize>) -> Span<'a> {
-        let formatted = self.duration_text(dur, width.unwrap_or(0), prec);
+    /// Creates a span with a formatted duration inside.
+    ///
+    /// The formatted duration will be colored depending on the palette
+    /// defined for this `Styles` object.
+    ///
+    /// If the `width` parameter is `None` then no padding will be
+    /// added. Otherwise the text in the span will be left-padded to
+    /// the specified width (right aligned).
+    pub fn time_units<'a>(
+        &self,
+        dur: Duration,
+        prec: usize,
+        width: Option<NonZeroUsize>,
+    ) -> Span<'a> {
+        let formatted = self.duration_text(dur, width.map_or(0, |w| w.get()), prec);
 
         if !self.toggles.color_durations() {
             return Span::raw(formatted.into_inner());
@@ -207,22 +179,22 @@ impl Styles {
         let style = match self.palette {
             Palette::NoColors => return Span::raw(formatted.into_inner()),
             Palette::Ansi8 | Palette::Ansi16 => match &formatted {
-                FormattedDuration::Days(_) => fg_style(Color::Green),
+                FormattedDuration::Days(_) => fg_style(Color::Blue),
                 FormattedDuration::DaysHours(_) => fg_style(Color::Blue),
-                FormattedDuration::HoursMinutes(_) => fg_style(Color::Gray),
-                FormattedDuration::MinutesSeconds(_) => fg_style(Color::Cyan),
-                FormattedDuration::Debug(s) if s.ends_with("ps") => fg_style(Color::Blue),
-                FormattedDuration::Debug(s) if s.ends_with("ns") => fg_style(Color::Green),
+                FormattedDuration::HoursMinutes(_) => fg_style(Color::Cyan),
+                FormattedDuration::MinutesSeconds(_) => fg_style(Color::Green),
+                FormattedDuration::Debug(s) if s.ends_with("ps") => fg_style(Color::Gray),
+                FormattedDuration::Debug(s) if s.ends_with("ns") => fg_style(Color::Gray),
                 FormattedDuration::Debug(s) if s.ends_with("µs") || s.ends_with("us") => {
-                    fg_style(Color::Yellow)
+                    fg_style(Color::Magenta)
                 }
                 FormattedDuration::Debug(s) if s.ends_with("ms") => fg_style(Color::Red),
-                FormattedDuration::Debug(s) if s.ends_with('s') => fg_style(Color::Magenta),
+                FormattedDuration::Debug(s) if s.ends_with('s') => fg_style(Color::Yellow),
                 _ => Style::default(),
             },
             Palette::Ansi256 | Palette::All => match &formatted {
-                FormattedDuration::Days(_) => fg_style(Color::Indexed(37)), // light sea green
-                FormattedDuration::DaysHours(_) => fg_style(Color::Indexed(38)), // deep sky blue 2
+                FormattedDuration::Days(_) => fg_style(Color::Indexed(33)), // dodger blue 1
+                FormattedDuration::DaysHours(_) => fg_style(Color::Indexed(33)), // dodger blue 1
                 FormattedDuration::HoursMinutes(_) => fg_style(Color::Indexed(39)), // deep sky blue 1
                 FormattedDuration::MinutesSeconds(_) => fg_style(Color::Indexed(45)), // turquoise 2
                 FormattedDuration::Debug(s) if s.ends_with("ps") => fg_style(Color::Indexed(40)), // green 3
@@ -237,6 +209,51 @@ impl Styles {
         };
 
         Span::styled(formatted.into_inner(), style)
+    }
+
+    fn duration_text(&self, dur: Duration, width: usize, prec: usize) -> FormattedDuration {
+        let secs = dur.as_secs();
+
+        if secs >= 60 * 60 * 24 * 100 {
+            let days = secs / (60 * 60 * 24);
+            FormattedDuration::Days(format!("{days:>width$}d", days = days, width = width))
+        } else if secs >= 60 * 60 * 24 {
+            let hours = secs / (60 * 60);
+            FormattedDuration::DaysHours(format!(
+                "{days:>leading_width$}d{hours:02.0}h",
+                days = hours / 24,
+                hours = hours % 24,
+                // Subtract the known 4 characters that trail the days value.
+                leading_width = if width > 4 { width - 4 } else { 0 }
+            ))
+        } else if secs >= 60 * 60 {
+            let mins = secs / 60;
+            FormattedDuration::HoursMinutes(format!(
+                "{hours:>leading_width$}h{minutes:02.0}m",
+                hours = mins / 60,
+                minutes = mins % 60,
+                // Subtract the known 4 characters that trail the hours value.
+                leading_width = if width > 4 { width - 4 } else { 0 }
+            ))
+        } else if secs >= 60 {
+            FormattedDuration::MinutesSeconds(format!(
+                "{minutes:>leading_width$}m{seconds:02.0}s",
+                minutes = secs / 60,
+                seconds = secs % 60,
+                // Subtract the known 4 characters that trail the minutes value.
+                leading_width = if width > 4 { width - 4 } else { 0 },
+            ))
+        } else {
+            let mut text = format!("{:>width$.prec$?}", dur, width = width, prec = prec);
+
+            if !self.utf8 {
+                if let Some(mu_offset) = text.find("µs") {
+                    text.replace_range(mu_offset.., "us");
+                }
+            }
+
+            FormattedDuration::Debug(text)
+        }
     }
 
     pub fn terminated(&self) -> Style {

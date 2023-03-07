@@ -186,7 +186,7 @@ impl TableList<9> for ResourcesTable {
             id_width.constraint(),
             parent_width.constraint(),
             kind_width.constraint(),
-            layout::Constraint::Length(DUR_LEN as u16),
+            layout::Constraint::Length(DUR_LEN.get() as u16),
             target_width.constraint(),
             type_width.constraint(),
             layout::Constraint::Length(viz_len),

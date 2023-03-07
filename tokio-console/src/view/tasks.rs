@@ -188,9 +188,9 @@ impl TableList<11> for TasksTable {
         let fixed_col_width = id_width.chars()
             + STATE_LEN
             + name_width.chars()
-            + DUR_LEN as u16
-            + DUR_LEN as u16
-            + DUR_LEN as u16
+            + DUR_LEN.get() as u16
+            + DUR_LEN.get() as u16
+            + DUR_LEN.get() as u16
             + POLLS_LEN as u16
             + target_width.chars();
         */
@@ -249,9 +249,9 @@ impl TableList<11> for TasksTable {
             id_width.constraint(),
             layout::Constraint::Length(state_len),
             name_width.constraint(),
-            layout::Constraint::Length(DUR_LEN as u16),
-            layout::Constraint::Length(DUR_LEN as u16),
-            layout::Constraint::Length(DUR_LEN as u16),
+            layout::Constraint::Length(DUR_LEN.get() as u16),
+            layout::Constraint::Length(DUR_LEN.get() as u16),
+            layout::Constraint::Length(DUR_LEN.get() as u16),
             polls_width.constraint(),
             target_width.constraint(),
             location_width.constraint(),
