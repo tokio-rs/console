@@ -1,6 +1,6 @@
 use crate::config;
 use serde::{Deserialize, Serialize};
-use std::{num::NonZeroUsize, str::FromStr, time::Duration};
+use std::{str::FromStr, time::Duration};
 use tui::{
     style::{Color, Modifier, Style},
     text::Span,
@@ -163,14 +163,10 @@ impl Styles {
     ///
     /// If the `width` parameter is `None` then no padding will be
     /// added. Otherwise the text in the span will be left-padded to
-    /// the specified width (right aligned).
-    pub fn time_units<'a>(
-        &self,
-        dur: Duration,
-        prec: usize,
-        width: Option<NonZeroUsize>,
-    ) -> Span<'a> {
-        let formatted = self.duration_text(dur, width.map_or(0, |w| w.get()), prec);
+    /// the specified width (right aligned). Passing `Some(0)` is
+    /// equivalent to `None`.
+    pub fn time_units<'a>(&self, dur: Duration, prec: usize, width: Option<usize>) -> Span<'a> {
+        let formatted = self.duration_text(dur, width.unwrap_or(0), prec);
 
         if !self.toggles.color_durations() {
             return Span::raw(formatted.into_inner());
