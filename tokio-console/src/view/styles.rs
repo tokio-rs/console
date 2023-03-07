@@ -220,7 +220,7 @@ impl Styles {
                 days = hours / 24,
                 hours = hours % 24,
                 // Subtract the known 4 characters that trail the days value.
-                leading_width = if width > 4 { width - 4 } else { 0 }
+                leading_width = width.saturating_sub(4),
             ))
         } else if secs >= 60 * 60 {
             let mins = secs / 60;
@@ -229,7 +229,7 @@ impl Styles {
                 hours = mins / 60,
                 minutes = mins % 60,
                 // Subtract the known 4 characters that trail the hours value.
-                leading_width = if width > 4 { width - 4 } else { 0 }
+                leading_width = width.saturating_sub(4),
             ))
         } else if secs >= 60 {
             FormattedDuration::MinutesSeconds(format!(
@@ -237,7 +237,7 @@ impl Styles {
                 minutes = secs / 60,
                 seconds = secs % 60,
                 // Subtract the known 4 characters that trail the minutes value.
-                leading_width = if width > 4 { width - 4 } else { 0 },
+                leading_width = width.saturating_sub(4),
             ))
         } else {
             let mut text = format!("{:>width$.prec$?}", dur, width = width, prec = prec);
