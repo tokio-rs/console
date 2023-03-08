@@ -9,6 +9,7 @@ use crate::{
     view::{
         self, bold,
         mini_histogram::{HistogramMetadata, MiniHistogram},
+        DUR_LIST_PRECISION,
     },
 };
 use std::{
@@ -329,29 +330,27 @@ impl Details {
     fn make_percentiles_widget(&self, styles: &view::Styles) -> Text<'static> {
         let mut text = Text::default();
         let histogram = self.poll_times_histogram();
-        let percentiles =
-            histogram
-                .iter()
-                .flat_map(|&DurationHistogram { ref histogram, .. }| {
-                    let pairs = [10f64, 25f64, 50f64, 75f64, 90f64, 95f64, 99f64]
-                        .iter()
-                        .map(move |i| (*i, histogram.value_at_percentile(*i)));
-                    pairs.map(|pair| {
-                        Spans::from(vec![
-                            bold(format!("p{:>2}: ", pair.0)),
-                            dur(styles, Duration::from_nanos(pair.1)),
-                        ])
-                    })
-                });
+        let percentiles = histogram
+            .iter()
+            .flat_map(|&DurationHistogram { histogram, .. }| {
+                let pairs = [10f64, 25f64, 50f64, 75f64, 90f64, 95f64, 99f64]
+                    .iter()
+                    .map(move |i| (*i, histogram.value_at_percentile(*i)));
+                pairs.map(|pair| {
+                    Spans::from(vec![
+                        bold(format!("p{:>2}: ", pair.0)),
+                        dur(styles, Duration::from_nanos(pair.1)),
+                    ])
+                })
+            });
         text.extend(percentiles);
         text
     }
 }
 
 fn dur(styles: &view::Styles, dur: std::time::Duration) -> Span<'static> {
-    const DUR_PRECISION: usize = 4;
     // TODO(eliza): can we not have to use `format!` to make a string here? is
     // there a way to just give TUI a `fmt::Debug` implementation, or does it
     // have to be given a string in order to do layout stuff?
-    styles.time_units(format!("{:.prec$?}", dur, prec = DUR_PRECISION))
+    styles.time_units(dur, DUR_LIST_PRECISION, None)
 }
