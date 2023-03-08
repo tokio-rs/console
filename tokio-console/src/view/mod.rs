@@ -18,11 +18,12 @@ mod tasks;
 pub(crate) use self::styles::{Palette, Styles};
 pub(crate) use self::table::SortBy;
 
-const DUR_LEN: usize = 10;
+const DUR_LEN: usize = 6;
 // This data is only updated every second, so it doesn't make a ton of
 // sense to have a lot of precision in timestamps (and this makes sure
 // there's room for the unit!)
-const DUR_PRECISION: usize = 4;
+const DUR_LIST_PRECISION: usize = 2;
+const DUR_TABLE_PRECISION: usize = 0;
 const TABLE_HIGHLIGHT_SYMBOL: &str = ">> ";
 
 pub struct View {
