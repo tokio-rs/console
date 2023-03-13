@@ -5,7 +5,7 @@ use crate::{
         histogram::DurationHistogram,
         pb_duration,
         store::{self, Id, SpanId, Store},
-        Field, Metadata, Visibility,
+        Field, FieldValue, Metadata, Visibility,
     },
     util::Percentage,
     view,
@@ -58,6 +58,17 @@ pub(crate) enum TaskState {
 
 pub(crate) type TaskRef = store::Ref<Task>;
 
+/// The Id for a Tokio task.
+///
+/// This should be equivalent to [`tokio::task::Id`], which can't be
+/// used because it's not possible to construct outside the `tokio`
+/// crate.
+///
+/// Within the context of `tokio-console`, we don't depend on it
+/// being the same as Tokio's own type, as the task id is recorded
+/// as a `u64` in tracing and then sent via the wire protocol as such.
+pub(crate) type TaskId = u64;
+
 #[derive(Debug)]
 pub(crate) struct Task {
     /// The task's pretty (console-generated, sequential) task ID.
@@ -65,6 +76,11 @@ pub(crate) struct Task {
     /// This is NOT the `tracing::span::Id` for the task's tracing span on the
     /// remote.
     id: Id<Task>,
+    /// The `tokio::task::Id` in the remote tokio runtime.
+    ///
+    /// This Id may not be unique if there are multiple runtimes in the
+    /// remote process.
+    task_id: Option<TaskId>,
     /// The `tracing::span::Id` on the remote process for this task's span.
     ///
     /// This is used when requesting a task details stream.
@@ -147,6 +163,7 @@ impl TasksState {
                     }
                 };
                 let mut name = None;
+                let mut task_id = None;
                 let mut fields = task
                     .fields
                     .drain(..)
@@ -155,6 +172,13 @@ impl TasksState {
                         // the `task.name` field gets its own column, if it's present.
                         if &*field.name == Field::NAME {
                             name = Some(strings.string(field.value.to_string()));
+                            return None;
+                        }
+                        if &*field.name == Field::TASK_ID {
+                            task_id = match field.value {
+                                FieldValue::U64(id) => Some(id as TaskId),
+                                _ => None,
+                            };
                             return None;
                         }
                         Some(field)
@@ -178,6 +202,7 @@ impl TasksState {
                 let mut task = Task {
                     name,
                     id,
+                    task_id,
                     span_id,
                     short_desc,
                     formatted_fields,
@@ -239,6 +264,10 @@ impl Details {
 impl Task {
     pub(crate) fn id(&self) -> Id<Task> {
         self.id
+    }
+
+    pub(crate) fn task_id(&self) -> Option<TaskId> {
+        self.task_id
     }
 
     pub(crate) fn span_id(&self) -> SpanId {
@@ -426,7 +455,9 @@ impl Default for SortBy {
 impl SortBy {
     pub fn sort(&self, now: SystemTime, tasks: &mut [Weak<RefCell<Task>>]) {
         match self {
-            Self::Tid => tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().id)),
+            Self::Tid => tasks.sort_unstable_by_key(|task| {
+                task.upgrade().map(|t| t.borrow().task_id.map(|id| id))
+            }),
             Self::Name => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().name.clone()))
             }
