@@ -456,7 +456,7 @@ impl SortBy {
     pub fn sort(&self, now: SystemTime, tasks: &mut [Weak<RefCell<Task>>]) {
         match self {
             Self::Tid => tasks.sort_unstable_by_key(|task| {
-                task.upgrade().map(|t| t.borrow().task_id.map(|id| id))
+                task.upgrade().map(|t| t.borrow().task_id)
             }),
             Self::Name => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().name.clone()))
