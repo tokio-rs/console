@@ -194,9 +194,11 @@ impl TasksState {
                 // remap the server's ID to a pretty, sequential task ID
                 let id = ids.id_for(span_id);
 
-                let short_desc = strings.string(match name.as_ref() {
-                    Some(name) => format!("{} ({})", id, name),
-                    None => format!("{}", id),
+                let short_desc = strings.string(match (task_id, name.as_ref()) {
+                    (Some(task_id), Some(name)) => format!("{} ({})", task_id, name),
+                    (Some(task_id), None) => format!("{}", task_id),
+                    (None, Some(name)) => format!("({})", name),
+                    (None, None) => "".to_owned(),
                 });
 
                 let mut task = Task {
