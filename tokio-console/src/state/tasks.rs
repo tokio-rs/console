@@ -77,14 +77,13 @@ pub(crate) struct Task {
     /// remote.
     id: Id<Task>,
     /// The `tokio::task::Id` in the remote tokio runtime.
-    ///
-    /// This Id may not be unique if there are multiple runtimes in the
-    /// remote process.
     task_id: Option<TaskId>,
     /// The `tracing::span::Id` on the remote process for this task's span.
     ///
     /// This is used when requesting a task details stream.
     span_id: SpanId,
+    /// A cached string representation of the Id for display purposes.
+    id_str: String,
     short_desc: InternedStr,
     formatted_fields: Vec<Vec<Span<'static>>>,
     stats: TaskStats,
@@ -197,7 +196,7 @@ impl TasksState {
                 let short_desc = strings.string(match (task_id, name.as_ref()) {
                     (Some(task_id), Some(name)) => format!("{task_id} ({name})"),
                     (Some(task_id), None) => task_id.to_string(),
-                    (None, Some(name)) => name.to_owned()
+                    (None, Some(name)) => name.as_ref().to_owned(),
                     (None, None) => "".to_owned(),
                 });
 
@@ -206,6 +205,7 @@ impl TasksState {
                     id,
                     task_id,
                     span_id,
+                    id_str: task_id.map(|id| id.to_string()).unwrap_or_default(),
                     short_desc,
                     formatted_fields,
                     stats,
@@ -268,12 +268,12 @@ impl Task {
         self.id
     }
 
-    pub(crate) fn task_id(&self) -> Option<TaskId> {
-        self.task_id
-    }
-
     pub(crate) fn span_id(&self) -> SpanId {
         self.span_id
+    }
+
+    pub(crate) fn id_str(&self) -> &str {
+        &self.id_str
     }
 
     pub(crate) fn target(&self) -> &str {
