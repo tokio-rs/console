@@ -195,9 +195,9 @@ impl TasksState {
                 let id = ids.id_for(span_id);
 
                 let short_desc = strings.string(match (task_id, name.as_ref()) {
-                    (Some(task_id), Some(name)) => format!("{} ({})", task_id, name),
-                    (Some(task_id), None) => format!("{}", task_id),
-                    (None, Some(name)) => format!("({})", name),
+                    (Some(task_id), Some(name)) => format!("{task_id} ({name})"),
+                    (Some(task_id), None) => task_id.to_string(),
+                    (None, Some(name)) => name.to_owned()
                     (None, None) => "".to_owned(),
                 });
 
