@@ -7,7 +7,7 @@ use crate::{
     view::{
         self, bold,
         table::{self, TableList, TableListState},
-        DUR_LEN, DUR_PRECISION,
+        DUR_LEN, DUR_TABLE_PRECISION,
     },
 };
 
@@ -106,12 +106,7 @@ impl TableList<9> for AsyncOpsTable {
         let mut polls_width = view::Width::new(Self::WIDTHS[7] as u16);
 
         let dur_cell = |dur: std::time::Duration| -> Cell<'static> {
-            Cell::from(styles.time_units(format!(
-                "{:>width$.prec$?}",
-                dur,
-                width = DUR_LEN,
-                prec = DUR_PRECISION,
-            )))
+            Cell::from(styles.time_units(dur, DUR_TABLE_PRECISION, Some(DUR_LEN)))
         };
 
         let rows = {

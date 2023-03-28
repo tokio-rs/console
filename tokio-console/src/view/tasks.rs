@@ -6,7 +6,7 @@ use crate::{
     view::{
         self, bold,
         table::{self, TableList, TableListState},
-        DUR_LEN, DUR_PRECISION,
+        DUR_LEN, DUR_TABLE_PRECISION,
     },
 };
 use tui::{
@@ -68,12 +68,7 @@ impl TableList<11> for TasksTable {
             .sort(now, &mut table_list_state.sorted_items);
 
         let dur_cell = |dur: std::time::Duration| -> Cell<'static> {
-            Cell::from(styles.time_units(format!(
-                "{:>width$.prec$?}",
-                dur,
-                width = DUR_LEN,
-                prec = DUR_PRECISION,
-            )))
+            Cell::from(styles.time_units(dur, DUR_TABLE_PRECISION, Some(DUR_LEN)))
         };
 
         // Start out wide enough to display the column headers...
@@ -127,7 +122,7 @@ impl TableList<11> for TasksTable {
                         warnings,
                         Cell::from(id_width.update_str(format!(
                             "{:>width$}",
-                            task.id(),
+                            task.id_str(),
                             width = id_width.chars() as usize
                         ))),
                         Cell::from(task.state().render(styles)),
