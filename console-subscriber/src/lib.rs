@@ -5,7 +5,7 @@ use serde::Serialize;
 use std::{
     cell::RefCell,
     fmt,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
+    net::{IpAddr, Ipv4Addr},
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -13,7 +13,11 @@ use std::{
     time::{Duration, Instant},
 };
 use thread_local::ThreadLocal;
+#[cfg(unix)]
+use tokio::net::UnixListener;
 use tokio::sync::{mpsc, oneshot};
+#[cfg(unix)]
+use tokio_stream::wrappers::UnixListenerStream;
 use tracing_core::{
     span::{self, Id},
     subscriber::{self, Subscriber},
@@ -36,7 +40,7 @@ pub(crate) mod sync;
 mod visitors;
 
 use aggregator::Aggregator;
-pub use builder::Builder;
+pub use builder::{Builder, ServerAddr};
 use callsites::Callsites;
 use record::Recorder;
 use stack::SpanStack;
@@ -134,7 +138,7 @@ pub struct ConsoleLayer {
 /// [cli]: https://crates.io/crates/tokio-console
 pub struct Server {
     subscribe: mpsc::Sender<Command>,
-    addr: SocketAddr,
+    addr: ServerAddr,
     aggregator: Option<Aggregator>,
     client_buffer: usize,
 }
@@ -945,13 +949,22 @@ impl Server {
             .take()
             .expect("cannot start server multiple times");
         let aggregate = spawn_named(aggregate.run(), "console::aggregate");
-        let addr = self.addr;
-        let serve = builder
-            .add_service(proto::instrument::instrument_server::InstrumentServer::new(
-                self,
-            ))
-            .serve(addr);
-        let res = spawn_named(serve, "console::serve").await;
+        let addr = self.addr.clone();
+        let router = builder.add_service(
+            proto::instrument::instrument_server::InstrumentServer::new(self),
+        );
+        let res = match addr {
+            ServerAddr::Tcp(addr) => {
+                let serve = router.serve(addr);
+                spawn_named(serve, "console::serve").await
+            }
+            #[cfg(unix)]
+            ServerAddr::Unix(path) => {
+                let incoming = UnixListener::bind(path)?;
+                let serve = router.serve_with_incoming(UnixListenerStream::new(incoming));
+                spawn_named(serve, "console::serve").await
+            }
+        };
         aggregate.abort();
         res?.map_err(Into::into)
     }
