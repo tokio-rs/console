@@ -39,7 +39,7 @@ tracing-subscriber = { version = "0.3.0", features = ["env-filter"] }
 tracing-journald = { version = "0.2", optional = true }
 prost-types = "0.11"
 crossterm = { version = "0.20", features = ["event-stream"] }
-color-eyre = { version = "0.5", features = ["issue-url"] }
+color-eyre = { version = "0.6", features = ["issue-url"] }
 hdrhistogram = { version = "7.3.0", default-features = false, features = ["serialization"] }
 h2 = "0.3"
 regex = "1.5"
