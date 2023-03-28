@@ -160,7 +160,11 @@ impl Builder {
     ///
     /// ```
     /// # use console_subscriber::Builder;
+    /// # #[cfg(unix)]
     /// use std::path::Path;
+    ///
+    /// // Unix domain sockets are only available on Unix-compatible operating systems.
+    /// #[cfg(unix)]
     /// let builder = Builder::default().server_addr(Path::new("/tmp/tokio-console"));
     /// ```
     ///
