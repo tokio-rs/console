@@ -5,7 +5,7 @@ use crate::{
         histogram::DurationHistogram,
         pb_duration,
         store::{self, Id, SpanId, Store},
-        Field, Metadata, Visibility,
+        Field, FieldValue, Metadata, Visibility,
     },
     util::Percentage,
     view,
@@ -58,6 +58,17 @@ pub(crate) enum TaskState {
 
 pub(crate) type TaskRef = store::Ref<Task>;
 
+/// The Id for a Tokio task.
+///
+/// This should be equivalent to [`tokio::task::Id`], which can't be
+/// used because it's not possible to construct outside the `tokio`
+/// crate.
+///
+/// Within the context of `tokio-console`, we don't depend on it
+/// being the same as Tokio's own type, as the task id is recorded
+/// as a `u64` in tracing and then sent via the wire protocol as such.
+pub(crate) type TaskId = u64;
+
 #[derive(Debug)]
 pub(crate) struct Task {
     /// The task's pretty (console-generated, sequential) task ID.
@@ -65,10 +76,14 @@ pub(crate) struct Task {
     /// This is NOT the `tracing::span::Id` for the task's tracing span on the
     /// remote.
     id: Id<Task>,
+    /// The `tokio::task::Id` in the remote tokio runtime.
+    task_id: Option<TaskId>,
     /// The `tracing::span::Id` on the remote process for this task's span.
     ///
     /// This is used when requesting a task details stream.
     span_id: SpanId,
+    /// A cached string representation of the Id for display purposes.
+    id_str: String,
     short_desc: InternedStr,
     formatted_fields: Vec<Vec<Span<'static>>>,
     stats: TaskStats,
@@ -147,6 +162,7 @@ impl TasksState {
                     }
                 };
                 let mut name = None;
+                let mut task_id = None;
                 let mut fields = task
                     .fields
                     .drain(..)
@@ -155,6 +171,13 @@ impl TasksState {
                         // the `task.name` field gets its own column, if it's present.
                         if &*field.name == Field::NAME {
                             name = Some(strings.string(field.value.to_string()));
+                            return None;
+                        }
+                        if &*field.name == Field::TASK_ID {
+                            task_id = match field.value {
+                                FieldValue::U64(id) => Some(id as TaskId),
+                                _ => None,
+                            };
                             return None;
                         }
                         Some(field)
@@ -170,15 +193,19 @@ impl TasksState {
                 // remap the server's ID to a pretty, sequential task ID
                 let id = ids.id_for(span_id);
 
-                let short_desc = strings.string(match name.as_ref() {
-                    Some(name) => format!("{} ({})", id, name),
-                    None => format!("{}", id),
+                let short_desc = strings.string(match (task_id, name.as_ref()) {
+                    (Some(task_id), Some(name)) => format!("{task_id} ({name})"),
+                    (Some(task_id), None) => task_id.to_string(),
+                    (None, Some(name)) => name.as_ref().to_owned(),
+                    (None, None) => "".to_owned(),
                 });
 
                 let mut task = Task {
                     name,
                     id,
+                    task_id,
                     span_id,
+                    id_str: task_id.map(|id| id.to_string()).unwrap_or_default(),
                     short_desc,
                     formatted_fields,
                     stats,
@@ -243,6 +270,10 @@ impl Task {
 
     pub(crate) fn span_id(&self) -> SpanId {
         self.span_id
+    }
+
+    pub(crate) fn id_str(&self) -> &str {
+        &self.id_str
     }
 
     pub(crate) fn target(&self) -> &str {
@@ -426,7 +457,9 @@ impl Default for SortBy {
 impl SortBy {
     pub fn sort(&self, now: SystemTime, tasks: &mut [Weak<RefCell<Task>>]) {
         match self {
-            Self::Tid => tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().id)),
+            Self::Tid => {
+                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().task_id))
+            }
             Self::Name => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().name.clone()))
             }

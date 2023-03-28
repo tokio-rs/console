@@ -122,7 +122,7 @@ impl TableList<11> for TasksTable {
                         warnings,
                         Cell::from(id_width.update_str(format!(
                             "{:>width$}",
-                            task.id(),
+                            task.id_str(),
                             width = id_width.chars() as usize
                         ))),
                         Cell::from(task.state().render(styles)),
