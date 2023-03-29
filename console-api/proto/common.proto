@@ -161,6 +161,10 @@ message PollStats {
     // Subtracting this timestamp from `created_at` can be used to calculate the
     // time to first poll for this object, a measurement of executor latency.
     optional google.protobuf.Timestamp first_poll = 3;
+    // The timestamp of the most recent time this object was woken.
+    //
+    // If this is `None`, the object has not yet been woken.
+    optional google.protobuf.Timestamp last_wake = 7;
     // The timestamp of the most recent time this objects's poll method was invoked.
     //
     // If this is `None`, the object has not yet been polled.
@@ -180,8 +184,15 @@ message PollStats {
     // all polls. Note that this includes only polls that have completed and is
     // not reflecting any inprogress polls. Subtracting `busy_time` from the
     // total lifetime of the polled object results in the amount of time it
-    // has spent *waiting* to be polled.
+    // has spent *waiting* to be polled (including `scheduled_time`).
     google.protobuf.Duration busy_time = 6;
+    // The total duration this object was scheduled prior to being polled, summed
+    // across all poll cycles. Note that this includes only polls that have
+    // started and is not reflecting any scheduled state where the polling hasn't
+    // yet finished. Subtracting both `busy_time` and `scheduled_time` from the
+    // total lifetime of the polled object results in the amount of time it spent
+    // unable to progress because it was waiting on some resource.
+    google.protobuf.Duration scheduled_time = 8;
 }
 
 // State attributes of an entity. These are dependent on the type of the entity.

@@ -56,7 +56,7 @@ pub(crate) struct TaskStats {
     is_dropped: AtomicBool,
     // task stats
     pub(crate) created_at: Instant,
-    timestamps: Mutex<TaskTimestamps>,
+    dropped_at: Mutex<Option<Instant>>,
 
     // waker stats
     wakes: AtomicUsize,
@@ -101,12 +101,6 @@ pub(crate) struct ResourceStats {
 }
 
 #[derive(Debug, Default)]
-struct TaskTimestamps {
-    dropped_at: Option<Instant>,
-    last_wake: Option<Instant>,
-}
-
-#[derive(Debug, Default)]
 struct PollStats<H> {
     /// The number of polls in progress
     current_polls: AtomicUsize,
@@ -118,9 +112,11 @@ struct PollStats<H> {
 #[derive(Debug, Default)]
 struct PollTimestamps<H> {
     first_poll: Option<Instant>,
+    last_wake: Option<Instant>,
     last_poll_started: Option<Instant>,
     last_poll_ended: Option<Instant>,
     busy_time: Duration,
+    scheduled_time: Duration,
     histogram: H,
 }
 
@@ -162,14 +158,16 @@ impl TaskStats {
             is_dirty: AtomicBool::new(true),
             is_dropped: AtomicBool::new(false),
             created_at,
-            timestamps: Mutex::new(TaskTimestamps::default()),
+            dropped_at: Mutex::new(None),
             poll_stats: PollStats {
                 timestamps: Mutex::new(PollTimestamps {
                     histogram: Histogram::new(poll_duration_max),
                     first_poll: None,
+                    last_wake: None,
                     last_poll_started: None,
                     last_poll_ended: None,
                     busy_time: Duration::new(0, 0),
+                    scheduled_time: Duration::new(0, 0),
                 }),
                 current_polls: AtomicUsize::new(0),
                 polls: AtomicUsize::new(0),
@@ -209,13 +207,14 @@ impl TaskStats {
     }
 
     fn wake(&self, at: Instant, self_wake: bool) {
-        let mut timestamps = self.timestamps.lock();
-        timestamps.last_wake = cmp::max(timestamps.last_wake, Some(at));
-        self.wakes.fetch_add(1, Release);
+        self.poll_stats.wake(at);
 
+        self.wakes.fetch_add(1, Release);
         if self_wake {
             self.wakes.fetch_add(1, Release);
         }
+
+        self.make_dirty();
     }
 
     pub(crate) fn start_poll(&self, at: Instant) {
@@ -235,8 +234,7 @@ impl TaskStats {
             return;
         }
 
-        let mut timestamps = self.timestamps.lock();
-        let _prev = timestamps.dropped_at.replace(dropped_at);
+        let _prev = self.dropped_at.lock().replace(dropped_at);
         debug_assert_eq!(_prev, None, "tried to drop a task twice; this is a bug!");
         self.make_dirty();
     }
@@ -257,16 +255,14 @@ impl ToProto for TaskStats {
 
     fn to_proto(&self, base_time: &TimeAnchor) -> Self::Output {
         let poll_stats = Some(self.poll_stats.to_proto(base_time));
-        let timestamps = self.timestamps.lock();
         proto::tasks::Stats {
             poll_stats,
             created_at: Some(base_time.to_timestamp(self.created_at)),
-            dropped_at: timestamps.dropped_at.map(|at| base_time.to_timestamp(at)),
+            dropped_at: self.dropped_at.lock().map(|at| base_time.to_timestamp(at)),
             wakes: self.wakes.load(Acquire) as u64,
             waker_clones: self.waker_clones.load(Acquire) as u64,
             self_wakes: self.self_wakes.load(Acquire) as u64,
             waker_drops: self.waker_drops.load(Acquire) as u64,
-            last_wake: timestamps.last_wake.map(|at| base_time.to_timestamp(at)),
         }
     }
 }
@@ -287,7 +283,7 @@ impl DroppedAt for TaskStats {
         // avoid acquiring the lock if we know we haven't tried to drop this
         // thing yet
         if self.is_dropped.load(Acquire) {
-            return self.timestamps.lock().dropped_at;
+            return *self.dropped_at.lock();
         }
 
         None
@@ -466,18 +462,49 @@ impl ToProto for ResourceStats {
 // === impl PollStats ===
 
 impl<H: RecordPoll> PollStats<H> {
+    fn wake(&self, at: Instant) {
+        let mut timestamps = self.timestamps.lock();
+        timestamps.last_wake = cmp::max(timestamps.last_wake, Some(at));
+    }
+
     fn start_poll(&self, at: Instant) {
-        if self.current_polls.fetch_add(1, AcqRel) == 0 {
-            // We are starting the first poll
-            let mut timestamps = self.timestamps.lock();
-            if timestamps.first_poll.is_none() {
-                timestamps.first_poll = Some(at);
-            }
-
-            timestamps.last_poll_started = Some(at);
-
-            self.polls.fetch_add(1, Release);
+        if self.current_polls.fetch_add(1, AcqRel) > 0 {
+            return;
         }
+
+        // We are starting the first poll
+        let mut timestamps = self.timestamps.lock();
+        if timestamps.first_poll.is_none() {
+            timestamps.first_poll = Some(at);
+        }
+
+        timestamps.last_poll_started = Some(at);
+
+        self.polls.fetch_add(1, Release);
+
+        let scheduled = match (timestamps.last_wake, timestamps.last_poll_ended) {
+            // If the last poll ended after the last wake then it was likely
+            // a self-wake, so we measure from the end of the last poll instead.
+            // This also ensures that `busy_time` and `scheduled_time` don't overlap.
+            (Some(last_wake), Some(last_poll_ended)) if last_poll_ended > last_wake => {
+                last_poll_ended
+            }
+            (Some(last_wake), _) => last_wake,
+            (None, _) => return, // Async operations record polls, but not wakes
+        };
+
+        let elapsed = match at.checked_duration_since(scheduled) {
+            Some(elapsed) => elapsed,
+            None => {
+                eprintln!(
+                    "possible Instant clock skew detected: a poll's start timestamp \
+                    was before the wake time/last poll end timestamp\nwake = {:?}\n  start = {:?}",
+                    scheduled, at
+                );
+                return;
+            }
+        };
+        timestamps.scheduled_time += elapsed;
     }
 
     fn end_poll(&self, at: Instant) {
@@ -526,6 +553,7 @@ impl<H> ToProto for PollStats<H> {
         proto::PollStats {
             polls: self.polls.load(Acquire) as u64,
             first_poll: timestamps.first_poll.map(|at| base_time.to_timestamp(at)),
+            last_wake: timestamps.last_wake.map(|at| base_time.to_timestamp(at)),
             last_poll_started: timestamps
                 .last_poll_started
                 .map(|at| base_time.to_timestamp(at)),
@@ -534,11 +562,23 @@ impl<H> ToProto for PollStats<H> {
                 .map(|at| base_time.to_timestamp(at)),
             busy_time: Some(timestamps.busy_time.try_into().unwrap_or_else(|error| {
                 eprintln!(
-                    "failed to convert busy time to protobuf duration: {}",
+                    "failed to convert `busy_time` to protobuf duration: {}",
                     error
                 );
                 Default::default()
             })),
+            scheduled_time: Some(
+                timestamps
+                    .scheduled_time
+                    .try_into()
+                    .unwrap_or_else(|error| {
+                        eprintln!(
+                            "failed to convert `scheduled_time` to protobuf duration: {}",
+                            error
+                        );
+                        Default::default()
+                    }),
+            ),
         }
     }
 }
