@@ -321,17 +321,25 @@ impl Task {
     }
 
     pub(crate) fn busy(&self, since: SystemTime) -> Duration {
-        let busy_time_in_poll = |started| {
-            // in this case the task is being polled at the moment
-            let current_time_in_poll = since.duration_since(started).unwrap_or_default();
-            self.stats.busy + current_time_in_poll
-        };
-
-        match (self.stats.last_poll_started, self.stats.last_poll_ended) {
-            (Some(started), Some(ended)) if started > ended => busy_time_in_poll(started),
-            (Some(started), _) => busy_time_in_poll(started),
-            _ => self.stats.busy,
+        if let Some(started) = self.stats.last_poll_started {
+            if self.stats.last_poll_started > self.stats.last_poll_ended {
+                // in this case the task is being polled at the moment
+                let current_time_in_poll = since.duration_since(started).unwrap_or_default();
+                return self.stats.busy + current_time_in_poll;
+            }
         }
+        self.stats.busy
+        // let busy_time_in_poll = |started| {
+        //     // in this case the task is being polled at the moment
+        //     let current_time_in_poll = since.duration_since(started).unwrap_or_default();
+        //     self.stats.busy + current_time_in_poll
+        // };
+
+        // match (self.stats.last_poll_started, self.stats.last_poll_ended) {
+        //     (Some(started), Some(ended)) if started > ended => busy_time_in_poll(started),
+        //     (Some(started), _) => busy_time_in_poll(started),
+        //     _ => self.stats.busy,
+        // }
     }
 
     pub(crate) fn idle(&self, since: SystemTime) -> Duration {
