@@ -321,12 +321,12 @@ impl Task {
     }
 
     pub(crate) fn busy(&self, since: SystemTime) -> Duration {
-        if let (Some(last_poll_started), None) =
-            (self.stats.last_poll_started, self.stats.last_poll_ended)
-        {
-            // in this case the task is being polled at the moment
-            let current_time_in_poll = since.duration_since(last_poll_started).unwrap_or_default();
-            return self.stats.busy + current_time_in_poll;
+        if let Some(started) = self.stats.last_poll_started {
+            if self.stats.last_poll_started > self.stats.last_poll_ended {
+                // in this case the task is being polled at the moment
+                let current_time_in_poll = since.duration_since(started).unwrap_or_default();
+                return self.stats.busy + current_time_in_poll;
+            }
         }
         self.stats.busy
     }
