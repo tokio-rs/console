@@ -43,6 +43,12 @@ pub struct TaskDetails {
     /// The timestamp for when the update to the task took place.
     #[prost(message, optional, tag="2")]
     pub now: ::core::option::Option<::prost_types::Timestamp>,
+    /// A histogram of task scheduled durations.
+    ///
+    /// The scheduled duration is the time a task spends between being
+    /// woken and when it is next polled.
+    #[prost(message, optional, tag="5")]
+    pub scheduled_times_histogram: ::core::option::Option<DurationHistogram>,
     /// A histogram of task poll durations.
     ///
     /// This is either:

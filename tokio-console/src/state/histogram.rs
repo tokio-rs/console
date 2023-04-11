@@ -30,7 +30,7 @@ impl DurationHistogram {
         })
     }
 
-    fn from_proto(proto: &proto::DurationHistogram) -> Option<Self> {
+    pub(crate) fn from_proto(proto: &proto::DurationHistogram) -> Option<Self> {
         let histogram = deserialize_histogram(&proto.raw_histogram[..])?;
         Some(Self {
             histogram,

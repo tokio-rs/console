@@ -6,6 +6,7 @@ use crate::{
 };
 use std::{
     cell::RefCell,
+    cmp,
     rc::Rc,
     time::{Duration, SystemTime},
 };
@@ -60,47 +61,64 @@ impl TaskView {
             })
             .collect();
 
-        let (controls_area, stats_area, poll_dur_area, fields_area, warnings_area) =
-            if warnings.is_empty() {
-                let chunks = Layout::default()
-                    .direction(layout::Direction::Vertical)
-                    .constraints(
-                        [
-                            // controls
-                            layout::Constraint::Length(1),
-                            // task stats
-                            layout::Constraint::Length(10),
-                            // poll duration
-                            layout::Constraint::Length(9),
-                            // fields
-                            layout::Constraint::Percentage(60),
-                        ]
-                        .as_ref(),
-                    )
-                    .split(area);
-                (chunks[0], chunks[1], chunks[2], chunks[3], None)
-            } else {
-                let chunks = Layout::default()
-                    .direction(layout::Direction::Vertical)
-                    .constraints(
-                        [
-                            // controls
-                            layout::Constraint::Length(1),
-                            // warnings (add 2 for top and bottom borders)
-                            layout::Constraint::Length(warnings.len() as u16 + 2),
-                            // task stats
-                            layout::Constraint::Length(10),
-                            // poll duration
-                            layout::Constraint::Length(9),
-                            // fields
-                            layout::Constraint::Percentage(60),
-                        ]
-                        .as_ref(),
-                    )
-                    .split(area);
+        let (
+            controls_area,
+            stats_area,
+            poll_dur_area,
+            scheduled_dur_area,
+            fields_area,
+            warnings_area,
+        ) = if warnings.is_empty() {
+            let chunks = Layout::default()
+                .direction(layout::Direction::Vertical)
+                .constraints(
+                    [
+                        // controls
+                        layout::Constraint::Length(1),
+                        // task stats
+                        layout::Constraint::Length(10),
+                        // poll duration
+                        layout::Constraint::Length(9),
+                        // scheduled duration
+                        layout::Constraint::Length(9),
+                        // fields
+                        layout::Constraint::Percentage(60),
+                    ]
+                    .as_ref(),
+                )
+                .split(area);
+            (chunks[0], chunks[1], chunks[2], chunks[3], chunks[4], None)
+        } else {
+            let chunks = Layout::default()
+                .direction(layout::Direction::Vertical)
+                .constraints(
+                    [
+                        // controls
+                        layout::Constraint::Length(1),
+                        // warnings (add 2 for top and bottom borders)
+                        layout::Constraint::Length(warnings.len() as u16 + 2),
+                        // task stats
+                        layout::Constraint::Length(10),
+                        // poll duration
+                        layout::Constraint::Length(9),
+                        // scheduled duration
+                        layout::Constraint::Length(9),
+                        // fields
+                        layout::Constraint::Percentage(60),
+                    ]
+                    .as_ref(),
+                )
+                .split(area);
 
-                (chunks[0], chunks[2], chunks[3], chunks[4], Some(chunks[1]))
-            };
+            (
+                chunks[0],
+                chunks[2],
+                chunks[3],
+                chunks[4],
+                chunks[5],
+                Some(chunks[1]),
+            )
+        };
 
         let stats_area = Layout::default()
             .direction(layout::Direction::Horizontal)
@@ -207,16 +225,32 @@ impl TaskView {
 
         let task_widget = Paragraph::new(overview).block(styles.border_block().title("Task"));
         let wakers_widget = Paragraph::new(waker_stats).block(styles.border_block().title("Waker"));
+
+        let poll_percentiles_title = "Poll Times Percentiles";
+        let scheduled_percentiles_title = "Sched Times Percentiles";
+        let percentiles_width = cmp::max(
+            poll_percentiles_title.len(),
+            scheduled_percentiles_title.len(),
+        ) as u16
+            + 2_u16;
         let poll_durations_widget = Durations::new(styles)
             .histogram(details.and_then(|d| d.poll_times_histogram()))
-            .percentiles_title("Poll Times Percentiles")
-            .histogram_title("Poll Times Histogram");
+            .percentiles_title(poll_percentiles_title)
+            .histogram_title("Poll Times Histogram")
+            .percentiles_width(percentiles_width);
+        let scheduled_durations_widget = Durations::new(styles)
+            .histogram(details.and_then(|d| d.scheduled_times_histogram()))
+            .percentiles_title(scheduled_percentiles_title)
+            .histogram_title("Scheduled Times Histogram")
+            .percentiles_width(percentiles_width);
+
         let fields_widget = Paragraph::new(fields).block(styles.border_block().title("Fields"));
 
         frame.render_widget(Block::default().title(controls), controls_area);
         frame.render_widget(task_widget, stats_area[0]);
         frame.render_widget(wakers_widget, stats_area[1]);
         frame.render_widget(poll_durations_widget, poll_dur_area);
+        frame.render_widget(scheduled_durations_widget, scheduled_dur_area);
         frame.render_widget(fields_widget, fields_area);
     }
 }

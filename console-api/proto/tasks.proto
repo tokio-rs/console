@@ -59,6 +59,12 @@ message TaskDetails {
         // A histogram plus additional data.
         DurationHistogram histogram = 4;
     }
+
+    // A histogram of task scheduled durations.
+    //
+    // The scheduled duration is the time a task spends between being
+    // woken and when it is next polled.
+    DurationHistogram scheduled_times_histogram = 5;
 }
 
 // Data recorded when a new task is spawned.

@@ -36,6 +36,8 @@ pub(crate) struct Durations<'a> {
     percentiles_title: &'a str,
     /// Title for histogram sparkline block
     histogram_title: &'a str,
+    /// Fixed width for percentiles block
+    percentiles_width: u16,
 }
 
 impl<'a> Widget for Durations<'a> {
@@ -43,7 +45,13 @@ impl<'a> Widget for Durations<'a> {
         // Only split the durations area in half if we're also drawing a
         // sparkline. We require UTF-8 to draw the sparkline and also enough width.
         let (percentiles_area, histogram_area) = if self.styles.utf8 {
-            let percentiles_width = cmp::max(self.percentiles_title.len() as u16, 13_u16) + 2;
+            let percentiles_width = match self.percentiles_width {
+                // Fixed width
+                width if width > 0 => width,
+                // Long enough for the title or for a single line
+                // like "p99: 544.77µs" (13) (and borders on the sides).
+                _ => cmp::max(self.percentiles_title.len() as u16, 13_u16) + 2,
+            };
 
             // If there isn't enough width left after drawing the percentiles
             // then we won't draw the sparkline at all.
@@ -88,6 +96,7 @@ impl<'a> Durations<'a> {
             histogram: None,
             percentiles_title: "Percentiles",
             histogram_title: "Histogram",
+            percentiles_width: 0,
         }
     }
 
@@ -103,6 +112,11 @@ impl<'a> Durations<'a> {
 
     pub(crate) fn histogram_title(mut self, title: &'a str) -> Self {
         self.histogram_title = title;
+        self
+    }
+
+    pub(crate) fn percentiles_width(mut self, width: u16) -> Self {
+        self.percentiles_width = width;
         self
     }
 }

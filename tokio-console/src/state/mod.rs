@@ -221,6 +221,10 @@ impl State {
                     .poll_times_histogram
                     .as_ref()
                     .and_then(histogram::DurationHistogram::from_poll_durations),
+                scheduled_times_histogram: update
+                    .scheduled_times_histogram
+                    .as_ref()
+                    .and_then(histogram::DurationHistogram::from_proto),
             };
 
             *self.current_task_details.borrow_mut() = Some(details);
