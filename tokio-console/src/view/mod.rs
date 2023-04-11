@@ -8,7 +8,9 @@ use tui::{
 };
 
 mod async_ops;
+mod durations;
 mod mini_histogram;
+mod percentiles;
 mod resource;
 mod resources;
 mod styles;
@@ -205,6 +207,13 @@ impl View {
     pub(crate) fn current_view(&self) -> &ViewState {
         &self.state
     }
+}
+
+pub(crate) fn dur(styles: &Styles, dur: std::time::Duration) -> Span<'static> {
+    // TODO(eliza): can we not have to use `format!` to make a string here? is
+    // there a way to just give TUI a `fmt::Debug` implementation, or does it
+    // have to be given a string in order to do layout stuff?
+    styles.time_units(dur, DUR_LIST_PRECISION, None)
 }
 
 pub(crate) fn bold<'a>(text: impl Into<Cow<'a, str>>) -> Span<'a> {
