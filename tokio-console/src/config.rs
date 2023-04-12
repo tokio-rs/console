@@ -26,6 +26,10 @@ pub struct Config {
     ///
     /// This may be an IP address and port, or a DNS name.
     ///
+    /// On Unix platforms, this may also be a URI with the `file` scheme that
+    /// specifies the path to a Unix domain socket, as in
+    /// `file://localhost/path/to/socket`.
+    ///
     /// [default: http://127.0.0.1:6669]
     #[clap(value_hint = ValueHint::Url)]
     pub(crate) target_addr: Option<Uri>,
