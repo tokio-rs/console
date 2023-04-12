@@ -7,7 +7,7 @@ use tui::{
 
 use crate::{
     state::histogram::DurationHistogram,
-    view::{self, bold, dur},
+    view::{self, bold},
 };
 
 /// This is a tui-rs widget to display duration percentiles in a list form.
@@ -53,7 +53,11 @@ impl<'a> Percentiles<'a> {
         let percentiles = pairs.map(|pair| {
             Spans::from(vec![
                 bold(format!("p{:>2}: ", pair.0)),
-                dur(self.styles, Duration::from_nanos(pair.1)),
+                self.styles.time_units(
+                    Duration::from_nanos(pair.1),
+                    view::DUR_LIST_PRECISION,
+                    None,
+                ),
             ])
         });
 

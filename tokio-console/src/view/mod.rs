@@ -20,11 +20,14 @@ mod tasks;
 pub(crate) use self::styles::{Palette, Styles};
 pub(crate) use self::table::SortBy;
 
-const DUR_LEN: usize = 6;
 // This data is only updated every second, so it doesn't make a ton of
 // sense to have a lot of precision in timestamps (and this makes sure
 // there's room for the unit!)
+const DUR_LEN: usize = 6;
+// Precision (after decimal point) for durations displayed in a list
+// (detail view)
 const DUR_LIST_PRECISION: usize = 2;
+// Precision (after decimal point) for durations displayed in a table
 const DUR_TABLE_PRECISION: usize = 0;
 const TABLE_HIGHLIGHT_SYMBOL: &str = ">> ";
 
@@ -207,13 +210,6 @@ impl View {
     pub(crate) fn current_view(&self) -> &ViewState {
         &self.state
     }
-}
-
-pub(crate) fn dur(styles: &Styles, dur: std::time::Duration) -> Span<'static> {
-    // TODO(eliza): can we not have to use `format!` to make a string here? is
-    // there a way to just give TUI a `fmt::Debug` implementation, or does it
-    // have to be given a string in order to do layout stuff?
-    styles.time_units(dur, DUR_LIST_PRECISION, None)
 }
 
 pub(crate) fn bold<'a>(text: impl Into<Cow<'a, str>>) -> Span<'a> {

@@ -12,6 +12,7 @@ use crate::{
 
 // This is calculated so that a legend like the below generally fits:
 // │0647.17µs  909.31µs │
+// This also gives at characters for the sparkline itself.
 const MIN_HISTOGRAM_BLOCK_WIDTH: u16 = 22;
 
 /// This is a tui-rs widget to visualize durations as a list of percentiles
@@ -20,7 +21,10 @@ const MIN_HISTOGRAM_BLOCK_WIDTH: u16 = 22;
 /// This widget wraps the [`Percentiles`] and [`MiniHistogram`] widgets which
 /// are displayed side by side. The mini-histogram will only be displayed if
 ///   a) UTF-8 support is enabled via [`Styles`]
-///   b) There is at least a minimum width left after drawing the percentiles
+///   b) There is at least a minimum width (22 characters to display the full
+///      bottom legend) left after drawing the percentiles
+///
+/// This
 ///
 /// [`Styles`]: crate::view::Styles
 pub(crate) struct Durations<'a> {
@@ -51,7 +55,7 @@ impl<'a> Widget for Durations<'a> {
                     .constraints(
                         [
                             layout::Constraint::Length(percentiles_width),
-                            layout::Constraint::Min(50),
+                            layout::Constraint::Min(MIN_HISTOGRAM_BLOCK_WIDTH),
                         ]
                         .as_ref(),
                     )

@@ -2,7 +2,7 @@ use crate::{
     input,
     state::{tasks::Task, DetailsRef},
     util::Percentage,
-    view::{self, bold, dur, durations::Durations},
+    view::{self, bold, durations::Durations},
 };
 use std::{
     cell::RefCell,
@@ -149,12 +149,15 @@ impl TaskView {
             let percent = amt.as_secs_f64().percent_of(total.as_secs_f64());
             Spans::from(vec![
                 bold(name),
-                dur(styles, amt),
+                styles.time_units(amt, view::DUR_LIST_PRECISION, None),
                 Span::from(format!(" ({:.2}%)", percent)),
             ])
         };
 
-        overview.push(Spans::from(vec![bold("Total Time: "), dur(styles, total)]));
+        overview.push(Spans::from(vec![
+            bold("Total Time: "),
+            styles.time_units(total, view::DUR_LIST_PRECISION, None),
+        ]));
         overview.push(dur_percent("Busy: ", task.busy(now)));
         overview.push(dur_percent("Idle: ", task.idle(now)));
 
