@@ -482,16 +482,13 @@ impl<H: RecordPoll> PollStats<H> {
 
         self.polls.fetch_add(1, Release);
 
-        let scheduled = match (timestamps.last_wake, timestamps.last_poll_ended) {
-            // If the last poll ended after the last wake then it was likely
-            // a self-wake, so we measure from the end of the last poll instead.
-            // This also ensures that `busy_time` and `scheduled_time` don't overlap.
-            (Some(last_wake), Some(last_poll_ended)) if last_poll_ended > last_wake => {
-                last_poll_ended
-            }
-            (Some(last_wake), _) => last_wake,
-            (None, _) => return, // Async operations record polls, but not wakes
-        };
+        // If the last poll ended after the last wake then it was likely
+        // a self-wake, so we measure from the end of the last poll instead.
+        // This also ensures that `busy_time` and `scheduled_time` don't overlap.
+        let scheduled = match std::cmp::max(timestamps.last_wake, timestamps.last_poll_ended) {
+            Some(scheduled) => scheduled,
+            None => return, // Async operations record polls, but not wakes
+        }
 
         let elapsed = match at.checked_duration_since(scheduled) {
             Some(elapsed) => elapsed,
