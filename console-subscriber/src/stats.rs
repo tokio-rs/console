@@ -488,7 +488,7 @@ impl<H: RecordPoll> PollStats<H> {
         let scheduled = match std::cmp::max(timestamps.last_wake, timestamps.last_poll_ended) {
             Some(scheduled) => scheduled,
             None => return, // Async operations record polls, but not wakes
-        }
+        };
 
         let elapsed = match at.checked_duration_since(scheduled) {
             Some(elapsed) => elapsed,
