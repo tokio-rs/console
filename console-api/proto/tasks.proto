@@ -134,7 +134,7 @@ message Stats {
     // across all poll cycles. Note that this includes only polls that have
     // started and is not reflecting any scheduled state where the task hasn't
     // yet been polled. Subtracting both `busy_time` and `scheduled_time` from the
-    // total lifetime of the polled object results in the amount of time it spent
+    // total lifetime of the polled task results in the amount of time it spent
     // unable to progress because it was waiting on some resource.
     google.protobuf.Duration scheduled_time = 9;
 }
