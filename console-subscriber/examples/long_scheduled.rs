@@ -11,6 +11,11 @@
 //! woken, but because there's only a single worker thread, it doesn't
 //! get polled until after the sender task has finished "working" and
 //! yields (via `tokio::time::sleep`).
+//!
+//! In the console, this is visible in the `rx` task, which has very
+//! high scheduled times - in the detail screen you will see that around
+//! it is scheduled around 98% of the time. The `tx` task, on the other
+//! hand, is busy most of the time.
 use std::time::Duration;
 
 use console_subscriber::ConsoleLayer;

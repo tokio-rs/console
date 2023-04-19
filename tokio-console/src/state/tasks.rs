@@ -454,17 +454,14 @@ impl From<proto::tasks::Stats> for TaskStats {
 
         let poll_stats = pb.poll_stats.expect("task should have poll stats");
         let busy = poll_stats.busy_time.map(pb_duration).unwrap_or_default();
-        let scheduled = poll_stats
-            .scheduled_time
-            .map(pb_duration)
-            .unwrap_or_default();
+        let scheduled = pb.scheduled_time.map(pb_duration).unwrap_or_default();
         let idle = total.map(|total| total.checked_sub(busy + scheduled).unwrap_or_default());
         Self {
             total,
             idle,
             scheduled,
             busy,
-            last_wake: poll_stats.last_wake.map(|v| v.try_into().unwrap()),
+            last_wake: pb.last_wake.map(|v| v.try_into().unwrap()),
             last_poll_started: poll_stats.last_poll_started.map(|v| v.try_into().unwrap()),
             last_poll_ended: poll_stats.last_poll_ended.map(|v| v.try_into().unwrap()),
             polls: poll_stats.polls,
