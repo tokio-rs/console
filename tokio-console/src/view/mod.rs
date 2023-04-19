@@ -39,7 +39,7 @@ pub struct View {
     /// details view), we want to leave the task list's state the way we left it
     /// --- e.g., if the user previously selected a particular sorting, we want
     /// it to remain sorted that way when we return to it.
-    tasks_list: TableListState<TasksTable, 11>,
+    tasks_list: TableListState<TasksTable, 12>,
     resources_list: TableListState<ResourcesTable, 9>,
     state: ViewState,
     pub(crate) styles: Styles,
@@ -93,7 +93,7 @@ impl View {
     pub fn new(styles: Styles) -> Self {
         Self {
             state: ViewState::TasksList,
-            tasks_list: TableListState::<TasksTable, 11>::default(),
+            tasks_list: TableListState::<TasksTable, 12>::default(),
             resources_list: TableListState::<ResourcesTable, 9>::default(),
             styles,
         }

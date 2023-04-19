@@ -19,17 +19,17 @@ use tui::{
 #[derive(Debug, Default)]
 pub(crate) struct TasksTable {}
 
-impl TableList<11> for TasksTable {
+impl TableList<12> for TasksTable {
     type Row = Task;
     type Sort = SortBy;
     type Context = ();
 
-    const HEADER: &'static [&'static str; 11] = &[
-        "Warn", "ID", "State", "Name", "Total", "Busy", "Idle", "Polls", "Target", "Location",
-        "Fields",
+    const HEADER: &'static [&'static str; 12] = &[
+        "Warn", "ID", "State", "Name", "Total", "Busy", "Sched", "Idle", "Polls", "Target",
+        "Location", "Fields",
     ];
 
-    const WIDTHS: &'static [usize; 11] = &[
+    const WIDTHS: &'static [usize; 12] = &[
         Self::HEADER[0].len() + 1,
         Self::HEADER[1].len() + 1,
         Self::HEADER[2].len() + 1,
@@ -41,10 +41,11 @@ impl TableList<11> for TasksTable {
         Self::HEADER[8].len() + 1,
         Self::HEADER[9].len() + 1,
         Self::HEADER[10].len() + 1,
+        Self::HEADER[11].len() + 1,
     ];
 
     fn render<B: tui::backend::Backend>(
-        table_list_state: &mut TableListState<Self, 11>,
+        table_list_state: &mut TableListState<Self, 12>,
         styles: &view::Styles,
         frame: &mut tui::terminal::Frame<B>,
         area: layout::Rect,
@@ -129,6 +130,7 @@ impl TableList<11> for TasksTable {
                         Cell::from(name_width.update_str(task.name().unwrap_or("")).to_string()),
                         dur_cell(task.total(now)),
                         dur_cell(task.busy(now)),
+                        dur_cell(task.scheduled(now)),
                         dur_cell(task.idle(now)),
                         Cell::from(polls_width.update_str(task.total_polls().to_string())),
                         Cell::from(target_width.update_str(task.target()).to_owned()),
@@ -249,6 +251,7 @@ impl TableList<11> for TasksTable {
             id_width.constraint(),
             layout::Constraint::Length(state_len),
             name_width.constraint(),
+            layout::Constraint::Length(DUR_LEN as u16),
             layout::Constraint::Length(DUR_LEN as u16),
             layout::Constraint::Length(DUR_LEN as u16),
             layout::Constraint::Length(DUR_LEN as u16),
