@@ -170,9 +170,10 @@ pub struct Stats {
     /// The total duration this task was scheduled prior to being polled, summed
     /// across all poll cycles. Note that this includes only polls that have
     /// started and is not reflecting any scheduled state where the task hasn't
-    /// yet been polled. Subtracting both `busy_time` and `scheduled_time` from the
-    /// total lifetime of the polled object results in the amount of time it spent
-    /// unable to progress because it was waiting on some resource.
+    /// yet been polled. Subtracting both `busy_time` (defined on
+    /// `common::PollStats`) and `scheduled_time` from the total lifetime of the
+    /// polled task results in the amount of time it spent unable to progress
+    /// because it was waiting on some resource.
     #[prost(message, optional, tag="9")]
     pub scheduled_time: ::core::option::Option<::prost_types::Duration>,
 }
