@@ -69,7 +69,7 @@ impl TaskView {
                             // controls
                             layout::Constraint::Length(1),
                             // task stats
-                            layout::Constraint::Length(8),
+                            layout::Constraint::Length(10),
                             // poll duration
                             layout::Constraint::Length(9),
                             // fields
@@ -89,7 +89,7 @@ impl TaskView {
                             // warnings (add 2 for top and bottom borders)
                             layout::Constraint::Length(warnings.len() as u16 + 2),
                             // task stats
-                            layout::Constraint::Length(8),
+                            layout::Constraint::Length(10),
                             // poll duration
                             layout::Constraint::Length(9),
                             // fields
@@ -122,7 +122,7 @@ impl TaskView {
         ]);
 
         // Just preallocate capacity for ID, name, target, total, busy, and idle.
-        let mut overview = Vec::with_capacity(7);
+        let mut overview = Vec::with_capacity(8);
         overview.push(Spans::from(vec![
             bold("ID: "),
             Span::raw(format!("{} ", task.id())),
@@ -159,6 +159,7 @@ impl TaskView {
             styles.time_units(total, view::DUR_LIST_PRECISION, None),
         ]));
         overview.push(dur_percent("Busy: ", task.busy(now)));
+        overview.push(dur_percent("Scheduled: ", task.scheduled(now)));
         overview.push(dur_percent("Idle: ", task.idle(now)));
 
         let mut waker_stats = vec![Spans::from(vec![

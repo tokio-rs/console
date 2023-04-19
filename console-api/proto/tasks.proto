@@ -130,6 +130,16 @@ message Stats {
     common.PollStats poll_stats = 7;
     // The total number of times this task has woken itself.
     uint64 self_wakes = 8;
+    // The total duration this task was scheduled prior to being polled, summed
+    // across all poll cycles.
+    //
+    // Note that this includes only polls that have started, and does not
+    // reflect any scheduled state where the task hasn't yet been polled.
+    // Subtracting both `busy_time` (from the task's `PollStats`) and
+    // `scheduled_time` from the total lifetime of the task results in the
+    // amount of time it spent unable to progress because it was waiting on 
+    // some resource.
+    google.protobuf.Duration scheduled_time = 9;
 }
 
 
