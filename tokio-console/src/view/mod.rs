@@ -8,7 +8,9 @@ use tui::{
 };
 
 mod async_ops;
+mod durations;
 mod mini_histogram;
+mod percentiles;
 mod resource;
 mod resources;
 mod styles;
@@ -18,11 +20,15 @@ mod tasks;
 pub(crate) use self::styles::{Palette, Styles};
 pub(crate) use self::table::SortBy;
 
-const DUR_LEN: usize = 10;
 // This data is only updated every second, so it doesn't make a ton of
 // sense to have a lot of precision in timestamps (and this makes sure
 // there's room for the unit!)
-const DUR_PRECISION: usize = 4;
+const DUR_LEN: usize = 6;
+// Precision (after decimal point) for durations displayed in a list
+// (detail view)
+const DUR_LIST_PRECISION: usize = 2;
+// Precision (after decimal point) for durations displayed in a table
+const DUR_TABLE_PRECISION: usize = 0;
 const TABLE_HIGHLIGHT_SYMBOL: &str = ">> ";
 
 pub struct View {
@@ -96,6 +102,17 @@ impl View {
     pub(crate) fn update_input(&mut self, event: input::Event, state: &State) -> UpdateKind {
         use ViewState::*;
         let mut update_kind = UpdateKind::Other;
+
+        if matches!(event, key!(Char('t'))) {
+            self.state = TasksList;
+            return update_kind;
+        }
+
+        if matches!(event, key!(Char('r'))) {
+            self.state = ResourcesList;
+            return update_kind;
+        }
+
         match self.state {
             TasksList => {
                 // The enter key changes views, so handle here since we can
@@ -110,9 +127,6 @@ impl View {
                             ));
                         }
                     }
-                    key!(Char('r')) => {
-                        self.state = ResourcesList;
-                    }
                     _ => {
                         // otherwise pass on to view
                         self.tasks_list.update_input(event);
@@ -126,9 +140,6 @@ impl View {
                             update_kind = UpdateKind::SelectResource(res.borrow().span_id());
                             self.state = ResourceInstance(self::resource::ResourceView::new(res));
                         }
-                    }
-                    key!(Char('t')) => {
-                        self.state = TasksList;
                     }
                     _ => {
                         // otherwise pass on to view

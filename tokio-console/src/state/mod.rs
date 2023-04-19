@@ -8,7 +8,7 @@ use console_api as proto;
 use std::{
     cell::RefCell,
     cmp::Ordering,
-    collections::hash_map::{Entry, HashMap},
+    collections::HashMap,
     convert::{TryFrom, TryInto},
     fmt,
     rc::Rc,
@@ -23,7 +23,10 @@ use tui::{
 pub mod async_ops;
 pub mod histogram;
 pub mod resources;
+pub mod store;
 pub mod tasks;
+
+pub(crate) use self::store::Id;
 
 pub(crate) type DetailsRef = Rc<RefCell<Option<Details>>>;
 
@@ -78,12 +81,6 @@ enum Temporality {
 pub(crate) struct Attribute {
     field: Field,
     unit: Option<String>,
-}
-
-#[derive(Debug)]
-pub(crate) struct Ids {
-    next: u64,
-    map: HashMap<u64, u64>,
 }
 
 impl State {
@@ -165,8 +162,8 @@ impl State {
                 &mut self.strings,
                 &self.metas,
                 async_ops_update,
-                &mut self.resources_state.ids,
-                &mut self.tasks_state.ids,
+                self.resources_state.ids_mut(),
+                self.tasks_state.ids_mut(),
                 visibility,
             )
         }
@@ -274,6 +271,7 @@ impl Metadata {
 impl Field {
     const SPAWN_LOCATION: &'static str = "spawn.location";
     const NAME: &'static str = "task.name";
+    const TASK_ID: &'static str = "task.id";
 
     /// Converts a wire-format `Field` into an internal `Field` representation,
     /// using the provided `Metadata` for the task span that the field came
@@ -493,31 +491,6 @@ impl Attribute {
             formatted.push(elems)
         }
         formatted
-    }
-}
-
-// === impl Ids ===
-
-impl Ids {
-    pub(crate) fn id_for(&mut self, span_id: u64) -> u64 {
-        match self.map.entry(span_id) {
-            Entry::Occupied(entry) => *entry.get(),
-            Entry::Vacant(entry) => {
-                let id = self.next;
-                entry.insert(id);
-                self.next = self.next.wrapping_add(1);
-                id
-            }
-        }
-    }
-}
-
-impl Default for Ids {
-    fn default() -> Self {
-        Self {
-            next: 1,
-            map: Default::default(),
-        }
     }
 }
 

@@ -47,7 +47,7 @@ pub struct TaskDetails {
     ///
     /// This is either:
     /// - the raw binary representation of a HdrHistogram.rs `Histogram`
-    ///   serialized to binary in the V2 format (legacy)
+    ///    serialized to binary in the V2 format (legacy)
     /// - a binary histogram plus details on outliers (current)
     #[prost(oneof="task_details::PollTimesHistogram", tags="3, 4")]
     pub poll_times_histogram: ::core::option::Option<task_details::PollTimesHistogram>,
@@ -58,7 +58,7 @@ pub mod task_details {
     ///
     /// This is either:
     /// - the raw binary representation of a HdrHistogram.rs `Histogram`
-    ///   serialized to binary in the V2 format (legacy)
+    ///    serialized to binary in the V2 format (legacy)
     /// - a binary histogram plus details on outliers (current)
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum PollTimesHistogram {
@@ -124,6 +124,18 @@ pub mod task {
         /// A task spawned via a runtime's blocking task spawning operation
         /// (such as `tokio::task::spawn_blocking`).
         Blocking = 1,
+    }
+    impl Kind {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Kind::Spawn => "SPAWN",
+                Kind::Blocking => "BLOCKING",
+            }
+        }
     }
 }
 /// Task performance statistics.

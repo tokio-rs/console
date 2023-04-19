@@ -20,11 +20,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                             *lock += 1;
                             tokio::time::sleep(Duration::from_secs(1)).await;
                         }
-                    });
+                    })
+                    .unwrap();
             }
 
             while *count.lock().await < 50 {}
         })
+        .unwrap()
         .await?;
 
     Ok(())

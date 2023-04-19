@@ -1,8 +1,11 @@
 use crate::{
     intern::{self, InternedStr},
     state::{
-        format_location, histogram::DurationHistogram, pb_duration, Field, Ids, Metadata,
-        Visibility,
+        format_location,
+        histogram::DurationHistogram,
+        pb_duration,
+        store::{self, Id, SpanId, Store},
+        Field, FieldValue, Metadata, Visibility,
     },
     util::Percentage,
     view,
@@ -20,16 +23,14 @@ use tui::{style::Color, text::Span};
 
 #[derive(Default, Debug)]
 pub(crate) struct TasksState {
-    tasks: HashMap<u64, Rc<RefCell<Task>>>,
-    pub(crate) ids: Ids,
-    new_tasks: Vec<TaskRef>,
+    tasks: Store<Task>,
     pub(crate) linters: Vec<Linter<Task>>,
     dropped_events: u64,
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct Details {
-    pub(crate) span_id: u64,
+    pub(crate) span_id: SpanId,
     pub(crate) poll_times_histogram: Option<DurationHistogram>,
 }
 
@@ -55,7 +56,18 @@ pub(crate) enum TaskState {
     Running,
 }
 
-pub(crate) type TaskRef = Weak<RefCell<Task>>;
+pub(crate) type TaskRef = store::Ref<Task>;
+
+/// The Id for a Tokio task.
+///
+/// This should be equivalent to [`tokio::task::Id`], which can't be
+/// used because it's not possible to construct outside the `tokio`
+/// crate.
+///
+/// Within the context of `tokio-console`, we don't depend on it
+/// being the same as Tokio's own type, as the task id is recorded
+/// as a `u64` in tracing and then sent via the wire protocol as such.
+pub(crate) type TaskId = u64;
 
 #[derive(Debug)]
 pub(crate) struct Task {
@@ -63,11 +75,15 @@ pub(crate) struct Task {
     ///
     /// This is NOT the `tracing::span::Id` for the task's tracing span on the
     /// remote.
-    num: u64,
+    id: Id<Task>,
+    /// The `tokio::task::Id` in the remote tokio runtime.
+    task_id: Option<TaskId>,
     /// The `tracing::span::Id` on the remote process for this task's span.
     ///
     /// This is used when requesting a task details stream.
-    span_id: u64,
+    span_id: SpanId,
+    /// A cached string representation of the Id for display purposes.
+    id_str: String,
     short_desc: InternedStr,
     formatted_fields: Vec<Vec<Span<'static>>>,
     stats: TaskStats,
@@ -107,7 +123,11 @@ struct TaskStats {
 impl TasksState {
     /// Returns any new tasks that were added since the last task update.
     pub(crate) fn take_new_tasks(&mut self) -> impl Iterator<Item = TaskRef> + '_ {
-        self.new_tasks.drain(..)
+        self.tasks.take_new_items()
+    }
+
+    pub(crate) fn ids_mut(&mut self) -> &mut store::Ids<Task> {
+        self.tasks.ids_mut()
     }
 
     pub(crate) fn update_tasks(
@@ -119,86 +139,88 @@ impl TasksState {
         visibility: Visibility,
     ) {
         let mut stats_update = update.stats_update;
-        let new_list = &mut self.new_tasks;
-        if matches!(visibility, Visibility::Show) {
-            new_list.clear();
-        }
-
         let linters = &self.linters;
 
-        let new_tasks = update.new_tasks.into_iter().filter_map(|mut task| {
-            if task.id.is_none() {
-                tracing::warn!(?task, "skipping task with no id");
-            }
+        self.tasks
+            .insert_with(visibility, update.new_tasks, |ids, mut task| {
+                if task.id.is_none() {
+                    tracing::warn!(?task, "skipping task with no id");
+                }
 
-            let meta_id = match task.metadata.as_ref() {
-                Some(id) => id.id,
-                None => {
-                    tracing::warn!(?task, "task has no metadata ID, skipping");
-                    return None;
-                }
-            };
-            let meta = match metas.get(&meta_id) {
-                Some(meta) => meta,
-                None => {
-                    tracing::warn!(?task, meta_id, "no metadata for task, skipping");
-                    return None;
-                }
-            };
-            let mut name = None;
-            let mut fields = task
-                .fields
-                .drain(..)
-                .filter_map(|pb| {
-                    let field = Field::from_proto(pb, meta, strings)?;
-                    // the `task.name` field gets its own column, if it's present.
-                    if &*field.name == Field::NAME {
-                        name = Some(strings.string(field.value.to_string()));
+                let meta_id = match task.metadata.as_ref() {
+                    Some(id) => id.id,
+                    None => {
+                        tracing::warn!(?task, "task has no metadata ID, skipping");
                         return None;
                     }
-                    Some(field)
-                })
-                .collect::<Vec<_>>();
+                };
+                let meta = match metas.get(&meta_id) {
+                    Some(meta) => meta,
+                    None => {
+                        tracing::warn!(?task, meta_id, "no metadata for task, skipping");
+                        return None;
+                    }
+                };
+                let mut name = None;
+                let mut task_id = None;
+                let mut fields = task
+                    .fields
+                    .drain(..)
+                    .filter_map(|pb| {
+                        let field = Field::from_proto(pb, meta, strings)?;
+                        // the `task.name` field gets its own column, if it's present.
+                        if &*field.name == Field::NAME {
+                            name = Some(strings.string(field.value.to_string()));
+                            return None;
+                        }
+                        if &*field.name == Field::TASK_ID {
+                            task_id = match field.value {
+                                FieldValue::U64(id) => Some(id as TaskId),
+                                _ => None,
+                            };
+                            return None;
+                        }
+                        Some(field)
+                    })
+                    .collect::<Vec<_>>();
 
-            let formatted_fields = Field::make_formatted(styles, &mut fields);
-            let span_id = task.id?.id;
+                let formatted_fields = Field::make_formatted(styles, &mut fields);
+                let span_id = task.id?.id;
 
-            let stats = stats_update.remove(&span_id)?.into();
-            let location = format_location(task.location);
+                let stats = stats_update.remove(&span_id)?.into();
+                let location = format_location(task.location);
 
-            // remap the server's ID to a pretty, sequential task ID
-            let num = self.ids.id_for(span_id);
+                // remap the server's ID to a pretty, sequential task ID
+                let id = ids.id_for(span_id);
 
-            let short_desc = strings.string(match name.as_ref() {
-                Some(name) => format!("{} ({})", num, name),
-                None => format!("{}", num),
+                let short_desc = strings.string(match (task_id, name.as_ref()) {
+                    (Some(task_id), Some(name)) => format!("{task_id} ({name})"),
+                    (Some(task_id), None) => task_id.to_string(),
+                    (None, Some(name)) => name.as_ref().to_owned(),
+                    (None, None) => "".to_owned(),
+                });
+
+                let mut task = Task {
+                    name,
+                    id,
+                    task_id,
+                    span_id,
+                    id_str: task_id.map(|id| id.to_string()).unwrap_or_default(),
+                    short_desc,
+                    formatted_fields,
+                    stats,
+                    target: meta.target.clone(),
+                    warnings: Vec::new(),
+                    location,
+                };
+                task.lint(linters);
+                Some((id, task))
             });
 
-            let mut task = Task {
-                name,
-                num,
-                span_id,
-                short_desc,
-                formatted_fields,
-                stats,
-                target: meta.target.clone(),
-                warnings: Vec::new(),
-                location,
-            };
+        for (stats, mut task) in self.tasks.updated(stats_update) {
+            tracing::trace!(?task, ?stats, "processing stats update for");
+            task.stats = stats.into();
             task.lint(linters);
-            let task = Rc::new(RefCell::new(task));
-            new_list.push(Rc::downgrade(&task));
-            Some((num, task))
-        });
-        self.tasks.extend(new_tasks);
-        for (span_id, stats) in stats_update {
-            let num = self.ids.id_for(span_id);
-            if let Some(task) = self.tasks.get_mut(&num) {
-                let mut task = task.borrow_mut();
-                tracing::trace!(?task, "processing stats update for");
-                task.stats = stats.into();
-                task.lint(linters);
-            }
         }
 
         self.dropped_events += update.dropped_events;
@@ -222,8 +244,8 @@ impl TasksState {
         self.linters.iter().filter(|linter| linter.count() > 0)
     }
 
-    pub(crate) fn task(&self, id: u64) -> Option<TaskRef> {
-        self.tasks.get(&id).map(Rc::downgrade)
+    pub(crate) fn task(&self, id: Id<Task>) -> Option<TaskRef> {
+        self.tasks.get(id).map(Rc::downgrade)
     }
 
     pub(crate) fn dropped_events(&self) -> u64 {
@@ -232,7 +254,7 @@ impl TasksState {
 }
 
 impl Details {
-    pub(crate) fn span_id(&self) -> u64 {
+    pub(crate) fn span_id(&self) -> SpanId {
         self.span_id
     }
 
@@ -242,12 +264,16 @@ impl Details {
 }
 
 impl Task {
-    pub(crate) fn id(&self) -> u64 {
-        self.num
+    pub(crate) fn id(&self) -> Id<Task> {
+        self.id
     }
 
-    pub(crate) fn span_id(&self) -> u64 {
+    pub(crate) fn span_id(&self) -> SpanId {
         self.span_id
+    }
+
+    pub(crate) fn id_str(&self) -> &str {
+        &self.id_str
     }
 
     pub(crate) fn target(&self) -> &str {
@@ -295,12 +321,12 @@ impl Task {
     }
 
     pub(crate) fn busy(&self, since: SystemTime) -> Duration {
-        if let (Some(last_poll_started), None) =
-            (self.stats.last_poll_started, self.stats.last_poll_ended)
-        {
-            // in this case the task is being polled at the moment
-            let current_time_in_poll = since.duration_since(last_poll_started).unwrap_or_default();
-            return self.stats.busy + current_time_in_poll;
+        if let Some(started) = self.stats.last_poll_started {
+            if self.stats.last_poll_started > self.stats.last_poll_ended {
+                // in this case the task is being polled at the moment
+                let current_time_in_poll = since.duration_since(started).unwrap_or_default();
+                return self.stats.busy + current_time_in_poll;
+            }
         }
         self.stats.busy
     }
@@ -431,7 +457,9 @@ impl Default for SortBy {
 impl SortBy {
     pub fn sort(&self, now: SystemTime, tasks: &mut [Weak<RefCell<Task>>]) {
         match self {
-            Self::Tid => tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().num)),
+            Self::Tid => {
+                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().task_id))
+            }
             Self::Name => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().name.clone()))
             }

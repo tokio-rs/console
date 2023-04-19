@@ -6,7 +6,7 @@ use crate::{
     view::{
         self, bold,
         table::{self, TableList, TableListState},
-        DUR_LEN, DUR_PRECISION,
+        DUR_LEN, DUR_TABLE_PRECISION,
     },
 };
 
@@ -104,12 +104,11 @@ impl TableList<9> for ResourcesTable {
                         ))),
                         Cell::from(parent_width.update_str(resource.parent_id()).to_owned()),
                         Cell::from(kind_width.update_str(resource.kind()).to_owned()),
-                        Cell::from(styles.time_units(format!(
-                            "{:>width$.prec$?}",
+                        Cell::from(styles.time_units(
                             resource.total(now),
-                            width = DUR_LEN,
-                            prec = DUR_PRECISION,
-                        ))),
+                            DUR_TABLE_PRECISION,
+                            Some(DUR_LEN),
+                        )),
                         Cell::from(target_width.update_str(resource.target()).to_owned()),
                         Cell::from(type_width.update_str(resource.concrete_type()).to_owned()),
                         Cell::from(resource.type_visibility().render(styles)),

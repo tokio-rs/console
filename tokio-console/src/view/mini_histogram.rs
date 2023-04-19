@@ -7,6 +7,8 @@ use tui::{
     widgets::{Block, Widget},
 };
 
+use crate::state::histogram::DurationHistogram;
+
 /// This is a tui-rs widget to visualize a latency histogram in a small area.
 /// It is based on the [`Sparkline`] widget, so it draws a mini bar chart with
 /// some labels for clarity. Unlike Sparkline, it does not omit very small
@@ -18,10 +20,8 @@ pub(crate) struct MiniHistogram<'a> {
     block: Option<Block<'a>>,
     /// Widget style
     style: Style,
-    /// Values for the buckets of the histogram
-    data: &'a [u64],
-    /// Metadata about the histogram
-    metadata: HistogramMetadata,
+    /// The histogram data to render
+    histogram: Option<&'a DurationHistogram>,
     /// The maximum value to take to compute the maximum bar height (if nothing is specified, the
     /// widget uses the max of the dataset)
     max: Option<u64>,
@@ -51,8 +51,7 @@ impl<'a> Default for MiniHistogram<'a> {
         MiniHistogram {
             block: None,
             style: Default::default(),
-            data: &[],
-            metadata: Default::default(),
+            histogram: None,
             max: None,
             bar_set: symbols::bar::NINE_LEVELS,
             duration_precision: 4,
@@ -75,34 +74,43 @@ impl<'a> Widget for MiniHistogram<'a> {
             return;
         }
 
-        let max_qty_label = self.metadata.max_bucket.to_string();
-        let min_qty_label = self.metadata.min_bucket.to_string();
+        let (data, metadata) = match self.histogram {
+            // Bit of a deadlock: We cannot know the highest bucket value without determining the number of buckets,
+            // and we cannot determine the number of buckets without knowing the width of the chart area which depends on
+            // the number of digits in the highest bucket value.
+            // So just assume here the number of digits in the highest bucket value is 3.
+            // If we overshoot, there will be empty columns/buckets at the right end of the chart.
+            // If we undershoot, the rightmost 1-2 columns/buckets will be hidden.
+            // We could get the max bucket value from the previous render though...
+            Some(h) => chart_data(h, inner_area.width - 3),
+            None => return,
+        };
+
+        let max_qty_label = metadata.max_bucket.to_string();
+        let min_qty_label = metadata.min_bucket.to_string();
         let max_record_label = format!(
             "{:.prec$?}",
-            Duration::from_nanos(self.metadata.max_value),
+            Duration::from_nanos(metadata.max_value),
             prec = self.duration_precision,
         );
         let min_record_label = format!(
             "{:.prec$?}",
-            Duration::from_nanos(self.metadata.min_value),
+            Duration::from_nanos(metadata.min_value),
             prec = self.duration_precision,
         );
         let y_axis_label_width = max_qty_label.len() as u16;
 
-        self.render_legend(
+        render_legend(
             inner_area,
             buf,
+            &metadata,
             max_record_label,
             min_record_label,
             max_qty_label,
             min_qty_label,
         );
 
-        let legend_height = if self.metadata.high_outliers > 0 {
-            2
-        } else {
-            1
-        };
+        let legend_height = if metadata.high_outliers > 0 { 2 } else { 1 };
 
         // Shrink the bars area by 1 row from the bottom
         // and `y_axis_label_width` columns from the left.
@@ -112,74 +120,23 @@ impl<'a> Widget for MiniHistogram<'a> {
             width: inner_area.width - y_axis_label_width,
             height: inner_area.height - legend_height,
         };
-        self.render_bars(bars_area, buf);
+        self.render_bars(bars_area, buf, data);
     }
 }
 
 impl<'a> MiniHistogram<'a> {
-    fn render_legend(
+    fn render_bars(
         &mut self,
         area: tui::layout::Rect,
         buf: &mut tui::buffer::Buffer,
-        max_record_label: String,
-        min_record_label: String,
-        max_qty_label: String,
-        min_qty_label: String,
+        data: Vec<u64>,
     ) {
-        // If there are outliers, display a note
-        let labels_pos = if self.metadata.high_outliers > 0 {
-            let outliers = format!(
-                "{} outliers (highest: {:?})",
-                self.metadata.high_outliers,
-                self.metadata
-                    .highest_outlier
-                    .expect("if there are outliers, the highest should be set")
-            );
-            buf.set_string(
-                area.right() - outliers.len() as u16,
-                area.bottom() - 1,
-                &outliers,
-                Style::default(),
-            );
-            2
-        } else {
-            1
-        };
-
-        // top left: max quantity
-        buf.set_string(area.left(), area.top(), &max_qty_label, Style::default());
-        // bottom left: 0 aligned to right
-        let zero_label = format!("{:>width$}", &min_qty_label, width = max_qty_label.len());
-        buf.set_string(
-            area.left(),
-            area.bottom() - labels_pos,
-            &zero_label,
-            Style::default(),
-        );
-        // bottom left below the chart: min time
-        buf.set_string(
-            area.left() + max_qty_label.len() as u16,
-            area.bottom() - labels_pos,
-            &min_record_label,
-            Style::default(),
-        );
-        // bottom right: max time
-        buf.set_string(
-            area.right() - max_record_label.len() as u16,
-            area.bottom() - labels_pos,
-            &max_record_label,
-            Style::default(),
-        );
-    }
-
-    fn render_bars(&mut self, area: tui::layout::Rect, buf: &mut tui::buffer::Buffer) {
         let max = match self.max {
             Some(v) => v,
-            None => *self.data.iter().max().unwrap_or(&1u64),
+            None => *data.iter().max().unwrap_or(&1u64),
         };
-        let max_index = std::cmp::min(area.width as usize, self.data.len());
-        let mut data = self
-            .data
+        let max_index = std::cmp::min(area.width as usize, data.len());
+        let mut data = data
             .iter()
             .take(max_index)
             .map(|e| {
@@ -244,15 +201,11 @@ impl<'a> MiniHistogram<'a> {
         self
     }
 
-    #[allow(dead_code)]
-    pub fn data(mut self, data: &'a [u64]) -> MiniHistogram<'a> {
-        self.data = data;
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn metadata(mut self, metadata: HistogramMetadata) -> MiniHistogram<'a> {
-        self.metadata = metadata;
+    pub(crate) fn histogram(
+        mut self,
+        histogram: Option<&'a DurationHistogram>,
+    ) -> MiniHistogram<'a> {
+        self.histogram = histogram;
         self
     }
 
@@ -267,4 +220,107 @@ impl<'a> MiniHistogram<'a> {
         self.bar_set = bar_set;
         self
     }
+}
+
+fn render_legend(
+    area: tui::layout::Rect,
+    buf: &mut tui::buffer::Buffer,
+    metadata: &HistogramMetadata,
+    max_record_label: String,
+    min_record_label: String,
+    max_qty_label: String,
+    min_qty_label: String,
+) {
+    // If there are outliers, display a note
+    let labels_pos = if metadata.high_outliers > 0 {
+        let outliers = format!(
+            "{} outliers (highest: {:?})",
+            metadata.high_outliers,
+            metadata
+                .highest_outlier
+                .expect("if there are outliers, the highest should be set")
+        );
+        buf.set_string(
+            area.right() - outliers.len() as u16,
+            area.bottom() - 1,
+            &outliers,
+            Style::default(),
+        );
+        2
+    } else {
+        1
+    };
+
+    // top left: max quantity
+    buf.set_string(area.left(), area.top(), &max_qty_label, Style::default());
+    // bottom left: 0 aligned to right
+    let zero_label = format!("{:>width$}", &min_qty_label, width = max_qty_label.len());
+    buf.set_string(
+        area.left(),
+        area.bottom() - labels_pos,
+        &zero_label,
+        Style::default(),
+    );
+    // bottom left below the chart: min time
+    buf.set_string(
+        area.left() + max_qty_label.len() as u16,
+        area.bottom() - labels_pos,
+        &min_record_label,
+        Style::default(),
+    );
+    // bottom right: max time
+    buf.set_string(
+        area.right() - max_record_label.len() as u16,
+        area.bottom() - labels_pos,
+        &max_record_label,
+        Style::default(),
+    );
+}
+
+/// From the histogram, build a visual representation by trying to make as
+/// many buckets as the width of the render area.
+fn chart_data(histogram: &DurationHistogram, width: u16) -> (Vec<u64>, HistogramMetadata) {
+    let &DurationHistogram {
+        ref histogram,
+        high_outliers,
+        highest_outlier,
+        ..
+    } = histogram;
+
+    let step_size = ((histogram.max() - histogram.min()) as f64 / width as f64).ceil() as u64 + 1;
+    // `iter_linear` panics if step_size is 0
+    let data = if step_size > 0 {
+        let mut found_first_nonzero = false;
+        let data: Vec<u64> = histogram
+            .iter_linear(step_size)
+            .filter_map(|value| {
+                let count = value.count_since_last_iteration();
+                // Remove the 0s from the leading side of the buckets.
+                // Because HdrHistogram can return empty buckets depending
+                // on its internal state, as it approximates values.
+                if count == 0 && !found_first_nonzero {
+                    None
+                } else {
+                    found_first_nonzero = true;
+                    Some(count)
+                }
+            })
+            .collect();
+        data
+    } else {
+        Vec::new()
+    };
+    let max_bucket = data.iter().max().copied().unwrap_or_default();
+    let min_bucket = data.iter().min().copied().unwrap_or_default();
+    (
+        data,
+        HistogramMetadata {
+            max_value: histogram.max(),
+            min_value: histogram.min(),
+            max_bucket,
+            min_bucket,
+            high_outliers,
+            highest_outlier,
+        },
+    )
 }

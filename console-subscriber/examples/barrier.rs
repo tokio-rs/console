@@ -14,11 +14,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             for i in 0..30 {
                 let c = barrier.clone();
                 let task_name = format!("task-{}", i);
-                handles.push(task::Builder::default().name(&task_name).spawn(async move {
-                    tokio::time::sleep(Duration::from_secs(i)).await;
-                    let wait_result = c.wait().await;
-                    wait_result
-                }));
+                handles.push(
+                    task::Builder::default()
+                        .name(&task_name)
+                        .spawn(async move {
+                            tokio::time::sleep(Duration::from_secs(i)).await;
+                            c.wait().await
+                        })
+                        .unwrap(),
+                );
             }
 
             // Will not resolve until all "after wait" messages have been printed
@@ -34,6 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             // Exactly one barrier will resolve as the "leader"
             assert_eq!(num_leaders, 1);
         })
+        .unwrap()
         .await?;
 
     Ok(())

@@ -78,7 +78,7 @@ runtime][Tokio] is considered *experimental*. In order to use
   ```
   If you're using a workspace, you should put the `.cargo/config.toml` file in the root of your workspace.
   Otherwise, put the `.cargo/config.toml` file in the root directory of your crate.
-  
+
   Putting `.cargo/config.toml` files below the workspace or crate root directory may lead to tools like
   Rust-Analyzer or VSCode not using your `.cargo/config.toml` since they invoke cargo from
   the workspace or crate root and cargo only looks for the `.cargo` directory in the current & parent directories.
@@ -101,9 +101,9 @@ runtime][Tokio] is considered *experimental*. In order to use
   [`EnvFilter`] or [`Targets`] filters from [`tracing-subscriber`], add
   `"tokio=trace,runtime=trace"` to your filter configuration.
 
-  + Also, ensure you have not enabled any of the [compile time filter 
+  + Also, ensure you have not enabled any of the [compile time filter
     features][compile_time_filters] in your `Cargo.toml`.
-  
+
 #### Required Tokio Versions
 
 Because instrumentation for different aspects of the runtime is being added to
@@ -111,7 +111,7 @@ Tokio over time, the latest Tokio release is generally *recommended* to access a
 the console's functionality. However, it should generally be compatible with
 earlier Tokio versions, although some information may not be available. A
 minimum version of [Tokio v1.0.0] or later is required to use the console's
-task instrumentation. 
+task instrumentation.
 
 Other instrumentation is added in later Tokio releases:
 
@@ -126,8 +126,10 @@ Other instrumentation is added in later Tokio releases:
 
 * [Tokio v1.15.0] or later is required to track [`tokio::sync`] resources, such
   as `Mutex`es, `RwLock`s, `Semaphore`s, `oneshot` channels, `mpsc` channels, et
-  cetera. 
-     
+  cetera.
+
+* [Tokio v1.21.0] or later is required to use newest `task::Builder::spawn*` APIs.
+
 [Tokio v1.0.0]: https://github.com/tokio-rs/tokio/releases/tag/tokio-1.0.0
 [Tokio v1.7.0]: https://github.com/tokio-rs/tokio/releases/tag/tokio-1.7.0
 [Tokio v1.12.0]:https://github.com/tokio-rs/tokio/releases/tag/tokio-1.12.0
@@ -144,6 +146,7 @@ Other instrumentation is added in later Tokio releases:
 [builder]: https://docs.rs/console-subscriber/latest/console_subscriber/struct.Builder.html
 [init]: https://docs.rs/console-subscriber/latest/console_subscriber/fn.init.html
 [compile_time_filters]: https://docs.rs/tracing/latest/tracing/level_filters/index.html#compile-time-filters
+[Tokio v1.21.0]: https://github.com/tokio-rs/tokio/releases/tag/tokio-1.21.0
 
 ### Adding the Console Subscriber
 

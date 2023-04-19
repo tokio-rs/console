@@ -26,6 +26,10 @@ pub struct Config {
     ///
     /// This may be an IP address and port, or a DNS name.
     ///
+    /// On Unix platforms, this may also be a URI with the `file` scheme that
+    /// specifies the path to a Unix domain socket, as in
+    /// `file://localhost/path/to/socket`.
+    ///
     /// [default: http://127.0.0.1:6669]
     #[clap(value_hint = ValueHint::Url)]
     pub(crate) target_addr: Option<Uri>,
@@ -121,6 +125,12 @@ pub enum OptionalCmd {
 #[derive(Debug, Clone, Copy, Deserialize)]
 struct RetainFor(Option<Duration>);
 
+impl Default for RetainFor {
+    fn default() -> Self {
+        Self(Some(Duration::from_secs(6)))
+    }
+}
+
 impl fmt::Display for RetainFor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
@@ -194,7 +204,7 @@ pub struct ColorToggles {
     color_terminated: Option<bool>,
 }
 
-/// A sturct used to parse the toml config file
+/// A struct used to parse the toml config file
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct ConfigFile {
@@ -320,7 +330,7 @@ impl Config {
     }
 
     pub(crate) fn retain_for(&self) -> Option<Duration> {
-        self.retain_for.as_ref().and_then(|value| value.0)
+        self.retain_for.unwrap_or_default().0
     }
 
     pub(crate) fn target_addr(&self) -> Uri {
@@ -328,6 +338,42 @@ impl Config {
             .as_ref()
             .unwrap_or(&default_target_addr())
             .clone()
+    }
+
+    pub(crate) fn add_issue_metadata(
+        &self,
+        mut builder: color_eyre::config::HookBuilder,
+    ) -> color_eyre::config::HookBuilder {
+        macro_rules! add_issue_metadata {
+            ($self:ident, $builder:ident =>
+                $(
+                    $($name:ident).+
+                ),+
+                $(,)?
+            ) => {
+                $(
+                    $builder = $builder.add_issue_metadata(concat!("config", $(".", stringify!($name)),+), format!("`{:?}`", $self$(.$name)+));
+                )*
+            }
+        }
+
+        add_issue_metadata! {
+            self, builder =>
+                subcmd,
+                target_addr,
+                env_filter,
+                log_directory,
+                retain_for,
+                view_options.no_colors,
+                view_options.lang,
+                view_options.ascii_only,
+                view_options.truecolor,
+                view_options.palette,
+                view_options.toggles.color_durations,
+                view_options.toggles.color_terminated,
+        }
+
+        builder
     }
 
     fn from_path(config_path: ConfigPath) -> color_eyre::Result<Option<Self>> {
@@ -354,7 +400,7 @@ impl Default for Config {
             target_addr: Some(default_target_addr()),
             env_filter: Some(tracing_subscriber::EnvFilter::new("off")),
             log_directory: Some(default_log_directory()),
-            retain_for: Some(RetainFor(Some(Duration::from_secs(6)))),
+            retain_for: Some(RetainFor::default()),
             view_options: ViewOptions::default(),
             subcmd: None,
         }
@@ -375,7 +421,7 @@ fn default_log_directory() -> PathBuf {
 
 impl ViewOptions {
     pub fn is_utf8(&self) -> bool {
-        if !self.ascii_only.unwrap_or(true) {
+        if self.ascii_only.unwrap_or(false) {
             return false;
         }
         self.lang.as_deref().unwrap_or_default().ends_with("UTF-8")
@@ -456,7 +502,7 @@ impl Default for ViewOptions {
     fn default() -> Self {
         Self {
             no_colors: false,
-            lang: Some("en_us.UTF8".to_string()),
+            lang: Some("en_us.UTF-8".to_string()),
             ascii_only: Some(false),
             truecolor: Some(true),
             palette: Some(Palette::All),

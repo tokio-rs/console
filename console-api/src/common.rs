@@ -1,7 +1,12 @@
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-include!("generated/rs.tokio.console.common.rs");
+pub use generated::*;
+
+mod generated {
+    #![allow(warnings)]
+    include!("generated/rs.tokio.console.common.rs");
+}
 
 impl From<tracing_core::Level> for metadata::Level {
     fn from(level: tracing_core::Level) -> Self {
@@ -205,7 +210,7 @@ impl From<&dyn std::fmt::Debug> for field::Value {
 // or vice versa. However, this is unavoidable here, because `prost` generates
 // a struct with `#[derive(PartialEq)]`, but we cannot add`#[derive(Hash)]` to the
 // generated code.
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl Hash for field::Name {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
