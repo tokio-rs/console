@@ -135,7 +135,7 @@ message Stats {
     //
     // Note that this includes only polls that have started, and does not
     // reflect any scheduled state where the task hasn't yet been polled.
-    // Subtracting both `busy_time` (from the task's PollStats`) and
+    // Subtracting both `busy_time` (from the task's `PollStats`) and
     // `scheduled_time` from the total lifetime of the task results in the
     // amount of time it spent unable to progress because it was waiting on 
     // some resource.
