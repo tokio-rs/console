@@ -162,12 +162,28 @@ pub struct Stats {
     /// The total number of times this task's waker has been dropped.
     #[prost(uint64, tag="5")]
     pub waker_drops: u64,
+    /// The timestamp of the most recent time this task has been woken.
+    ///
+    /// If this is `None`, the task has not yet been woken.
+    #[prost(message, optional, tag="6")]
+    pub last_wake: ::core::option::Option<::prost_types::Timestamp>,
     /// Contains task poll statistics.
     #[prost(message, optional, tag="7")]
     pub poll_stats: ::core::option::Option<super::common::PollStats>,
     /// The total number of times this task has woken itself.
     #[prost(uint64, tag="8")]
     pub self_wakes: u64,
+    /// The total duration this task was scheduled prior to being polled, summed
+    /// across all poll cycles.
+    ///
+    /// Note that this includes only polls that have started, and does not
+    /// reflect any scheduled state where the task hasn't yet been polled.
+    /// Subtracting both `busy_time` (from the task's `PollStats`) and
+    /// `scheduled_time` from the total lifetime of the task results in the
+    /// amount of time it spent unable to progress because it was waiting on 
+    /// some resource.
+    #[prost(message, optional, tag="9")]
+    pub scheduled_time: ::core::option::Option<::prost_types::Duration>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DurationHistogram {

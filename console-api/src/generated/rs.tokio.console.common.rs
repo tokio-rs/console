@@ -258,10 +258,13 @@ pub struct PollStats {
     #[prost(message, optional, tag="5")]
     pub last_poll_ended: ::core::option::Option<::prost_types::Timestamp>,
     /// The total duration this object was being *actively polled*, summed across
-    /// all polls. Note that this includes only polls that have completed and is
-    /// not reflecting any inprogress polls. Subtracting `busy_time` from the
+    /// all polls.
+    ///
+    /// Note that this includes only polls that have completed, and does not
+    /// reflect any in-progress polls. Subtracting `busy_time` from the
     /// total lifetime of the polled object results in the amount of time it
-    /// has spent *waiting* to be polled (including `scheduled_time`).
+    /// has spent *waiting* to be polled (including the `scheduled_time` value
+    /// from `TaskStats`, if this is a task).
     #[prost(message, optional, tag="6")]
     pub busy_time: ::core::option::Option<::prost_types::Duration>,
     /// The total duration this object was scheduled prior to being polled, summed

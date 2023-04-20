@@ -181,10 +181,13 @@ message PollStats {
     // its poll method has completed.
     optional google.protobuf.Timestamp last_poll_ended = 5;
     // The total duration this object was being *actively polled*, summed across
-    // all polls. Note that this includes only polls that have completed and is
-    // not reflecting any inprogress polls. Subtracting `busy_time` from the
+    // all polls.
+    //
+    // Note that this includes only polls that have completed, and does not
+    // reflect any in-progress polls. Subtracting `busy_time` from the
     // total lifetime of the polled object results in the amount of time it
-    // has spent *waiting* to be polled (including `scheduled_time`).
+    // has spent *waiting* to be polled (including the `scheduled_time` value
+    // from `TaskStats`, if this is a task).
     google.protobuf.Duration busy_time = 6;
     // The total duration this object was scheduled prior to being polled, summed
     // across all poll cycles. Note that this includes only polls that have

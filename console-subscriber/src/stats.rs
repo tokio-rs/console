@@ -269,6 +269,7 @@ impl ToProto for TaskStats {
 
     fn to_proto(&self, base_time: &TimeAnchor) -> Self::Output {
         let poll_stats = Some(self.poll_stats.to_proto(base_time));
+        let timestamps = self.poll_stats.timestamps.lock();
         proto::tasks::Stats {
             poll_stats,
             created_at: Some(base_time.to_timestamp(self.created_at)),
@@ -277,6 +278,19 @@ impl ToProto for TaskStats {
             waker_clones: self.waker_clones.load(Acquire) as u64,
             self_wakes: self.self_wakes.load(Acquire) as u64,
             waker_drops: self.waker_drops.load(Acquire) as u64,
+            last_wake: timestamps.last_wake.map(|at| base_time.to_timestamp(at)),
+            scheduled_time: Some(
+                timestamps
+                    .scheduled_time
+                    .try_into()
+                    .unwrap_or_else(|error| {
+                        eprintln!(
+                            "failed to convert `scheduled_time` to protobuf duration: {}",
+                            error
+                        );
+                        Default::default()
+                    }),
+            ),
         }
     }
 }
@@ -496,15 +510,12 @@ impl<H: RecordDuration> PollStats<H> {
 
         self.polls.fetch_add(1, Release);
 
-        let scheduled = match (timestamps.last_wake, timestamps.last_poll_ended) {
-            // If the last poll ended after the last wake then it was likely
-            // a self-wake, so we measure from the end of the last poll instead.
-            // This also ensures that `busy_time` and `scheduled_time` don't overlap.
-            (Some(last_wake), Some(last_poll_ended)) if last_poll_ended > last_wake => {
-                last_poll_ended
-            }
-            (Some(last_wake), _) => last_wake,
-            (None, _) => return, // Async operations record polls, but not wakes
+        // If the last poll ended after the last wake then it was likely
+        // a self-wake, so we measure from the end of the last poll instead.
+        // This also ensures that `busy_time` and `scheduled_time` don't overlap.
+        let scheduled = match std::cmp::max(timestamps.last_wake, timestamps.last_poll_ended) {
+            Some(scheduled) => scheduled,
+            None => return, // Async operations record polls, but not wakes
         };
 
         let elapsed = match at.checked_duration_since(scheduled) {
