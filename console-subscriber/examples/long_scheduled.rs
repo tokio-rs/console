@@ -16,7 +16,6 @@
 //! high scheduled times - in the detail screen you will see that around
 //! it is scheduled around 98% of the time. The `tx` task, on the other
 //! hand, is busy most of the time.
-
 use std::time::Duration;
 
 use console_subscriber::ConsoleLayer;
