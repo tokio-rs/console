@@ -60,6 +60,7 @@ impl TaskView {
             })
             .collect();
 
+        let fields_len = (task.formatted_fields().len() + 2) as u16;
         let (controls_area, stats_area, poll_dur_area, fields_area, warnings_area) =
             if warnings.is_empty() {
                 let chunks = Layout::default()
@@ -71,9 +72,9 @@ impl TaskView {
                             // task stats
                             layout::Constraint::Length(10),
                             // poll duration
-                            layout::Constraint::Length(9),
+                            layout::Constraint::Min(9),
                             // fields
-                            layout::Constraint::Percentage(60),
+                            layout::Constraint::Min(fields_len),
                         ]
                         .as_ref(),
                     )
@@ -91,9 +92,9 @@ impl TaskView {
                             // task stats
                             layout::Constraint::Length(10),
                             // poll duration
-                            layout::Constraint::Length(9),
+                            layout::Constraint::Min(9),
                             // fields
-                            layout::Constraint::Percentage(60),
+                            layout::Constraint::Min(fields_len),
                         ]
                         .as_ref(),
                     )
