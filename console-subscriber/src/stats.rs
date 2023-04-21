@@ -117,7 +117,8 @@ struct PollTimestamps<H> {
     last_poll_ended: Option<Instant>,
     busy_time: Duration,
     scheduled_time: Duration,
-    histogram: H,
+    poll_histogram: H,
+    scheduled_histogram: H,
 }
 
 #[derive(Debug)]
@@ -128,8 +129,8 @@ struct Histogram {
     max_outlier: Option<u64>,
 }
 
-trait RecordPoll {
-    fn record_poll_duration(&mut self, duration: Duration);
+trait RecordDuration {
+    fn record_duration(&mut self, duration: Duration);
 }
 
 impl TimeAnchor {
@@ -153,7 +154,11 @@ impl TimeAnchor {
 }
 
 impl TaskStats {
-    pub(crate) fn new(poll_duration_max: u64, created_at: Instant) -> Self {
+    pub(crate) fn new(
+        poll_duration_max: u64,
+        scheduled_duration_max: u64,
+        created_at: Instant,
+    ) -> Self {
         Self {
             is_dirty: AtomicBool::new(true),
             is_dropped: AtomicBool::new(false),
@@ -161,7 +166,8 @@ impl TaskStats {
             dropped_at: Mutex::new(None),
             poll_stats: PollStats {
                 timestamps: Mutex::new(PollTimestamps {
-                    histogram: Histogram::new(poll_duration_max),
+                    poll_histogram: Histogram::new(poll_duration_max),
+                    scheduled_histogram: Histogram::new(scheduled_duration_max),
                     first_poll: None,
                     last_wake: None,
                     last_poll_started: None,
@@ -240,8 +246,16 @@ impl TaskStats {
     }
 
     pub(crate) fn poll_duration_histogram(&self) -> proto::tasks::task_details::PollTimesHistogram {
-        let hist = self.poll_stats.timestamps.lock().histogram.to_proto();
+        let hist = self.poll_stats.timestamps.lock().poll_histogram.to_proto();
         proto::tasks::task_details::PollTimesHistogram::Histogram(hist)
+    }
+
+    pub(crate) fn scheduled_duration_histogram(&self) -> proto::tasks::DurationHistogram {
+        self.poll_stats
+            .timestamps
+            .lock()
+            .scheduled_histogram
+            .to_proto()
     }
 
     #[inline]
@@ -475,7 +489,7 @@ impl ToProto for ResourceStats {
 
 // === impl PollStats ===
 
-impl<H: RecordPoll> PollStats<H> {
+impl<H: RecordDuration> PollStats<H> {
     fn wake(&self, at: Instant) {
         let mut timestamps = self.timestamps.lock();
         timestamps.last_wake = cmp::max(timestamps.last_wake, Some(at));
@@ -515,6 +529,10 @@ impl<H: RecordPoll> PollStats<H> {
                 return;
             }
         };
+
+        // if we have a scheduled time histogram, add the timestamp
+        timestamps.scheduled_histogram.record_duration(elapsed);
+
         timestamps.scheduled_time += elapsed;
     }
 
@@ -550,7 +568,7 @@ impl<H: RecordPoll> PollStats<H> {
         };
 
         // if we have a poll time histogram, add the timestamp
-        timestamps.histogram.record_poll_duration(elapsed);
+        timestamps.poll_histogram.record_duration(elapsed);
 
         timestamps.busy_time += elapsed;
     }
@@ -636,8 +654,8 @@ impl Histogram {
     }
 }
 
-impl RecordPoll for Histogram {
-    fn record_poll_duration(&mut self, duration: Duration) {
+impl RecordDuration for Histogram {
+    fn record_duration(&mut self, duration: Duration) {
         let mut duration_ns = duration.as_nanos() as u64;
 
         // clamp the duration to the histogram's max value
@@ -653,8 +671,8 @@ impl RecordPoll for Histogram {
     }
 }
 
-impl RecordPoll for () {
-    fn record_poll_duration(&mut self, _: Duration) {
+impl RecordDuration for () {
+    fn record_duration(&mut self, _: Duration) {
         // do nothing
     }
 }

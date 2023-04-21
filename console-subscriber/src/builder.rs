@@ -50,6 +50,12 @@ pub struct Builder {
     /// Any polls exceeding this duration will be clamped to this value. Higher
     /// values will result in more memory usage.
     pub(super) poll_duration_max: Duration,
+
+    /// The maximum value for the task scheduled duration histogram.
+    ///
+    /// Any scheduled times exceeding this duration will be clamped to this
+    /// value. Higher values will result in more memory usage.
+    pub(super) scheduled_duration_max: Duration,
 }
 
 impl Default for Builder {
@@ -60,6 +66,7 @@ impl Default for Builder {
             publish_interval: ConsoleLayer::DEFAULT_PUBLISH_INTERVAL,
             retention: ConsoleLayer::DEFAULT_RETENTION,
             poll_duration_max: ConsoleLayer::DEFAULT_POLL_DURATION_MAX,
+            scheduled_duration_max: ConsoleLayer::DEFAULT_SCHEDULED_DURATION_MAX,
             server_addr: ServerAddr::Tcp(SocketAddr::new(Server::DEFAULT_IP, Server::DEFAULT_PORT)),
             recording_path: None,
             filter_env_var: "RUST_LOG".to_string(),
@@ -231,6 +238,23 @@ impl Builder {
     pub fn poll_duration_histogram_max(self, max: Duration) -> Self {
         Self {
             poll_duration_max: max,
+            ..self
+        }
+    }
+
+    /// Sets the maximum value for task scheduled duration histograms.
+    ///
+    /// Any scheduled duration (the time from a task being woken until it is next
+    /// polled) exceeding this value will be clamped down to this duration
+    /// and recorded as an outlier.
+    ///
+    /// By default, this is [one second]. Higher values will increase per-task
+    /// memory usage.
+    ///
+    /// [one second]: ConsoleLayer::DEFAULT_SCHEDULED_DURATION_MAX
+    pub fn scheduled_duration_histogram_max(self, max: Duration) -> Self {
+        Self {
+            scheduled_duration_max: max,
             ..self
         }
     }
