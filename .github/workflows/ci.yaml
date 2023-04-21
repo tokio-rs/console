@@ -25,6 +25,10 @@ env:
   RUSTUP_MAX_RETRIES: 10
   # Don't emit giant backtraces in the CI logs.
   RUST_BACKTRACE: short
+  # Use Rust 1.68.2 for Clippy (and fmt) because of an enhanced `almost_swapped`
+  # lint in 1.69.0 which affects clap 3 and can't be `allow`ed.
+  RUST_FMT_CLIPPY: 1.68.2
+
 
 jobs:
   check:
@@ -105,14 +109,11 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v3
 
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Install Rust ${{ env.RUST_FMT_CLIPPY }}
+        uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v1
+          toolchain: ${{ env.RUST_FMT_CLIPPY }}
+          components: clippy, rustfmt
 
       - name: Run cargo fmt
         uses: actions-rs/cargo@v1
