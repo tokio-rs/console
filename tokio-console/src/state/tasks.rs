@@ -32,6 +32,7 @@ pub(crate) struct TasksState {
 pub(crate) struct Details {
     pub(crate) span_id: SpanId,
     pub(crate) poll_times_histogram: Option<DurationHistogram>,
+    pub(crate) scheduled_times_histogram: Option<DurationHistogram>,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -263,6 +264,10 @@ impl Details {
 
     pub(crate) fn poll_times_histogram(&self) -> Option<&DurationHistogram> {
         self.poll_times_histogram.as_ref()
+    }
+
+    pub(crate) fn scheduled_times_histogram(&self) -> Option<&DurationHistogram> {
+        self.scheduled_times_histogram.as_ref()
     }
 }
 
