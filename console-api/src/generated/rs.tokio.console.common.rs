@@ -235,11 +235,6 @@ pub struct PollStats {
     /// time to first poll for this object, a measurement of executor latency.
     #[prost(message, optional, tag="3")]
     pub first_poll: ::core::option::Option<::prost_types::Timestamp>,
-    /// The timestamp of the most recent time this object was woken.
-    ///
-    /// If this is `None`, the object has not yet been woken.
-    #[prost(message, optional, tag="7")]
-    pub last_wake: ::core::option::Option<::prost_types::Timestamp>,
     /// The timestamp of the most recent time this objects's poll method was invoked.
     ///
     /// If this is `None`, the object has not yet been polled.
@@ -267,14 +262,6 @@ pub struct PollStats {
     /// from `TaskStats`, if this is a task).
     #[prost(message, optional, tag="6")]
     pub busy_time: ::core::option::Option<::prost_types::Duration>,
-    /// The total duration this object was scheduled prior to being polled, summed
-    /// across all poll cycles. Note that this includes only polls that have
-    /// started and is not reflecting any scheduled state where the polling hasn't
-    /// yet finished. Subtracting both `busy_time` and `scheduled_time` from the
-    /// total lifetime of the polled object results in the amount of time it spent
-    /// unable to progress because it was waiting on some resource.
-    #[prost(message, optional, tag="8")]
-    pub scheduled_time: ::core::option::Option<::prost_types::Duration>,
 }
 /// State attributes of an entity. These are dependent on the type of the entity.
 ///

@@ -582,7 +582,6 @@ impl<H> ToProto for PollStats<H> {
         proto::PollStats {
             polls: self.polls.load(Acquire) as u64,
             first_poll: timestamps.first_poll.map(|at| base_time.to_timestamp(at)),
-            last_wake: timestamps.last_wake.map(|at| base_time.to_timestamp(at)),
             last_poll_started: timestamps
                 .last_poll_started
                 .map(|at| base_time.to_timestamp(at)),
@@ -596,18 +595,6 @@ impl<H> ToProto for PollStats<H> {
                 );
                 Default::default()
             })),
-            scheduled_time: Some(
-                timestamps
-                    .scheduled_time
-                    .try_into()
-                    .unwrap_or_else(|error| {
-                        eprintln!(
-                            "failed to convert `scheduled_time` to protobuf duration: {}",
-                            error
-                        );
-                        Default::default()
-                    }),
-            ),
         }
     }
 }
