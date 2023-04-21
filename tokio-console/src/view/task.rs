@@ -232,7 +232,7 @@ impl TaskView {
             poll_percentiles_title.len(),
             scheduled_percentiles_title.len(),
         ) as u16
-            + 2_u16;
+            + 2_u16; // extra 2 characters for the border
         let poll_durations_widget = Durations::new(styles)
             .histogram(details.and_then(|d| d.poll_times_histogram()))
             .percentiles_title(poll_percentiles_title)
