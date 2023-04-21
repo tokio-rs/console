@@ -109,10 +109,10 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v3
 
-      - name: Install Rust ${{ env.rust_clippy }}
+      - name: Install Rust ${{ env.RUST_FMT_CLIPPY }}
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.rust_fmt_clippy }}
+          toolchain: ${{ env.RUST_FMT_CLIPPY }}
           components: clippy, rustfmt
 
       - name: Run cargo fmt
