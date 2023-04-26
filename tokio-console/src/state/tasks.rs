@@ -32,6 +32,7 @@ pub(crate) struct TasksState {
 pub(crate) struct Details {
     pub(crate) span_id: SpanId,
     pub(crate) poll_times_histogram: Option<DurationHistogram>,
+    pub(crate) scheduled_times_histogram: Option<DurationHistogram>,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -43,10 +44,11 @@ pub(crate) enum SortBy {
     Name = 3,
     Total = 4,
     Busy = 5,
-    Idle = 6,
-    Polls = 7,
-    Target = 8,
-    Location = 9,
+    Scheduled = 6,
+    Idle = 7,
+    Polls = 8,
+    Target = 9,
+    Location = 10,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -54,6 +56,7 @@ pub(crate) enum TaskState {
     Completed,
     Idle,
     Running,
+    Scheduled,
 }
 
 pub(crate) type TaskRef = store::Ref<Task>;
@@ -100,6 +103,7 @@ struct TaskStats {
     created_at: SystemTime,
     dropped_at: Option<SystemTime>,
     busy: Duration,
+    scheduled: Duration,
     last_poll_started: Option<SystemTime>,
     last_poll_ended: Option<SystemTime>,
     idle: Option<Duration>,
@@ -261,6 +265,10 @@ impl Details {
     pub(crate) fn poll_times_histogram(&self) -> Option<&DurationHistogram> {
         self.poll_times_histogram.as_ref()
     }
+
+    pub(crate) fn scheduled_times_histogram(&self) -> Option<&DurationHistogram> {
+        self.scheduled_times_histogram.as_ref()
+    }
 }
 
 impl Task {
@@ -297,6 +305,10 @@ impl Task {
         self.stats.last_poll_started > self.stats.last_poll_ended
     }
 
+    pub(crate) fn is_scheduled(&self) -> bool {
+        self.stats.last_wake > self.stats.last_poll_started
+    }
+
     pub(crate) fn is_completed(&self) -> bool {
         self.stats.total.is_some()
     }
@@ -308,6 +320,10 @@ impl Task {
 
         if self.is_running() {
             return TaskState::Running;
+        }
+
+        if self.is_scheduled() {
+            return TaskState::Scheduled;
         }
 
         TaskState::Idle
@@ -331,10 +347,24 @@ impl Task {
         self.stats.busy
     }
 
+    pub(crate) fn scheduled(&self, since: SystemTime) -> Duration {
+        if let Some(wake) = self.stats.last_wake {
+            if self.stats.last_wake > self.stats.last_poll_started {
+                // In this case the task is scheduled, but has not yet been polled
+                let current_time_since_wake = since.duration_since(wake).unwrap_or_default();
+                return self.stats.scheduled + current_time_since_wake;
+            }
+        }
+        self.stats.scheduled
+    }
+
     pub(crate) fn idle(&self, since: SystemTime) -> Duration {
         self.stats
             .idle
-            .or_else(|| self.total(since).checked_sub(self.busy(since)))
+            .or_else(|| {
+                self.total(since)
+                    .checked_sub(self.busy(since) + self.scheduled(since))
+            })
             .unwrap_or_default()
     }
 
@@ -429,11 +459,14 @@ impl From<proto::tasks::Stats> for TaskStats {
 
         let poll_stats = pb.poll_stats.expect("task should have poll stats");
         let busy = poll_stats.busy_time.map(pb_duration).unwrap_or_default();
-        let idle = total.map(|total| total.checked_sub(busy).unwrap_or_default());
+        let scheduled = pb.scheduled_time.map(pb_duration).unwrap_or_default();
+        let idle = total.map(|total| total.checked_sub(busy + scheduled).unwrap_or_default());
         Self {
             total,
             idle,
+            scheduled,
             busy,
+            last_wake: pb.last_wake.map(|v| v.try_into().unwrap()),
             last_poll_started: poll_stats.last_poll_started.map(|v| v.try_into().unwrap()),
             last_poll_ended: poll_stats.last_poll_ended.map(|v| v.try_into().unwrap()),
             polls: poll_stats.polls,
@@ -442,7 +475,6 @@ impl From<proto::tasks::Stats> for TaskStats {
             wakes: pb.wakes,
             waker_clones: pb.waker_clones,
             waker_drops: pb.waker_drops,
-            last_wake: pb.last_wake.map(|v| v.try_into().unwrap()),
             self_wakes: pb.self_wakes,
         }
     }
@@ -473,6 +505,9 @@ impl SortBy {
             }
             Self::Idle => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().idle(now)))
+            }
+            Self::Scheduled => {
+                tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().scheduled(now)))
             }
             Self::Busy => {
                 tasks.sort_unstable_by_key(|task| task.upgrade().map(|t| t.borrow().busy(now)))
@@ -505,6 +540,7 @@ impl TryFrom<usize> for SortBy {
             idx if idx == Self::Name as usize => Ok(Self::Name),
             idx if idx == Self::Total as usize => Ok(Self::Total),
             idx if idx == Self::Busy as usize => Ok(Self::Busy),
+            idx if idx == Self::Scheduled as usize => Ok(Self::Scheduled),
             idx if idx == Self::Idle as usize => Ok(Self::Idle),
             idx if idx == Self::Polls as usize => Ok(Self::Polls),
             idx if idx == Self::Target as usize => Ok(Self::Target),
@@ -517,6 +553,7 @@ impl TryFrom<usize> for SortBy {
 impl TaskState {
     pub(crate) fn render(self, styles: &crate::view::Styles) -> Span<'static> {
         const RUNNING_UTF8: &str = "\u{25B6}";
+        const SCHEDULED_UTF8: &str = "\u{23EB}";
         const IDLE_UTF8: &str = "\u{23F8}";
         const COMPLETED_UTF8: &str = "\u{23F9}";
         match self {
@@ -524,6 +561,7 @@ impl TaskState {
                 styles.if_utf8(RUNNING_UTF8, "BUSY"),
                 styles.fg(Color::Green),
             ),
+            Self::Scheduled => Span::raw(styles.if_utf8(SCHEDULED_UTF8, "SCHED")),
             Self::Idle => Span::raw(styles.if_utf8(IDLE_UTF8, "IDLE")),
             Self::Completed => Span::raw(styles.if_utf8(COMPLETED_UTF8, "DONE")),
         }

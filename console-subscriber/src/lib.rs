@@ -123,6 +123,11 @@ pub struct ConsoleLayer {
     ///
     /// By default, this is one second.
     max_poll_duration_nanos: u64,
+
+    /// Maximum value for the scheduled time histogram.
+    ///
+    /// By default, this is one second.
+    max_scheduled_duration_nanos: u64,
 }
 
 /// A gRPC [`Server`] that implements the [`tokio-console` wire format][wire].
@@ -273,6 +278,7 @@ impl ConsoleLayer {
             ?config.recording_path,
             ?config.filter_env_var,
             ?config.poll_duration_max,
+            ?config.scheduled_duration_max,
             ?base_time,
             "configured console subscriber"
         );
@@ -310,6 +316,7 @@ impl ConsoleLayer {
             recorder,
             base_time,
             max_poll_duration_nanos: config.poll_duration_max.as_nanos() as u64,
+            max_scheduled_duration_nanos: config.scheduled_duration_max.as_nanos() as u64,
         };
         (layer, server)
     }
@@ -364,6 +371,15 @@ impl ConsoleLayer {
     ///
     /// See also [`Builder::poll_duration_histogram_max`].
     pub const DEFAULT_POLL_DURATION_MAX: Duration = Duration::from_secs(1);
+
+    /// The default maximum value for the task scheduled duration histogram.
+    ///
+    /// Any scheduled duration (the time from a task being woken until it is next
+    /// polled) exceeding this will be clamped to this value. By default, the
+    /// maximum scheduled duration is one second.
+    ///
+    /// See also [`Builder::scheduled_duration_histogram_max`].
+    pub const DEFAULT_SCHEDULED_DURATION_MAX: Duration = Duration::from_secs(1);
 
     fn is_spawn(&self, meta: &'static Metadata<'static>) -> bool {
         self.spawn_callsites.contains(meta)
@@ -567,7 +583,11 @@ where
                 fields: record::SerializeFields(fields.clone()),
             });
             if let Some(stats) = self.send_stats(&self.shared.dropped_tasks, move || {
-                let stats = Arc::new(stats::TaskStats::new(self.max_poll_duration_nanos, at));
+                let stats = Arc::new(stats::TaskStats::new(
+                    self.max_poll_duration_nanos,
+                    self.max_scheduled_duration_nanos,
+                    at,
+                ));
                 let event = Event::Spawn {
                     id: id.clone(),
                     stats: stats.clone(),
