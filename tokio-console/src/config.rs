@@ -1,3 +1,6 @@
+// TODO(hds): Remove when upgrading to Clap 4.x
+#![allow(clippy::almost_swapped)]
+
 use crate::view::Palette;
 use clap::{ArgGroup, IntoApp, Parser as Clap, Subcommand, ValueHint};
 use clap_complete::Shell;
