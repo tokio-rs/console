@@ -2,7 +2,7 @@ use crate::{
     input,
     state::{tasks::Task, DetailsRef},
     util::Percentage,
-    view::{self, bold, durations::Durations},
+    view::{self, bold, durations::Durations, help::HelpText},
 };
 use std::{
     cell::RefCell,
@@ -253,8 +253,10 @@ impl TaskView {
         frame.render_widget(scheduled_durations_widget, scheduled_dur_area);
         frame.render_widget(fields_widget, fields_area);
     }
+}
 
-    pub(in crate::view) fn render_help_content(_styles: &view::Styles) -> Spans<'static> {
-        Spans::from(vec![Span::raw("A view to diplay help data for a task")])
+impl HelpText for TaskView {
+    fn render_help_content(&self, _styles: &view::Styles) -> Paragraph<'static> {
+        Paragraph::new(Span::raw("A view to diplay help data for a task"))
     }
 }

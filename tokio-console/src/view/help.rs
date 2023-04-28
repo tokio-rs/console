@@ -1,21 +1,21 @@
 use tui::{
     layout::{self, Constraint, Direction, Layout},
-    text::Text,
     widgets::{Clear, Paragraph, Wrap},
 };
 
 use crate::{state::State, view};
 
-/// Simple view for help popup
-pub(crate) struct HelpView<T> {
-    help_text: Option<T>,
+pub(crate) trait HelpText {
+    fn render_help_content(&self, styles: &view::Styles) -> Paragraph<'static>;
 }
 
-impl<T> HelpView<T>
-where
-    T: Into<Text<'static>>,
-{
-    pub(super) fn new(help_text: T) -> Self {
+/// Simple view for help popup
+pub(crate) struct HelpView<'a> {
+    help_text: Option<Paragraph<'a>>,
+}
+
+impl<'a> HelpView<'a> {
+    pub(super) fn new(help_text: Paragraph<'a>) -> Self {
         HelpView {
             help_text: Some(help_text),
         }
@@ -32,16 +32,15 @@ where
         let content = self
             .help_text
             .take()
-            .expect("help_text should be initialized")
-            .into();
+            .expect("help_text should be initialized");
 
         let popup_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints(
                 [
-                    Constraint::Percentage(40),
                     Constraint::Percentage(20),
-                    Constraint::Percentage(40),
+                    Constraint::Min(15),
+                    Constraint::Percentage(20),
                 ]
                 .as_ref(),
             )
@@ -59,9 +58,7 @@ where
             )
             .split(popup_layout[1])[1];
 
-        let display_text = Paragraph::new(content)
-            .block(styles.border_block().title("Help"))
-            .wrap(Wrap { trim: true });
+        let display_text = content.block(styles.border_block().title("Help"));
 
         // Clear the help block area and render the popup
         frame.render_widget(Clear, popup_area);

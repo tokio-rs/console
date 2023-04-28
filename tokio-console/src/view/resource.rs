@@ -5,7 +5,9 @@ use crate::{
     view::{
         self,
         async_ops::{AsyncOpsTable, AsyncOpsTableCtx},
-        bold, TableListState,
+        bold,
+        help::HelpText,
+        TableListState,
     },
 };
 use std::{cell::RefCell, rc::Rc};
@@ -118,8 +120,10 @@ impl ResourceView {
             .render(styles, frame, async_ops_area, state, ctx);
         self.initial_render = false;
     }
+}
 
-    pub(in crate::view) fn render_help_content(_styles: &view::Styles) -> Spans<'static> {
-        Spans::from(vec![Span::raw("A view to display help data for a resource")])
+impl HelpText for ResourceView {
+    fn render_help_content(&self, _styles: &view::Styles) -> Paragraph<'static> {
+        Paragraph::new(Span::raw("A view to display help data for a resource"))
     }
 }

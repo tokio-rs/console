@@ -1,5 +1,7 @@
 use crate::view::help::HelpView;
-use crate::view::{resources::ResourcesTable, table::TableListState, tasks::TasksTable};
+use crate::view::{
+    help::HelpText, resources::ResourcesTable, table::TableListState, tasks::TasksTable,
+};
 use crate::{input, state::State};
 use std::{borrow::Cow, cmp};
 use tui::{
@@ -19,10 +21,8 @@ mod styles;
 mod table;
 mod task;
 mod tasks;
-use self::resource::ResourceView;
 pub(crate) use self::styles::{Palette, Styles};
 pub(crate) use self::table::SortBy;
-use self::task::TaskView;
 
 // This data is only updated every second, so it doesn't make a ton of
 // sense to have a lot of precision in timestamps (and this makes sure
@@ -204,38 +204,34 @@ impl View {
         area: layout::Rect,
         state: &mut State,
     ) {
-        let mut help_content;
-        match self.state {
+        let help_text: &dyn HelpText = match self.state {
             ViewState::TasksList => {
                 self.tasks_list.render(&self.styles, frame, area, state, ());
-                help_content = HelpView::new(
-                    TableListState::<TasksTable, 12>::render_help_content(&self.styles),
-                );
+                &self.tasks_list
             }
             ViewState::ResourcesList => {
                 self.resources_list
                     .render(&self.styles, frame, area, state, ());
-                help_content = HelpView::new(
-                    TableListState::<ResourcesTable, 9>::render_help_content(&self.styles),
-                );
+                &self.resources_list
             }
             ViewState::TaskInstance(ref mut view) => {
                 let now = state
                     .last_updated_at()
                     .expect("task view implies we've received an update");
                 view.render(&self.styles, frame, area, now);
-                help_content = HelpView::new(TaskView::render_help_content(&self.styles));
+                view
             }
             ViewState::ResourceInstance(ref mut view) => {
                 view.render(&self.styles, frame, area, state);
-                help_content = HelpView::new(ResourceView::render_help_content(&self.styles));
+                view
             }
-        }
+        };
 
         state.retain_active();
 
         if self.show_help_toggle {
-            help_content.render(&self.styles, frame, area, state);
+            let mut help_view = HelpView::new(help_text.render_help_content(&self.styles));
+            help_view.render(&self.styles, frame, area, state);
         }
     }
 
