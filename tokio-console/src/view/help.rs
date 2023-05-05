@@ -1,6 +1,6 @@
 use tui::{
     layout::{self, Constraint, Direction, Layout},
-    widgets::{Clear, Paragraph, Wrap},
+    widgets::{Clear, Paragraph},
 };
 
 use crate::{state::State, view};

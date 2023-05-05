@@ -2,6 +2,7 @@ use crate::{
     input, state,
     view::{self, bold},
 };
+use once_cell::sync::OnceCell;
 use std::convert::TryFrom;
 use tui::{
     layout,
@@ -232,15 +233,165 @@ where
             ]),
             Spans::from(vec![text::Span::raw("  scroll to top: "), bold("gg")]),
             Spans::from(vec![text::Span::raw("  scroll to bottom: "), bold("G")]),
-            Spans::from(vec![text::Span::raw("  exit help: "), bold("?")]),
+            Spans::from(vec![text::Span::raw("  toggle help: "), bold("?")]),
             Spans::from(vec![text::Span::raw("  quit: "), bold("q")]),
         ];
         Paragraph::new(controls)
     }
 }
 
+struct KeyDisplay {
+    base: &'static str,
+    utf8: Option<&'static str>,
+}
+
+struct ControlDisplay {
+    action: &'static str,
+    keys: Vec<KeyDisplay>,
+}
+
+impl ControlDisplay {
+    fn new_simple(action: &'static str, key: &'static str) -> Self {
+        ControlDisplay {
+            action,
+            keys: vec![KeyDisplay {
+                base: key,
+                utf8: None,
+            }],
+        }
+    }
+
+    fn into_spans(&self, styles: &view::Styles) -> Spans<'static> {
+        let mut spans = Vec::new();
+
+        spans.push(Span::from(self.action));
+        spans.push(Span::from(" = "));
+        let extra_spans: Vec<Span> = self
+            .keys
+            .iter()
+            .map(|kd| {
+                Span::from(match kd.utf8 {
+                    Some(utf8) => styles.if_utf8(utf8, kd.base),
+                    None => kd.base,
+                })
+            })
+            // TODO(hds): somehow I need to intersperse these values with `Span::from(" or ")`.
+            .collect();
+
+        Spans::from(spans)
+    }
+}
+
+fn view_controls() -> Vec<ControlDisplay> {
+    vec![
+        ControlDisplay {
+            action: "select column (sort)",
+            keys: vec![
+                KeyDisplay {
+                    base: "left, right",
+                    utf8: Some("\u{2190}\u{2192}"),
+                },
+                KeyDisplay {
+                    base: "h, l",
+                    utf8: None,
+                },
+            ],
+        },
+        ControlDisplay {
+            action: "scroll",
+            keys: vec![
+                KeyDisplay {
+                    base: "up, down",
+                    utf8: Some("\u{2191}\u{2193}"),
+                },
+                KeyDisplay {
+                    base: "k, j",
+                    utf8: None,
+                },
+            ],
+        },
+        ControlDisplay {
+            action: "view details",
+            keys: vec![KeyDisplay {
+                base: "enter",
+                utf8: Some("\u{21B5}"),
+            }],
+        },
+        ControlDisplay::new_simple("invert sort (highest/lowest)", "i"),
+        ControlDisplay::new_simple("scroll to top", "gg"),
+        ControlDisplay::new_simple("scroll to bottom", "G"),
+    ]
+}
+
+fn universal_controls() -> Vec<ControlDisplay> {
+    vec![
+        ControlDisplay::new_simple("toggle help", "?"),
+        ControlDisplay::new_simple("quit", "q"),
+    ]
+}
+
+fn controls(styles: &view::Styles) -> Vec<(&str, Spans)> {
+    vec![
+        (
+            "select column (sort)",
+            Spans::from(vec![
+                bold(styles.if_utf8("\u{2190}\u{2192}", "left, right")),
+                Span::raw(" or "),
+                bold("h, l"),
+            ]),
+        ),
+        (
+            "scroll",
+            Spans::from(vec![
+                bold(styles.if_utf8("\u{2191}\u{2193}", "up, down")),
+                Span::raw(" or "),
+                bold("k, j"),
+            ]),
+        ),
+        (
+            "view details",
+            Spans::from(vec![bold(styles.if_utf8("\u{21B5}", "enter"))]),
+        ),
+        (
+            "invert sort (highest/lowest):",
+            Spans::from(vec![bold("i")]),
+        ),
+        ("scroll to top", Spans::from(vec![bold("gg")])),
+        ("scroll to bottom", Spans::from(vec![bold("G")])),
+        ("toggle help", Spans::from(vec![bold("?")])),
+        ("quit", Spans::from(vec![bold("q")])),
+    ]
+}
+
+fn build_control_part<'a>(action: &str, keys: Spans<'a>) -> Spans<'a> {
+    let mut control = keys;
+    let mut label = Spans::from(format!(" = {action}"));
+    control.0.append(&mut label.0);
+
+    control
+}
+
 impl Controls {
     pub(in crate::view) fn for_area(area: &layout::Rect, styles: &view::Styles) -> Self {
+        let mut spans = Spans::from("controls: ");
+
+        let mut controls = controls(styles);
+        let quit_control = {
+            let (action, keys) = controls.pop().unwrap();
+            build_control_part(action, keys)
+        };
+        let help_control = {
+            let (action, keys) = controls.pop().unwrap();
+            build_control_part(action, keys)
+        };
+        //let last_controls
+        for (action, keys) in controls(styles) {
+            let mut next_control = build_control_part(action, keys);
+            if spans.width() + next_control.width() + 2 > area.width as usize {
+                spans.0.append(&mut next_control.0);
+            }
+        }
+
         let text = Text::from(Spans::from(vec![
             Span::raw("controls: "),
             bold(styles.if_utf8("\u{2190}\u{2192}", "left, right")),
