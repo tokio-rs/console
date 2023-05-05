@@ -1,6 +1,3 @@
-// TODO(hds): Remove when upgrading to Clap 4.x
-#![allow(clippy::almost_swapped)]
-
 use clap::Parser;
 use color_eyre::{
     eyre::{ensure, WrapErr},
