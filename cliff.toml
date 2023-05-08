@@ -81,9 +81,15 @@ commit_parsers = [
   { message = "^style", skip = true },
   { message = "^test", skip = true },
   { message = "^chore\\(release\\)", skip = true },
+  { message = "[Pp]repare to release", skip = true },
   { message = "^chore", skip = true },
   { body = ".*security", group = "Security" },
   { body = ".*[dD]eprecate.*", group = "Deprecated" },
+  # older non-conventional commits
+  { message = "^subscriber:", group = "Added" },
+  { message = "^console:", group = "Added" },
+  { message = "^api:", group = "Added" },
+  { message = "^example:", group = "Documented" },
 ]
 # protect breaking changes from being skipped due to matching a skipping commit_parser
 protect_breaking_commits = false
