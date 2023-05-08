@@ -9,7 +9,6 @@ FLAGS:
     -v, --verbose   Enable verbose output."
 
 set -euo pipefail
-set -x
 
 bindir=$( cd "${BASH_SOURCE[0]%/*}" && pwd )
 rootdir=$( cd "$bindir"/.. && pwd )
@@ -84,7 +83,7 @@ git_cliff=(
     --include-path "${path}/**"
     --output "$changelog_path"
     --config cliff.toml
-    # --tag "$tag"
+    --tag "$tag"
 )
 if [[ "$verbose" ]]; then
     git_cliff+=("$verbose")
