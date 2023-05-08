@@ -22,8 +22,8 @@ body = """
 {% endif %}\
 {% if previous %}\
     {% if previous.commit_id %}
-        [{{ previous.commit_id | truncate(length=7, end="") }}](https://github.com/tokio-rs/console/{{ previous.commit_id }})...\
-            [{{ commit_id | truncate(length=7, end="") }}](https://github.com/tokio-rs/console/{{ commit_id }})
+        [{{ previous.commit_id | truncate(length=7, end="") }}](https://github.com/tokio-rs/console/commit/{{ previous.commit_id }})...\
+            [{{ commit_id | truncate(length=7, end="") }}](https://github.com/tokio-rs/console/commit/{{ commit_id }})
     {% endif %}\
 {% endif %}
 {% set has_breaking = false -%}
@@ -36,7 +36,7 @@ body = """
     ### <a id = "{{ version }}-breaking"></a>Breaking Changes
     {% for commit in commits -%}
         {% if commit.breaking -%}
-            - **{{ commit.message | upper_first }}** ([{{ commit.id | truncate(length=7, end="") }}]({{ commit.id }}))<br />{{ commit.breaking_description }}
+            - **{{ commit.message | upper_first }}** ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/tokio-rs/console/commit/{{ commit.id }}))<br />{{ commit.breaking_description }}
         {% endif -%}
     {% endfor -%}
 {% endif -%}
@@ -44,7 +44,7 @@ body = """
     ### {{ group | upper_first }}
     {% for commit in commits %}
         - {% if commit.breaking %}[**breaking**](#{{ version }}-breaking) {% endif -%} {{ commit.message | upper_first }} (\
-            [{{ commit.id | truncate(length=7, end="") }}](https://github.com/tokio-rs/console/{{ commit.id }})\
+            [{{ commit.id | truncate(length=7, end="") }}](https://github.com/tokio-rs/console/commit/{{ commit.id }})\
                 {% for link in commit.links -%}
                     , {{ link.text }}({{ link.href }})\
                 {% endfor -%}

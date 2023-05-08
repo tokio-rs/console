@@ -8,16 +8,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
-- Use tokio task ids in task views ([#403](https://github.com/tokio-rs/console/issues/403)) ([001fc49](https://github.com/tokio-rs/console/001fc49f09ad78cc4ab50770cf4a677ae177103f))
-- Add scheduled time per task ([#406](https://github.com/tokio-rs/console/issues/406)) ([ac20daa](https://github.com/tokio-rs/console/ac20daaf301f80e87002593813965d11d11371e4))
-- Add task scheduled times histogram ([#409](https://github.com/tokio-rs/console/issues/409)) ([3b37dda](https://github.com/tokio-rs/console/3b37dda773f8cd237f6759d193fdc83a75ab7653))
+- Use tokio task ids in task views ([#403](https://github.com/tokio-rs/console/issues/403)) ([001fc49](https://github.com/tokio-rs/console/commit/001fc49f09ad78cc4ab50770cf4a677ae177103f))
+- Add scheduled time per task ([#406](https://github.com/tokio-rs/console/issues/406)) ([ac20daa](https://github.com/tokio-rs/console/commit/ac20daaf301f80e87002593813965d11d11371e4))
+- Add task scheduled times histogram ([#409](https://github.com/tokio-rs/console/issues/409)) ([3b37dda](https://github.com/tokio-rs/console/commit/3b37dda773f8cd237f6759d193fdc83a75ab7653))
 
 ## console-api-v0.3.0 - (2022-05-23)
 
-[0d6d7a9](https://github.com/tokio-rs/console/0d6d7a9af3a8174ca624f4289c5877ad3ac4f227)...[5490d64](https://github.com/tokio-rs/console/5490d64c098d6997f4327e7ec08d5136ece2a2e5)
+[0d6d7a9](https://github.com/tokio-rs/console/commit/0d6d7a9af3a8174ca624f4289c5877ad3ac4f227)...[5490d64](https://github.com/tokio-rs/console/commit/5490d64c098d6997f4327e7ec08d5136ece2a2e5)
 
 ### <a id = "console-api-v0.3.0-breaking"></a>Breaking Changes
-- **Add optional histogram outlier details ([#351](https://github.com/tokio-rs/console/issues/351))** ([4611591](46115913877051090abd36719161f306b68124c7))<br />This is a breaking change *to the Rust bindings* (the `console-api`
+- **Add optional histogram outlier details ([#351](https://github.com/tokio-rs/console/issues/351))** ([4611591](https://github.com/tokio-rs/console/commit/46115913877051090abd36719161f306b68124c7))<br />This is a breaking change *to the Rust bindings* (the `console-api`
 crate) due to changing a field from an `Option` to a protobuf `oneof`
 (introducing a new enum type). This is **not** a breaking change to the
 protobufs themselves --- the actual wire format change is
@@ -26,70 +26,70 @@ way.
 
 ### Added
 
-- [**breaking**](#console-api-v0.3.0-breaking) Add optional histogram outlier details ([#351](https://github.com/tokio-rs/console/issues/351)) ([4611591](https://github.com/tokio-rs/console/46115913877051090abd36719161f306b68124c7))
+- [**breaking**](#console-api-v0.3.0-breaking) Add optional histogram outlier details ([#351](https://github.com/tokio-rs/console/issues/351)) ([4611591](https://github.com/tokio-rs/console/commit/46115913877051090abd36719161f306b68124c7))
 
 ### Documented
 
-- Update minimal Rust version ([#338](https://github.com/tokio-rs/console/issues/338)) ([ff3b6db](https://github.com/tokio-rs/console/ff3b6db6fa06456a14992663e8ff7ba8c80c1cc1))
+- Update minimal Rust version ([#338](https://github.com/tokio-rs/console/issues/338)) ([ff3b6db](https://github.com/tokio-rs/console/commit/ff3b6db6fa06456a14992663e8ff7ba8c80c1cc1))
 
 ## console-api-v0.2.0 - (2022-04-11)
 
-[c7cab71](https://github.com/tokio-rs/console/c7cab7112368682a8ccea8c4ec4a5ef99b88d567)...[0d6d7a9](https://github.com/tokio-rs/console/0d6d7a9af3a8174ca624f4289c5877ad3ac4f227)
+[c7cab71](https://github.com/tokio-rs/console/commit/c7cab7112368682a8ccea8c4ec4a5ef99b88d567)...[0d6d7a9](https://github.com/tokio-rs/console/commit/0d6d7a9af3a8174ca624f4289c5877ad3ac4f227)
 
 ### <a id = "console-api-v0.2.0-breaking"></a>Breaking Changes
-- **Update `tonic` to `0.7` ([#318](https://github.com/tokio-rs/console/issues/318))** ([83d8a87](83d8a870bcc40be71bc23d0f45fc374899c636a8))<br />`console-api` is now no longer compatible with projects using `prost`
+- **Update `tonic` to `0.7` ([#318](https://github.com/tokio-rs/console/issues/318))** ([83d8a87](https://github.com/tokio-rs/console/commit/83d8a870bcc40be71bc23d0f45fc374899c636a8))<br />`console-api` is now no longer compatible with projects using `prost`
 0.9 or `tonic` 0.7. These crates must be updated to use `console-api`
 0.2.
 
 ### Added
 
-- [**breaking**](#console-api-v0.2.0-breaking) Update `tonic` to `0.7` ([#318](https://github.com/tokio-rs/console/issues/318)) ([83d8a87](https://github.com/tokio-rs/console/83d8a870bcc40be71bc23d0f45fc374899c636a8))
+- [**breaking**](#console-api-v0.2.0-breaking) Update `tonic` to `0.7` ([#318](https://github.com/tokio-rs/console/issues/318)) ([83d8a87](https://github.com/tokio-rs/console/commit/83d8a870bcc40be71bc23d0f45fc374899c636a8))
 
 ### Documented
 
-- Reword comment on the tracing_core::metadata::Kind match ([#272](https://github.com/tokio-rs/console/issues/272)) ([1ac3b9f](https://github.com/tokio-rs/console/1ac3b9f4558d8f4f1233aa40ffd87702c58cbfee))
+- Reword comment on the tracing_core::metadata::Kind match ([#272](https://github.com/tokio-rs/console/issues/272)) ([1ac3b9f](https://github.com/tokio-rs/console/commit/1ac3b9f4558d8f4f1233aa40ffd87702c58cbfee))
 
 ## console-api-v0.1.2 - (2022-02-04)
 
-[1fe0650](https://github.com/tokio-rs/console/1fe06508604dcfff473455fe848e9ff2a5588f62)...[c7cab71](https://github.com/tokio-rs/console/c7cab7112368682a8ccea8c4ec4a5ef99b88d567)
+[1fe0650](https://github.com/tokio-rs/console/commit/1fe06508604dcfff473455fe848e9ff2a5588f62)...[c7cab71](https://github.com/tokio-rs/console/commit/c7cab7112368682a8ccea8c4ec4a5ef99b88d567)
 
 
 ### Fixed
 
-- Fix accidental exhaustive matching on `metadata::Kind` ([#271](https://github.com/tokio-rs/console/issues/271)) ([d9aafaa](https://github.com/tokio-rs/console/d9aafaa05549379cf02113faea90816de2235c16), fixes [#270](https://github.com/tokio-rs/console/issues/270))
+- Fix accidental exhaustive matching on `metadata::Kind` ([#271](https://github.com/tokio-rs/console/issues/271)) ([d9aafaa](https://github.com/tokio-rs/console/commit/d9aafaa05549379cf02113faea90816de2235c16), fixes [#270](https://github.com/tokio-rs/console/issues/270))
 
 ## console-api-v0.1.1 - (2022-01-18)
 
-[5c041d7](https://github.com/tokio-rs/console/5c041d7149684fbc2735058c386f85e02b5381fb)...[1fe0650](https://github.com/tokio-rs/console/1fe06508604dcfff473455fe848e9ff2a5588f62)
+[5c041d7](https://github.com/tokio-rs/console/commit/5c041d7149684fbc2735058c386f85e02b5381fb)...[1fe0650](https://github.com/tokio-rs/console/commit/1fe06508604dcfff473455fe848e9ff2a5588f62)
 
 
 ### Documented
 
-- Post-release readme fixup ([#221](https://github.com/tokio-rs/console/issues/221)) ([28a4321](https://github.com/tokio-rs/console/28a4321e0f555c3744194ec64dccc93e4fd194ce))
+- Post-release readme fixup ([#221](https://github.com/tokio-rs/console/issues/221)) ([28a4321](https://github.com/tokio-rs/console/commit/28a4321e0f555c3744194ec64dccc93e4fd194ce))
 
 ## console-api-v0.1.0 - (2021-12-16)
 
 
 ### Added
 
-- Add TUI app, simple top-style view ([#2](https://github.com/tokio-rs/console/issues/2)) ([c7f0b43](https://github.com/tokio-rs/console/c7f0b43494e439331ea2ae0ba4fc4cea8ddff6e3))
-- Send structured fields on the wire ([#26](https://github.com/tokio-rs/console/issues/26)) ([38adbd9](https://github.com/tokio-rs/console/38adbd97aefc53d06e509c7b33c98b4dcfa7a970), fixes [#6](https://github.com/tokio-rs/console/issues/6))
-- Populate `Metadata`'s `field names` ([#32](https://github.com/tokio-rs/console/issues/32)) ([e45fca0](https://github.com/tokio-rs/console/e45fca08102cefec7494d28f80863990cfb24160))
-- Record and send poll times with HdrHistogram ([#47](https://github.com/tokio-rs/console/issues/47)) ([94e7834](https://github.com/tokio-rs/console/94e7834db44c3b19c54ff16a22f1b0e6464be1a2), closes [#36](https://github.com/tokio-rs/console/issues/36))
-- Use sequential `u64` task IDs ([#75](https://github.com/tokio-rs/console/issues/75)) ([c2c486e](https://github.com/tokio-rs/console/c2c486ee9c792453db81786490bff52a031be9e9))
-- Resource instrumentation ([#77](https://github.com/tokio-rs/console/issues/77)) ([f4a21ac](https://github.com/tokio-rs/console/f4a21acb18935af8b256999e2380eb5fb7e17d72))
-- Use `Location` for tasks and resources ([#154](https://github.com/tokio-rs/console/issues/154)) ([08c5186](https://github.com/tokio-rs/console/08c5186eb01f18f8e4018058d12817e4127dd7be))
-- Add resource detail view ([#188](https://github.com/tokio-rs/console/issues/188)) ([1aa9b59](https://github.com/tokio-rs/console/1aa9b594f30e42098c6c6bbf41eb1d2b01dc0426))
-- Count dropped events due to buffer cap ([#211](https://github.com/tokio-rs/console/issues/211)) ([aa09600](https://github.com/tokio-rs/console/aa09600b3bdc6591eafc9fe7b4507f7da2bca498))
+- Add TUI app, simple top-style view ([#2](https://github.com/tokio-rs/console/issues/2)) ([c7f0b43](https://github.com/tokio-rs/console/commit/c7f0b43494e439331ea2ae0ba4fc4cea8ddff6e3))
+- Send structured fields on the wire ([#26](https://github.com/tokio-rs/console/issues/26)) ([38adbd9](https://github.com/tokio-rs/console/commit/38adbd97aefc53d06e509c7b33c98b4dcfa7a970), fixes [#6](https://github.com/tokio-rs/console/issues/6))
+- Populate `Metadata`'s `field names` ([#32](https://github.com/tokio-rs/console/issues/32)) ([e45fca0](https://github.com/tokio-rs/console/commit/e45fca08102cefec7494d28f80863990cfb24160))
+- Record and send poll times with HdrHistogram ([#47](https://github.com/tokio-rs/console/issues/47)) ([94e7834](https://github.com/tokio-rs/console/commit/94e7834db44c3b19c54ff16a22f1b0e6464be1a2), closes [#36](https://github.com/tokio-rs/console/issues/36))
+- Use sequential `u64` task IDs ([#75](https://github.com/tokio-rs/console/issues/75)) ([c2c486e](https://github.com/tokio-rs/console/commit/c2c486ee9c792453db81786490bff52a031be9e9))
+- Resource instrumentation ([#77](https://github.com/tokio-rs/console/issues/77)) ([f4a21ac](https://github.com/tokio-rs/console/commit/f4a21acb18935af8b256999e2380eb5fb7e17d72))
+- Use `Location` for tasks and resources ([#154](https://github.com/tokio-rs/console/issues/154)) ([08c5186](https://github.com/tokio-rs/console/commit/08c5186eb01f18f8e4018058d12817e4127dd7be))
+- Add resource detail view ([#188](https://github.com/tokio-rs/console/issues/188)) ([1aa9b59](https://github.com/tokio-rs/console/commit/1aa9b594f30e42098c6c6bbf41eb1d2b01dc0426))
+- Count dropped events due to buffer cap ([#211](https://github.com/tokio-rs/console/issues/211)) ([aa09600](https://github.com/tokio-rs/console/commit/aa09600b3bdc6591eafc9fe7b4507f7da2bca498))
 
 ### Documented
 
-- Console-api docs ([#197](https://github.com/tokio-rs/console/issues/197)) ([fdf8637](https://github.com/tokio-rs/console/fdf8637f2671a95d84a4c9046a2ed411e08045ef))
-- Add a README and lib.rs docs ([#201](https://github.com/tokio-rs/console/issues/201)) ([5af6e07](https://github.com/tokio-rs/console/5af6e07d6eb44b133dcd0d6deff6b99a806d9e79))
-- Add a README (and `lib.rs` docs) ([#202](https://github.com/tokio-rs/console/issues/202)) ([a79c505](https://github.com/tokio-rs/console/a79c5056875a3593b4fd61d18e42c2aa6a08688c))
+- Console-api docs ([#197](https://github.com/tokio-rs/console/issues/197)) ([fdf8637](https://github.com/tokio-rs/console/commit/fdf8637f2671a95d84a4c9046a2ed411e08045ef))
+- Add a README and lib.rs docs ([#201](https://github.com/tokio-rs/console/issues/201)) ([5af6e07](https://github.com/tokio-rs/console/commit/5af6e07d6eb44b133dcd0d6deff6b99a806d9e79))
+- Add a README (and `lib.rs` docs) ([#202](https://github.com/tokio-rs/console/issues/202)) ([a79c505](https://github.com/tokio-rs/console/commit/a79c5056875a3593b4fd61d18e42c2aa6a08688c))
 
 ### Fixed
 
-- Make proto/ vendor-able ([#128](https://github.com/tokio-rs/console/issues/128)) ([81cd611](https://github.com/tokio-rs/console/81cd61152755abfdfa2f00727d079e65006e8c55))
+- Make proto/ vendor-able ([#128](https://github.com/tokio-rs/console/issues/128)) ([81cd611](https://github.com/tokio-rs/console/commit/81cd61152755abfdfa2f00727d079e65006e8c55))
 
 <!-- generated by git-cliff -->
