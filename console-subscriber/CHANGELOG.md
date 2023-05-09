@@ -3,7 +3,9 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## console-subscriber-v0.1.9 - (2023-05-09)
+
+[8fb1732](https://github.com/tokio-rs/console/commit/8fb1732dfd78ec3a8e4945c453d1c127f63ecdc4)...[c8a69e9](https://github.com/tokio-rs/console/commit/c8a69e9269c113bdde909ad1f4aab4156adfd5f4)
 
 
 ### Added
@@ -11,6 +13,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Add support for Unix domain sockets ([#388](https://github.com/tokio-rs/console/issues/388)) ([bff8b8a](https://github.com/tokio-rs/console/commit/bff8b8a4291b0584ab4f97c5f91246eb9a68f262), closes [#296](https://github.com/tokio-rs/console/issues/296))
 - Add scheduled time per task ([#406](https://github.com/tokio-rs/console/issues/406)) ([ac20daa](https://github.com/tokio-rs/console/commit/ac20daaf301f80e87002593813965d11d11371e4))
 - Add task scheduled times histogram ([#409](https://github.com/tokio-rs/console/issues/409)) ([3b37dda](https://github.com/tokio-rs/console/commit/3b37dda773f8cd237f6759d193fdc83a75ab7653))
+- Update `tonic` to 0.9 ([#420](https://github.com/tokio-rs/console/issues/420)) ([54f6be9](https://github.com/tokio-rs/console/commit/54f6be985a248d3dd5a98a7624a2447d0547bc60))
+- Update MSRV to Rust 1.60.0 ([e3c5656](https://github.com/tokio-rs/console/commit/e3c56561a062be123be460dd477f512a6a9ec3cd))
 
 ### Fixed
 
@@ -59,7 +63,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 [0e67d17](https://github.com/tokio-rs/console/commit/0e67d17e1b92f549c787a5c700008064c10da00e)...[43fb91f](https://github.com/tokio-rs/console/commit/43fb91f58b1ed6255d21fe591c68275995ea8894)
 
 ### <a id = "console-subscriber-v0.1.4-breaking"></a>Breaking Changes
-- **Update `tonic` to `0.7` ([#318](https://github.com/tokio-rs/console/issues/318))** ([83d8a87](83d8a870bcc40be71bc23d0f45fc374899c636a8))<br />`console-api` is now no longer compatible with projects using `prost`
+- **Update `tonic` to `0.7` ([#318](https://github.com/tokio-rs/console/issues/318))** ([83d8a87](https://github.com/tokio-rs/console/commit/83d8a870bcc40be71bc23d0f45fc374899c636a8))<br />`console-api` is now no longer compatible with projects using `prost`
 0.9 or `tonic` 0.7. These crates must be updated to use `console-api`
 0.2.
 
