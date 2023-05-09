@@ -31,7 +31,7 @@ atty = "0.2"
 console-api = { version = "0.4.0", path = "../console-api", features = ["transport"] }
 clap = { version = "3", features = ["cargo", "derive", "env"] }
 tokio = { version = "1", features = ["full", "rt-multi-thread"] }
-tonic = { version = "0.8", features = ["transport"] }
+tonic = { version = "0.9", features = ["transport"] }
 futures = "0.3"
 tui = { version = "0.16.0", default-features = false, features = ["crossterm"] }
 tower = "0.4.12"
