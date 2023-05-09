@@ -3,11 +3,11 @@ name = "xtask"
 version = "0.1.0"
 license = "MIT"
 edition = "2021"
-rust-version = "1.56.0"
+rust-version = "1.60.0"
 publish = false
 
 [dependencies]
-tonic-build = { version = "0.8", default-features = false, features = [
+tonic-build = { version = "0.9", default-features = false, features = [
     "prost", "transport"
 ] }
 clap = { version = "3", features = ["derive"] }
