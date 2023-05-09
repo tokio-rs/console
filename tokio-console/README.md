@@ -106,14 +106,14 @@ Using the <kbd>&#8593;</kbd> and <kbd>&#8595;</kbd> arrow keys, an individual ta
 Pressing<kbd>enter</kbd> while a task is highlighted displays details about that
 task:
 
-![task details](https://raw.githubusercontent.com/tokio-rs/console/main/assets/details2.png)
+![task details](https://raw.githubusercontent.com/tokio-rs/console/main/assets/task_details.png)
 
 Pressing the <kbd>escape</kbd> key returns to the task list.
 
 The <kbd>r</kbd> key switches from the list of tasks to a list of [resources],
 such as synchronization primitives, I/O resources, et cetera:
 
-![resource list](https://raw.githubusercontent.com/tokio-rs/console/main/assets/resources.png)
+![resource list](https://raw.githubusercontent.com/tokio-rs/console/main/assets/resources_list.png)
 
 
 Pressing the <kbd>t</kbd> key switches the view back to the task list.
@@ -122,13 +122,13 @@ Like the task list view, the resource list view can be navigated using the
 <kbd>&#8593;</kbd> and <kbd>&#8595;</kbd> arrow keys. Pressing <kbd>enter</kbd>
 while a resource is highlighted displays details about that resource:
 
-![resource details --- oneshot](https://raw.githubusercontent.com/tokio-rs/console/main/assets/resource_details1.png)
+![resource details --- sleep](https://raw.githubusercontent.com/tokio-rs/console/main/assets/resource_details_sleep.png)
 
 The resource details view lists the tasks currently waiting on that resource.
-This may be a single task, as in the [`tokio::sync::oneshot`] channel above, or
-a large number of tasks, such as this [`tokio::sync::Semaphore`]:
+This may be a single task, as in the [`tokio::time::Sleep`] above, or
+a large number of tasks, such as this private `tokio::sync::batch_semaphore::Semaphore`:
 
-![resource details --- semaphore](https://raw.githubusercontent.com/tokio-rs/console/main/assets/resource_details2.png)
+![resource details --- semaphore](https://raw.githubusercontent.com/tokio-rs/console/main/assets/resource_details_semaphore.png)
 
 Like the task details view, pressing the <kbd>escape</kbd> key while viewing a resource's details
 returns to the resource list.
