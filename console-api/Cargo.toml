@@ -26,10 +26,10 @@ keywords = [
 
 [features]
 # Generate code that is compatible with Tonic's `transport` module.
-transport = ["tonic-build/transport", "tonic/transport"]
+transport = ["tonic/transport"]
 
 [dependencies]
-tonic = { version = "0.8", default-features = false, features = [
+tonic = { version = "0.9", default-features = false, features = [
     "prost",
     "codegen",
     "transport",
@@ -39,7 +39,7 @@ prost-types = "0.11"
 tracing-core = "0.1.17"
 
 [dev-dependencies]
-tonic-build = { version = "0.8", default-features = false, features = [
+tonic-build = { version = "0.9", default-features = false, features = [
     "prost", "transport"
 ] }
 # explicit dep so we can get the version with fixed whitespace.
