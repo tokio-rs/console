@@ -3,14 +3,22 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## console-api-v0.5.0 - (2023-05-09)
 
+[2cb6ee5](https://github.com/tokio-rs/console/commit/2cb6ee5b813837324f5f9934a929ac928cfbb03f)...[e3c5656](https://github.com/tokio-rs/console/commit/e3c56561a062be123be460dd477f512a6a9ec3cd)
+
+### <a id = "console-api-v0.5.0-breaking"></a>Breaking Changes
+- **Update `tonic` to v0.9 ([#420](https://github.com/tokio-rs/console/issues/420))** ([b70c1d8](https://github.com/tokio-rs/console/commit/b70c1d886d64fc43de6715f07ae49313f778e92b))<br />This is a breaking change for users of `console-api`, as it changes the
+public `tonic` dependency to a semver-incompatible version. This breaks
+compatibility with `tonic` 0.8.
 
 ### Added
 
 - Use tokio task ids in task views ([#403](https://github.com/tokio-rs/console/issues/403)) ([001fc49](https://github.com/tokio-rs/console/commit/001fc49f09ad78cc4ab50770cf4a677ae177103f))
 - Add scheduled time per task ([#406](https://github.com/tokio-rs/console/issues/406)) ([ac20daa](https://github.com/tokio-rs/console/commit/ac20daaf301f80e87002593813965d11d11371e4))
 - Add task scheduled times histogram ([#409](https://github.com/tokio-rs/console/issues/409)) ([3b37dda](https://github.com/tokio-rs/console/commit/3b37dda773f8cd237f6759d193fdc83a75ab7653))
+- [**breaking**](#console-api-v0.5.0-breaking) Update `tonic` to v0.9 ([#420](https://github.com/tokio-rs/console/issues/420)) ([b70c1d8](https://github.com/tokio-rs/console/commit/b70c1d886d64fc43de6715f07ae49313f778e92b))
+- Update MSRV to Rust 1.60.0 ([e3c5656](https://github.com/tokio-rs/console/commit/e3c56561a062be123be460dd477f512a6a9ec3cd))
 
 ## console-api-v0.3.0 - (2022-05-23)
 
