@@ -4,25 +4,26 @@
 /// TODO: In the future allow for the request to specify
 /// only the data that the caller cares about (i.e. only
 /// tasks but no resources)
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct InstrumentRequest {
-}
+pub struct InstrumentRequest {}
 /// TaskDetailsRequest requests the stream of updates about
 /// the specific task identified in the request.
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TaskDetailsRequest {
     /// Identifies the task for which details were requested.
-    #[prost(message, optional, tag="1")]
+    #[prost(message, optional, tag = "1")]
     pub id: ::core::option::Option<super::common::Id>,
 }
 /// PauseRequest requests the stream of updates to pause.
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct PauseRequest {
-}
+pub struct PauseRequest {}
 /// ResumeRequest requests the stream of updates to resume after a pause.
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ResumeRequest {
-}
+pub struct ResumeRequest {}
 /// Update carries all information regarding tasks, resources, async operations
 /// and resource operations in one message. There are a couple of reasons to combine all
 /// of these into a single message:
@@ -31,35 +32,36 @@ pub struct ResumeRequest {
 /// - we can have all the new_metadata in one place
 /// - things such as async ops and resource ops do not make sense
 ///    on their own as they have relations to tasks and resources
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Update {
     /// The system time when this update was recorded.
     ///
     /// This is the timestamp any durations in the included `Stats` were
     /// calculated relative to.
-    #[prost(message, optional, tag="1")]
+    #[prost(message, optional, tag = "1")]
     pub now: ::core::option::Option<::prost_types::Timestamp>,
     /// Task state update.
-    #[prost(message, optional, tag="2")]
+    #[prost(message, optional, tag = "2")]
     pub task_update: ::core::option::Option<super::tasks::TaskUpdate>,
     /// Resource state update.
-    #[prost(message, optional, tag="3")]
+    #[prost(message, optional, tag = "3")]
     pub resource_update: ::core::option::Option<super::resources::ResourceUpdate>,
     /// Async operations state update
-    #[prost(message, optional, tag="4")]
+    #[prost(message, optional, tag = "4")]
     pub async_op_update: ::core::option::Option<super::async_ops::AsyncOpUpdate>,
     /// Any new span metadata that was registered since the last update.
-    #[prost(message, optional, tag="5")]
+    #[prost(message, optional, tag = "5")]
     pub new_metadata: ::core::option::Option<super::common::RegisterMetadata>,
 }
 /// `PauseResponse` is the value returned after a pause request.
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct PauseResponse {
-}
+pub struct PauseResponse {}
 /// `ResumeResponse` is the value returned after a resume request.
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ResumeResponse {
-}
+pub struct ResumeResponse {}
 /// Generated client implementations.
 pub mod instrument_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
@@ -74,7 +76,7 @@ pub mod instrument_client {
         /// Attempt to create a new client by connecting to a given endpoint.
         pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
         where
-            D: std::convert::TryInto<tonic::transport::Endpoint>,
+            D: TryInto<tonic::transport::Endpoint>,
             D::Error: Into<StdError>,
         {
             let conn = tonic::transport::Endpoint::new(dst)?.connect().await?;
@@ -130,11 +132,27 @@ pub mod instrument_client {
             self.inner = self.inner.accept_compressed(encoding);
             self
         }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_decoding_message_size(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_encoding_message_size(limit);
+            self
+        }
         /// Produces a stream of updates representing the behavior of the instrumented async runtime.
         pub async fn watch_updates(
             &mut self,
             request: impl tonic::IntoRequest<super::InstrumentRequest>,
-        ) -> Result<
+        ) -> std::result::Result<
                 tonic::Response<tonic::codec::Streaming<super::Update>>,
                 tonic::Status,
             > {
@@ -151,13 +169,21 @@ pub mod instrument_client {
             let path = http::uri::PathAndQuery::from_static(
                 "/rs.tokio.console.instrument.Instrument/WatchUpdates",
             );
-            self.inner.server_streaming(request.into_request(), path, codec).await
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "rs.tokio.console.instrument.Instrument",
+                        "WatchUpdates",
+                    ),
+                );
+            self.inner.server_streaming(req, path, codec).await
         }
         /// Produces a stream of updates describing the activity of a specific task.
         pub async fn watch_task_details(
             &mut self,
             request: impl tonic::IntoRequest<super::TaskDetailsRequest>,
-        ) -> Result<
+        ) -> std::result::Result<
                 tonic::Response<
                     tonic::codec::Streaming<super::super::tasks::TaskDetails>,
                 >,
@@ -176,13 +202,21 @@ pub mod instrument_client {
             let path = http::uri::PathAndQuery::from_static(
                 "/rs.tokio.console.instrument.Instrument/WatchTaskDetails",
             );
-            self.inner.server_streaming(request.into_request(), path, codec).await
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "rs.tokio.console.instrument.Instrument",
+                        "WatchTaskDetails",
+                    ),
+                );
+            self.inner.server_streaming(req, path, codec).await
         }
         /// Registers that the console observer wants to pause the stream.
         pub async fn pause(
             &mut self,
             request: impl tonic::IntoRequest<super::PauseRequest>,
-        ) -> Result<tonic::Response<super::PauseResponse>, tonic::Status> {
+        ) -> std::result::Result<tonic::Response<super::PauseResponse>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -196,13 +230,18 @@ pub mod instrument_client {
             let path = http::uri::PathAndQuery::from_static(
                 "/rs.tokio.console.instrument.Instrument/Pause",
             );
-            self.inner.unary(request.into_request(), path, codec).await
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("rs.tokio.console.instrument.Instrument", "Pause"),
+                );
+            self.inner.unary(req, path, codec).await
         }
         /// Registers that the console observer wants to resume the stream.
         pub async fn resume(
             &mut self,
             request: impl tonic::IntoRequest<super::ResumeRequest>,
-        ) -> Result<tonic::Response<super::ResumeResponse>, tonic::Status> {
+        ) -> std::result::Result<tonic::Response<super::ResumeResponse>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -216,7 +255,12 @@ pub mod instrument_client {
             let path = http::uri::PathAndQuery::from_static(
                 "/rs.tokio.console.instrument.Instrument/Resume",
             );
-            self.inner.unary(request.into_request(), path, codec).await
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("rs.tokio.console.instrument.Instrument", "Resume"),
+                );
+            self.inner.unary(req, path, codec).await
         }
     }
 }
@@ -224,12 +268,12 @@ pub mod instrument_client {
 pub mod instrument_server {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
-    ///Generated trait containing gRPC methods that should be implemented for use with InstrumentServer.
+    /// Generated trait containing gRPC methods that should be implemented for use with InstrumentServer.
     #[async_trait]
     pub trait Instrument: Send + Sync + 'static {
-        ///Server streaming response type for the WatchUpdates method.
+        /// Server streaming response type for the WatchUpdates method.
         type WatchUpdatesStream: futures_core::Stream<
-                Item = Result<super::Update, tonic::Status>,
+                Item = std::result::Result<super::Update, tonic::Status>,
             >
             + Send
             + 'static;
@@ -237,10 +281,16 @@ pub mod instrument_server {
         async fn watch_updates(
             &self,
             request: tonic::Request<super::InstrumentRequest>,
-        ) -> Result<tonic::Response<Self::WatchUpdatesStream>, tonic::Status>;
-        ///Server streaming response type for the WatchTaskDetails method.
+        ) -> std::result::Result<
+                tonic::Response<Self::WatchUpdatesStream>,
+                tonic::Status,
+            >;
+        /// Server streaming response type for the WatchTaskDetails method.
         type WatchTaskDetailsStream: futures_core::Stream<
-                Item = Result<super::super::tasks::TaskDetails, tonic::Status>,
+                Item = std::result::Result<
+                    super::super::tasks::TaskDetails,
+                    tonic::Status,
+                >,
             >
             + Send
             + 'static;
@@ -248,17 +298,20 @@ pub mod instrument_server {
         async fn watch_task_details(
             &self,
             request: tonic::Request<super::TaskDetailsRequest>,
-        ) -> Result<tonic::Response<Self::WatchTaskDetailsStream>, tonic::Status>;
+        ) -> std::result::Result<
+                tonic::Response<Self::WatchTaskDetailsStream>,
+                tonic::Status,
+            >;
         /// Registers that the console observer wants to pause the stream.
         async fn pause(
             &self,
             request: tonic::Request<super::PauseRequest>,
-        ) -> Result<tonic::Response<super::PauseResponse>, tonic::Status>;
+        ) -> std::result::Result<tonic::Response<super::PauseResponse>, tonic::Status>;
         /// Registers that the console observer wants to resume the stream.
         async fn resume(
             &self,
             request: tonic::Request<super::ResumeRequest>,
-        ) -> Result<tonic::Response<super::ResumeResponse>, tonic::Status>;
+        ) -> std::result::Result<tonic::Response<super::ResumeResponse>, tonic::Status>;
     }
     /// `InstrumentServer<T>` implements `Instrument` as a service.
     #[derive(Debug)]
@@ -266,6 +319,8 @@ pub mod instrument_server {
         inner: _Inner<T>,
         accept_compression_encodings: EnabledCompressionEncodings,
         send_compression_encodings: EnabledCompressionEncodings,
+        max_decoding_message_size: Option<usize>,
+        max_encoding_message_size: Option<usize>,
     }
     struct _Inner<T>(Arc<T>);
     impl<T: Instrument> InstrumentServer<T> {
@@ -278,6 +333,8 @@ pub mod instrument_server {
                 inner,
                 accept_compression_encodings: Default::default(),
                 send_compression_encodings: Default::default(),
+                max_decoding_message_size: None,
+                max_encoding_message_size: None,
             }
         }
         pub fn with_interceptor<F>(
@@ -301,6 +358,22 @@ pub mod instrument_server {
             self.send_compression_encodings.enable(encoding);
             self
         }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.max_decoding_message_size = Some(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.max_encoding_message_size = Some(limit);
+            self
+        }
     }
     impl<T, B> tonic::codegen::Service<http::Request<B>> for InstrumentServer<T>
     where
@@ -314,7 +387,7 @@ pub mod instrument_server {
         fn poll_ready(
             &mut self,
             _cx: &mut Context<'_>,
-        ) -> Poll<Result<(), Self::Error>> {
+        ) -> Poll<std::result::Result<(), Self::Error>> {
             Poll::Ready(Ok(()))
         }
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
@@ -337,7 +410,7 @@ pub mod instrument_server {
                             &mut self,
                             request: tonic::Request<super::InstrumentRequest>,
                         ) -> Self::Future {
-                            let inner = self.0.clone();
+                            let inner = Arc::clone(&self.0);
                             let fut = async move {
                                 (*inner).watch_updates(request).await
                             };
@@ -346,6 +419,8 @@ pub mod instrument_server {
                     }
                     let accept_compression_encodings = self.accept_compression_encodings;
                     let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
@@ -355,6 +430,10 @@ pub mod instrument_server {
                             .apply_compression_config(
                                 accept_compression_encodings,
                                 send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
                             );
                         let res = grpc.server_streaming(method, req).await;
                         Ok(res)
@@ -378,7 +457,7 @@ pub mod instrument_server {
                             &mut self,
                             request: tonic::Request<super::TaskDetailsRequest>,
                         ) -> Self::Future {
-                            let inner = self.0.clone();
+                            let inner = Arc::clone(&self.0);
                             let fut = async move {
                                 (*inner).watch_task_details(request).await
                             };
@@ -387,6 +466,8 @@ pub mod instrument_server {
                     }
                     let accept_compression_encodings = self.accept_compression_encodings;
                     let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
@@ -396,6 +477,10 @@ pub mod instrument_server {
                             .apply_compression_config(
                                 accept_compression_encodings,
                                 send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
                             );
                         let res = grpc.server_streaming(method, req).await;
                         Ok(res)
@@ -416,13 +501,15 @@ pub mod instrument_server {
                             &mut self,
                             request: tonic::Request<super::PauseRequest>,
                         ) -> Self::Future {
-                            let inner = self.0.clone();
+                            let inner = Arc::clone(&self.0);
                             let fut = async move { (*inner).pause(request).await };
                             Box::pin(fut)
                         }
                     }
                     let accept_compression_encodings = self.accept_compression_encodings;
                     let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
@@ -432,6 +519,10 @@ pub mod instrument_server {
                             .apply_compression_config(
                                 accept_compression_encodings,
                                 send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
                             );
                         let res = grpc.unary(method, req).await;
                         Ok(res)
@@ -452,13 +543,15 @@ pub mod instrument_server {
                             &mut self,
                             request: tonic::Request<super::ResumeRequest>,
                         ) -> Self::Future {
-                            let inner = self.0.clone();
+                            let inner = Arc::clone(&self.0);
                             let fut = async move { (*inner).resume(request).await };
                             Box::pin(fut)
                         }
                     }
                     let accept_compression_encodings = self.accept_compression_encodings;
                     let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
@@ -468,6 +561,10 @@ pub mod instrument_server {
                             .apply_compression_config(
                                 accept_compression_encodings,
                                 send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
                             );
                         let res = grpc.unary(method, req).await;
                         Ok(res)
@@ -496,12 +593,14 @@ pub mod instrument_server {
                 inner,
                 accept_compression_encodings: self.accept_compression_encodings,
                 send_compression_encodings: self.send_compression_encodings,
+                max_decoding_message_size: self.max_decoding_message_size,
+                max_encoding_message_size: self.max_encoding_message_size,
             }
         }
     }
     impl<T: Instrument> Clone for _Inner<T> {
         fn clone(&self) -> Self {
-            Self(self.0.clone())
+            Self(Arc::clone(&self.0))
         }
     }
     impl<T: std::fmt::Debug> std::fmt::Debug for _Inner<T> {
