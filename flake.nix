@@ -2,7 +2,7 @@
   description = "The Tokio console: a debugger for async Rust.";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/release-21.11";
+    # nixpkgs.url = "github:nixos/nixpkgs/release-21.11";
     flake-utils = {
       url = "github:numtide/flake-utils";
       inputs.nixpkgs.follows = "nixpkgs";
