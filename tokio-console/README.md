@@ -122,7 +122,7 @@ Like the task list view, the resource list view can be navigated using the
 <kbd>&#8593;</kbd> and <kbd>&#8595;</kbd> arrow keys. Pressing <kbd>enter</kbd>
 while a resource is highlighted displays details about that resource:
 
-![resource details --- oneshot](https://raw.githubusercontent.com/tokio-rs/console/main/assets/resource_details_sleep.png)
+![resource details --- sleep](https://raw.githubusercontent.com/tokio-rs/console/main/assets/resource_details_sleep.png)
 
 The resource details view lists the tasks currently waiting on that resource.
 This may be a single task, as in the [`tokio::time::Sleep`] above, or
