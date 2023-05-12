@@ -53,11 +53,11 @@ toolkit consists of multiple components:
 
 wow! whoa! it's like `top(1)` for tasks!
 
-![task list view](https://user-images.githubusercontent.com/2796466/129774465-7bd2ad2f-f1a3-4830-a8fa-f72667028fa1.png)
+![task list view](assets/readme/top-for-tasks.png)
 
 viewing details for a single task:
 
-![task details view](https://user-images.githubusercontent.com/2796466/129774524-288c967b-6066-4f98-973d-099b3e6a2c55.png)
+![task details view](assets/readme/task-details.png)
 
 ## on the shoulders of giants
 
@@ -163,58 +163,75 @@ as an argument to the console (either as an `<IP>:<PORT>` or
 cargo run -- http://my.great.console.app.local:5555
 ```
 
-the console command-line tool supports a number of additional flags to configure
-its behavior. the `-h` or `--help` flag will print a list of supported
-command-line flags and arguments:
+The console command-line tool supports a number of additional flags to configure
+its behavior. The `help` command will print a list of supported command-line
+flags and arguments:
 
 ```text
 USAGE:
-    tokio-console [FLAGS] [OPTIONS] [TARGET_ADDR]
+    tokio-console [OPTIONS] [TARGET_ADDR] [SUBCOMMAND]
 
 ARGS:
     <TARGET_ADDR>
             The address of a console-enabled process to connect to.
 
-            This may be an IP address and port, or a DNS name. [default: http://127.0.0.1:6669]
+            This may be an IP address and port, or a DNS name.
 
-FLAGS:
-        --ascii-only
-            Explicitly use only ASCII characters
+            On Unix platforms, this may also be a URI with the `file` scheme that specifies the path
+            to a Unix domain socket, as in `file://localhost/path/to/socket`.
 
-    -h, --help
-            Print help information
-
-        --no-colors
-            Disable ANSI colors entirely
-
-        --no-duration-colors
-            Disable color-coding for duration units
-
-        --no-terminated-colors
-            Disable color-coding for terminated tasks
-
-    -V, --version
-            Print version information
+            [default: http://127.0.0.1:6669]
 
 OPTIONS:
+        --ascii-only <ASCII_ONLY>
+            Explicitly use only ASCII characters
+
         --colorterm <truecolor>
             Overrides the value of the `COLORTERM` environment variable.
 
             If this is set to `24bit` or `truecolor`, 24-bit RGB color support will be enabled.
-            [env: COLORTERM=truecolor] [possible values: 24bit, truecolor]
+
+            [env: COLORTERM=truecolor]
+            [possible values: 24bit, truecolor]
+
+    -h, --help
+            Print help information
 
         --lang <LANG>
-            Overrides the terminal's default language [env: LANG=en_US.UTF-8] [default: en_us.UTF-8]
+            Overrides the terminal's default language
+
+            [env: LANG=]
 
         --log <ENV_FILTER>
             Log level filter for the console's internal diagnostics.
 
-            The console will log to stderr if a log level filter is provided. Since the console
-            application runs interactively, stderr should generally be redirected to a file to avoid
-            interfering with the console's text output. [env: RUST_LOG=] [default: off]
+            Logs are written to a new file at the path given by the `--log-dir` argument (or its
+            default value), or to the system journal if `systemd-journald` support is enabled.
+
+            If this is set to 'off' or is not set, no logs will be written.
+
+            [default: off]
+
+            [env: RUST_LOG=]
+
+        --log-dir <LOG_DIRECTORY>
+            Path to a directory to write the console's internal logs to.
+
+            [default: /tmp/tokio-console/logs]
+
+        --no-colors
+            Disable ANSI colors entirely
+
+        --no-duration-colors <COLOR_DURATIONS>
+            Disable color-coding for duration units
+
+        --no-terminated-colors <COLOR_TERMINATED>
+            Disable color-coding for terminated tasks
 
         --palette <PALETTE>
-            Explicitly set which color palette to use [possible values: 8, 16, 256, all, off]
+            Explicitly set which color palette to use
+
+            [possible values: 8, 16, 256, all, off]
 
         --retain-for <RETAIN_FOR>
             How long to continue displaying completed tasks and dropped resources after they have
@@ -243,7 +260,21 @@ OPTIONS:
 
             * `months`, `month`, `M` -- defined as 30.44 days
 
-            * `years`, `year`, `y` -- defined as 365.25 days [default: 6s]
+            * `years`, `year`, `y` -- defined as 365.25 days
+
+            [default: 6s]
+
+    -V, --version
+            Print version information
+
+SUBCOMMANDS:
+    gen-completion
+            Generate shell completions
+    gen-config
+            Generate a `console.toml` config file with the default configuration values, overridden
+            by any provided command-line arguments
+    help
+            Print this message or the help of the given subcommand(s)
 ```
 
 ## for development
