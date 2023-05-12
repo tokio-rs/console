@@ -25,10 +25,6 @@ env:
   RUSTUP_MAX_RETRIES: 10
   # Don't emit giant backtraces in the CI logs.
   RUST_BACKTRACE: short
-  # Use Rust 1.68.2 for Clippy (and fmt) because of an enhanced `almost_swapped`
-  # lint in 1.69.0 which affects clap 3 and can't be `allow`ed.
-  RUST_FMT_CLIPPY: 1.68.2
-
 
 jobs:
   check:
@@ -59,9 +55,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [stable]
         include:
-          # Make 1.58 MSRV due to <=1.57 failing to build console-api due to a bug
-          # with cargo version resolution.
-          - rust: 1.58.0
+          # Make 1.60 MSRV, as it's Tonic 0.9's MSRV.
+          - rust: 1.60.0
             os: ubuntu-latest
           # Try to build on the latest nightly. This job is allowed to fail, but
           # it's useful to help catch bugs in upcoming Rust versions.
@@ -109,11 +104,14 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v3
 
-      - name: Install Rust ${{ env.RUST_FMT_CLIPPY }}
-        uses: dtolnay/rust-toolchain@master
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{ env.RUST_FMT_CLIPPY }}
-          components: clippy, rustfmt
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v1
 
       - name: Run cargo fmt
         uses: actions-rs/cargo@v1
