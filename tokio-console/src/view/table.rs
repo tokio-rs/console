@@ -385,7 +385,7 @@ impl Controls {
             build_control_part(action, keys)
         };
         //let last_controls
-        for (action, keys) in controls(styles) {
+        for (action, keys) in controls {
             let mut next_control = build_control_part(action, keys);
             if spans.width() + next_control.width() + 2 > area.width as usize {
                 spans.0.append(&mut next_control.0);

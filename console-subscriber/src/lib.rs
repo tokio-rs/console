@@ -79,7 +79,7 @@ pub struct ConsoleLayer {
     ///
     /// 16 is probably a reasonable number of waker ops; it's a bit generous if
     /// there's only one async runtime library in use, but if there are multiple,
-    /// they might all have their own sets of waker ops.
+    /// they might all have their own sets fof waker ops.
     waker_callsites: Callsites<16>,
 
     /// Set of callsites for spans representing resources
