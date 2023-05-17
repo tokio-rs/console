@@ -39,8 +39,6 @@ pub(crate) struct HistogramMetadata {
     pub(crate) min_value: u64,
     /// The value of the bucket with the greatest quantity
     pub(crate) max_bucket: u64,
-    /// The value of the bucket with the smallest quantity
-    pub(crate) min_bucket: u64,
     /// Number of high outliers, if any
     pub(crate) high_outliers: u64,
     pub(crate) highest_outlier: Option<Duration>,
@@ -87,7 +85,6 @@ impl<'a> Widget for MiniHistogram<'a> {
         };
 
         let max_qty_label = metadata.max_bucket.to_string();
-        let min_qty_label = metadata.min_bucket.to_string();
         let max_record_label = format!(
             "{:.prec$?}",
             Duration::from_nanos(metadata.max_value),
@@ -107,7 +104,6 @@ impl<'a> Widget for MiniHistogram<'a> {
             max_record_label,
             min_record_label,
             max_qty_label,
-            min_qty_label,
         );
 
         let legend_height = if metadata.high_outliers > 0 { 2 } else { 1 };
@@ -229,7 +225,6 @@ fn render_legend(
     max_record_label: String,
     min_record_label: String,
     max_qty_label: String,
-    min_qty_label: String,
 ) {
     // If there are outliers, display a note
     let labels_pos = if metadata.high_outliers > 0 {
@@ -253,14 +248,6 @@ fn render_legend(
 
     // top left: max quantity
     buf.set_string(area.left(), area.top(), &max_qty_label, Style::default());
-    // bottom left: 0 aligned to right
-    let zero_label = format!("{:>width$}", &min_qty_label, width = max_qty_label.len());
-    buf.set_string(
-        area.left(),
-        area.bottom() - labels_pos,
-        &zero_label,
-        Style::default(),
-    );
     // bottom left below the chart: min time
     buf.set_string(
         area.left() + max_qty_label.len() as u16,
@@ -311,14 +298,12 @@ fn chart_data(histogram: &DurationHistogram, width: u16) -> (Vec<u64>, Histogram
         Vec::new()
     };
     let max_bucket = data.iter().max().copied().unwrap_or_default();
-    let min_bucket = data.iter().min().copied().unwrap_or_default();
     (
         data,
         HistogramMetadata {
             max_value: histogram.max(),
             min_value: histogram.min(),
             max_bucket,
-            min_bucket,
             high_outliers,
             highest_outlier,
         },
