@@ -209,34 +209,15 @@ where
     T: TableList<N>,
 {
     fn render_help_content(&self, styles: &view::Styles) -> Paragraph<'static> {
-        let controls = vec![
-            Spans::from(vec![Span::raw("controls:")]),
-            Spans::from(vec![
-                Span::raw("  select column (sort): "),
-                bold(styles.if_utf8("\u{2190}\u{2192}", "left, right")),
-                Span::raw(" or "),
-                bold("h, l"),
-            ]),
-            Spans::from(vec![
-                Span::raw("  scroll: "),
-                bold(styles.if_utf8("\u{2191}\u{2193}", "up, down")),
-                Span::raw(" or "),
-                bold("k, j"),
-            ]),
-            Spans::from(vec![
-                Span::raw("  view details: "),
-                bold(styles.if_utf8("\u{21B5}", "enter")),
-            ]),
-            Spans::from(vec![
-                text::Span::raw("  invert sort (highest/lowest): "),
-                bold("i"),
-            ]),
-            Spans::from(vec![text::Span::raw("  scroll to top: "), bold("gg")]),
-            Spans::from(vec![text::Span::raw("  scroll to bottom: "), bold("G")]),
-            Spans::from(vec![text::Span::raw("  toggle help: "), bold("?")]),
-            Spans::from(vec![text::Span::raw("  quit: "), bold("q")]),
-        ];
-        Paragraph::new(controls)
+        let view_controls = view_controls();
+        let universal_controls = universal_controls();
+
+        let mut spans = Vec::with_capacity(1 + view_controls.len() + universal_controls.len());
+        spans.push(Spans::from(vec![Span::raw("controls:")]));
+        spans.extend(view_controls.iter().map(|c| c.into_spans(styles, 2)));
+        spans.extend(universal_controls.iter().map(|c| c.into_spans(styles, 2)));
+
+        Paragraph::new(spans)
     }
 }
 
@@ -261,22 +242,23 @@ impl ControlDisplay {
         }
     }
 
-    fn into_spans(&self, styles: &view::Styles) -> Spans<'static> {
+    fn into_spans(&self, styles: &view::Styles, indent: usize) -> Spans<'static> {
         let mut spans = Vec::new();
 
+        spans.push(Span::from(
+            std::iter::repeat(" ").take(indent).collect::<String>(),
+        ));
         spans.push(Span::from(self.action));
         spans.push(Span::from(" = "));
-        let extra_spans: Vec<Span> = self
-            .keys
-            .iter()
-            .map(|kd| {
-                Span::from(match kd.utf8 {
-                    Some(utf8) => styles.if_utf8(utf8, kd.base),
-                    None => kd.base,
-                })
-            })
-            // TODO(hds): somehow I need to intersperse these values with `Span::from(" or ")`.
-            .collect();
+        for (idx, key_display) in self.keys.iter().enumerate() {
+            if idx > 0 {
+                spans.push(Span::from(" or "))
+            }
+            spans.push(Span::from(bold(match key_display.utf8 {
+                Some(utf8) => styles.if_utf8(utf8, key_display.base),
+                None => key_display.base,
+            })));
+        }
 
         Spans::from(spans)
     }
@@ -414,27 +396,71 @@ impl Controls {
             text::Span::raw(" = scroll to bottom"),
         ]));
 
-        // how many lines do we need to display the controls?
-        let mut height = 1;
+        let view_controls = view_controls();
+        let universal_controls = universal_controls();
 
-        // if the area is narrower than the width of the controls text, we need
-        // to wrap the text across multiple lines.
-        let width = text.width() as u16;
-        if area.width < width {
-            height = width / area.width;
+        let mut spans_controls = Vec::with_capacity(view_controls.len() + universal_controls.len());
+        spans_controls.extend(view_controls.iter().map(|c| c.into_spans(styles, 0)));
+        spans_controls.extend(universal_controls.iter().map(|c| c.into_spans(styles, 0)));
 
-            // if the text's width is not neatly divisible by the area's width
-            // (and it almost never will be), round up for the remaining text.
-            if width % area.width > 0 {
-                height += 1
-            };
+        let mut lines = vec![Spans::default()];
+        let mut current_line = lines.last_mut().expect("This vector is never empty");
+        let separator = Span::from(", ");
+
+        let mut idx = 0;
+        let controls_count = spans_controls.len();
+        for spans in spans_controls {
+            if current_line.width() == 0 {
+                current_line.0.extend(spans.0);
+            } else {
+                let needed_trailing_separator_width = if idx == controls_count + 1 {
+                    separator.width()
+                } else {
+                    0
+                };
+
+                if current_line.width()
+                    + separator.width()
+                    + spans.width()
+                    + needed_trailing_separator_width
+                    <= area.width as usize
+                {
+                    current_line.0.push(separator.clone());
+                    current_line.0.extend(spans.0);
+                } else {
+                    current_line.0.push(separator.clone());
+                    lines.push(Spans::default());
+                    current_line = lines.last_mut().expect("This vector is never empty");
+                }
+            }
+            idx += 1;
         }
+
+        let height = lines.len() as u16;
+        let text = Text::from(lines);
+        // Paragraph::new(spans)
+
+        // // how many lines do we need to display the controls?
+        // let mut height = 1;
+
+        // // if the area is narrower than the width of the controls text, we need
+        // // to wrap the text across multiple lines.
+        // let width = text.width() as u16;
+        // if area.width < width {
+        //     height = width / area.width;
+
+        //     // if the text's width is not neatly divisible by the area's width
+        //     // (and it almost never will be), round up for the remaining text.
+        //     if width % area.width > 0 {
+        //         height += 1
+        //     };
+        // }
 
         Self {
             // TODO(eliza): it would be nice if we could wrap this on commas,
             // specifically, rather than whitespace...but that seems like a
             // bunch of additional work...
-            paragraph: Paragraph::new(text).wrap(Wrap { trim: true }),
+            paragraph: Paragraph::new(text), //.wrap(Wrap { trim: true }),
             height,
         }
     }
