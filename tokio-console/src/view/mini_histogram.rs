@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use tui::{
+use ratatui::{
     layout::Rect,
     style::Style,
     symbols,
@@ -9,12 +9,12 @@ use tui::{
 
 use crate::state::histogram::DurationHistogram;
 
-/// This is a tui-rs widget to visualize a latency histogram in a small area.
+/// This is a Ratatui widget to visualize a latency histogram in a small area.
 /// It is based on the [`Sparkline`] widget, so it draws a mini bar chart with
 /// some labels for clarity. Unlike Sparkline, it does not omit very small
 /// values.
 ///
-/// [`Sparkline`]: tui::widgets::Sparkline
+/// [`Sparkline`]: ratatui::widgets::Sparkline
 pub(crate) struct MiniHistogram<'a> {
     /// A block to wrap the widget in
     block: Option<Block<'a>>,
@@ -58,7 +58,7 @@ impl<'a> Default for MiniHistogram<'a> {
 }
 
 impl<'a> Widget for MiniHistogram<'a> {
-    fn render(mut self, area: tui::layout::Rect, buf: &mut tui::buffer::Buffer) {
+    fn render(mut self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
         let inner_area = match self.block.take() {
             Some(b) => {
                 let inner_area = b.inner(area);
@@ -123,8 +123,8 @@ impl<'a> Widget for MiniHistogram<'a> {
 impl<'a> MiniHistogram<'a> {
     fn render_bars(
         &mut self,
-        area: tui::layout::Rect,
-        buf: &mut tui::buffer::Buffer,
+        area: ratatui::layout::Rect,
+        buf: &mut ratatui::buffer::Buffer,
         data: Vec<u64>,
     ) {
         let max = match self.max {
@@ -219,8 +219,8 @@ impl<'a> MiniHistogram<'a> {
 }
 
 fn render_legend(
-    area: tui::layout::Rect,
-    buf: &mut tui::buffer::Buffer,
+    area: ratatui::layout::Rect,
+    buf: &mut ratatui::buffer::Buffer,
     metadata: &HistogramMetadata,
     max_record_label: String,
     min_record_label: String,

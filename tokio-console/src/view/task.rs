@@ -10,7 +10,7 @@ use std::{
     rc::Rc,
     time::{Duration, SystemTime},
 };
-use tui::{
+use ratatui::{
     layout::{self, Layout},
     text::{Span, Spans, Text},
     widgets::{Block, List, ListItem, Paragraph},
@@ -30,10 +30,10 @@ impl TaskView {
         // TODO :D
     }
 
-    pub(crate) fn render<B: tui::backend::Backend>(
+    pub(crate) fn render<B: ratatui::backend::Backend>(
         &mut self,
         styles: &view::Styles,
-        frame: &mut tui::terminal::Frame<B>,
+        frame: &mut ratatui::terminal::Frame<B>,
         area: layout::Rect,
         now: SystemTime,
     ) {

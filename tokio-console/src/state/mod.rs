@@ -15,7 +15,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 use tasks::{Details, Task, TasksState};
-use tui::{
+use ratatui::{
     style::{Color, Modifier},
     text::Span,
 };

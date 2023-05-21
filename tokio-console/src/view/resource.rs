@@ -9,7 +9,7 @@ use crate::{
     },
 };
 use std::{cell::RefCell, rc::Rc};
-use tui::{
+use ratatui::{
     layout::{self, Layout},
     text::{Span, Spans, Text},
     widgets::{Block, Paragraph},
@@ -34,10 +34,10 @@ impl ResourceView {
         self.async_ops_table.update_input(event)
     }
 
-    pub(crate) fn render<B: tui::backend::Backend>(
+    pub(crate) fn render<B: ratatui::backend::Backend>(
         &mut self,
         styles: &view::Styles,
-        frame: &mut tui::terminal::Frame<B>,
+        frame: &mut ratatui::terminal::Frame<B>,
         area: layout::Rect,
         state: &mut State,
     ) {

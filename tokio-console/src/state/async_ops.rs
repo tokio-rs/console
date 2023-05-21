@@ -17,7 +17,7 @@ use std::{
     rc::{Rc, Weak},
     time::{Duration, SystemTime},
 };
-use tui::text::Span;
+use ratatui::text::Span;
 
 #[derive(Default, Debug)]
 pub(crate) struct AsyncOpsState {

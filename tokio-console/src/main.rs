@@ -4,7 +4,7 @@ use state::State;
 
 use futures::stream::StreamExt;
 use tokio::sync::{mpsc, watch};
-use tui::{
+use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::Color,
     text::{Span, Spans},

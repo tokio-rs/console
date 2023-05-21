@@ -1,7 +1,7 @@
 use crate::view::{resources::ResourcesTable, table::TableListState, tasks::TasksTable};
 use crate::{input, state::State};
 use std::{borrow::Cow, cmp};
-use tui::{
+use ratatui::{
     layout,
     style::{self, Style},
     text::Span,
@@ -179,9 +179,9 @@ impl View {
         update_kind
     }
 
-    pub(crate) fn render<B: tui::backend::Backend>(
+    pub(crate) fn render<B: ratatui::backend::Backend>(
         &mut self,
-        frame: &mut tui::terminal::Frame<B>,
+        frame: &mut ratatui::terminal::Frame<B>,
         area: layout::Rect,
         state: &mut State,
     ) {

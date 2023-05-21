@@ -19,7 +19,7 @@ use std::{
     rc::{Rc, Weak},
     time::{Duration, SystemTime},
 };
-use tui::{style::Color, text::Span};
+use ratatui::{style::Color, text::Span};
 
 #[derive(Default, Debug)]
 pub(crate) struct TasksState {
