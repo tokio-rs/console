@@ -116,19 +116,17 @@ impl ResourceView {
     }
 }
 
-fn view_controls() -> &'static Vec<ControlDisplay> {
+fn view_controls() -> &'static [ControlDisplay] {
     static VIEW_CONTROLS: OnceCell<Vec<ControlDisplay>> = OnceCell::new();
 
     VIEW_CONTROLS.get_or_init(|| {
-        let mut resource_controls = vec![ControlDisplay {
+        let resource_controls = &[ControlDisplay {
             action: "return to task list",
-            keys: vec![KeyDisplay {
+            keys: &[KeyDisplay {
                 base: "esc",
                 utf8: Some("\u{238B} esc"),
             }],
         }];
-        resource_controls.extend(async_ops::view_controls().to_owned());
-
-        resource_controls
+        [resource_controls, async_ops::view_controls()].concat()
     })
 }

@@ -1,6 +1,5 @@
 use crate::view::{self, bold};
 
-use once_cell::sync::OnceCell;
 use tui::{
     layout,
     text::{Span, Spans, Text},
@@ -16,7 +15,7 @@ pub(crate) struct Controls {
 
 impl Controls {
     pub(in crate::view) fn new(
-        view_controls: &Vec<ControlDisplay>,
+        view_controls: &'static [ControlDisplay],
         area: &layout::Rect,
         styles: &view::Styles,
     ) -> Self {
@@ -32,28 +31,39 @@ impl Controls {
 
         let controls_count: usize = spans_controls.len();
         for (idx, spans) in spans_controls.into_iter().enumerate() {
+            // If this is the first item on this line - or first item on the
+            // first line, then always include it - even if it goes beyond the
+            // line width, not much we can do anyway.
             if idx == 0 || current_line.width() == 0 {
                 current_line.0.extend(spans.0);
-            } else {
-                let needed_trailing_separator_width = if idx == controls_count + 1 {
-                    separator.width()
-                } else {
-                    0
-                };
+                continue;
+            }
 
-                let total_width = current_line.width()
-                    + separator.width()
-                    + spans.width()
-                    + needed_trailing_separator_width;
-                    
-                if total_width <= area.width as usize {
-                    current_line.0.push(separator.clone());
-                    current_line.0.extend(spans.0);
-                } else {
-                    current_line.0.push(separator.clone());
-                    lines.push(spans);
-                    current_line = lines.last_mut().expect("This vector is never empty");
-                }
+            // Include the width of our separator in the current item if we
+            // aren't placing the last item. This is the separator after the
+            // new element.
+            let needed_trailing_separator_width = if idx == controls_count + 1 {
+                separator.width()
+            } else {
+                0
+            };
+
+            let total_width = current_line.width()
+                + separator.width()
+                + spans.width()
+                + needed_trailing_separator_width;
+
+            // If the current item fits on this line, append it.
+            // Otherwise, append only the separator - we accounted for its
+            // width in the previous loop iteration - and then create a new
+            // line for the current item.
+            if total_width <= area.width as usize {
+                current_line.0.push(separator.clone());
+                current_line.0.extend(spans.0);
+            } else {
+                current_line.0.push(separator.clone());
+                lines.push(spans);
+                current_line = lines.last_mut().expect("This vector is never empty");
             }
         }
 
@@ -99,17 +109,7 @@ pub(crate) struct KeyDisplay {
 }
 
 impl ControlDisplay {
-    pub(crate) fn new_simple(action: &'static str, key: &'static str) -> Self {
-        ControlDisplay {
-            action,
-            keys: vec![KeyDisplay {
-                base: key,
-                utf8: None,
-            }],
-        }
-    }
-
-    pub fn to_spans(&self, styles: &view::Styles) -> Spans<'static> {
+    pub(crate) fn to_spans(&self, styles: &view::Styles) -> Spans<'static> {
         let mut spans = Vec::new();
 
         spans.push(Span::from(self.action));
@@ -129,13 +129,21 @@ impl ControlDisplay {
 }
 
 /// Returns a list of controls which are available in all views.
-pub(crate) fn universal_controls() -> &'static Vec<ControlDisplay> {
-    static UNIVERSAL_CONTROLS: OnceCell<Vec<ControlDisplay>> = OnceCell::new();
-
-    UNIVERSAL_CONTROLS.get_or_init(|| {
-        vec![
-            ControlDisplay::new_simple("toggle pause", "space"),
-            ControlDisplay::new_simple("quit", "q"),
-        ]
-    })
+const fn universal_controls() -> &'static [ControlDisplay] {
+    &[
+        ControlDisplay {
+            action: "toggle pause",
+            keys: &[KeyDisplay {
+                base: "space",
+                utf8: None,
+            }],
+        },
+        ControlDisplay {
+            action: "quit",
+            keys: &[KeyDisplay {
+                base: "q",
+                utf8: None,
+            }],
+        },
+    ]
 }

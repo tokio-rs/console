@@ -5,7 +5,6 @@ use crate::{
         controls::{ControlDisplay, KeyDisplay},
     },
 };
-use once_cell::sync::OnceCell;
 use tui::{layout, widgets::TableState};
 
 use std::cell::RefCell;
@@ -195,47 +194,61 @@ where
     }
 }
 
-pub(crate) fn view_controls() -> &'static Vec<ControlDisplay> {
-    static VIEW_CONTROLS: OnceCell<Vec<ControlDisplay>> = OnceCell::new();
-
-    VIEW_CONTROLS.get_or_init(|| {
-        vec![
-            ControlDisplay {
-                action: "select column (sort)",
-                keys: vec![
-                    KeyDisplay {
-                        base: "left, right",
-                        utf8: Some("\u{2190}\u{2192}"),
-                    },
-                    KeyDisplay {
-                        base: "h, l",
-                        utf8: None,
-                    },
-                ],
-            },
-            ControlDisplay {
-                action: "scroll",
-                keys: vec![
-                    KeyDisplay {
-                        base: "up, down",
-                        utf8: Some("\u{2191}\u{2193}"),
-                    },
-                    KeyDisplay {
-                        base: "k, j",
-                        utf8: None,
-                    },
-                ],
-            },
-            ControlDisplay {
-                action: "view details",
-                keys: vec![KeyDisplay {
-                    base: "enter",
-                    utf8: Some("\u{21B5}"),
-                }],
-            },
-            ControlDisplay::new_simple("invert sort (highest/lowest)", "i"),
-            ControlDisplay::new_simple("scroll to top", "gg"),
-            ControlDisplay::new_simple("scroll to bottom", "G"),
-        ]
-    })
+pub(crate) const fn view_controls() -> &'static [ControlDisplay] {
+    &[
+        ControlDisplay {
+            action: "select column (sort)",
+            keys: &[
+                KeyDisplay {
+                    base: "left, right",
+                    utf8: Some("\u{2190}\u{2192}"),
+                },
+                KeyDisplay {
+                    base: "h, l",
+                    utf8: None,
+                },
+            ],
+        },
+        ControlDisplay {
+            action: "scroll",
+            keys: &[
+                KeyDisplay {
+                    base: "up, down",
+                    utf8: Some("\u{2191}\u{2193}"),
+                },
+                KeyDisplay {
+                    base: "k, j",
+                    utf8: None,
+                },
+            ],
+        },
+        ControlDisplay {
+            action: "view details",
+            keys: &[KeyDisplay {
+                base: "enter",
+                utf8: Some("\u{21B5}"),
+            }],
+        },
+        ControlDisplay {
+            action: "invert sort (highest/lowest)",
+            keys: &[KeyDisplay {
+                base: "i",
+                utf8: None,
+            }],
+        },
+        ControlDisplay {
+            action: "scroll to top",
+            keys: &[KeyDisplay {
+                base: "gg",
+                utf8: None,
+            }],
+        },
+        ControlDisplay {
+            action: "scroll to bottom",
+            keys: &[KeyDisplay {
+                base: "G",
+                utf8: None,
+            }],
+        },
+    ]
 }
