@@ -41,12 +41,12 @@ impl Controls {
                     0
                 };
 
-                if current_line.width()
+                let total_width = current_line.width()
                     + separator.width()
                     + spans.width()
-                    + needed_trailing_separator_width
-                    <= area.width as usize
-                {
+                    + needed_trailing_separator_width;
+                    
+                if total_width <= area.width as usize {
                     current_line.0.push(separator.clone());
                     current_line.0.extend(spans.0);
                 } else {
@@ -82,7 +82,7 @@ impl Controls {
 #[derive(Clone)]
 pub(crate) struct ControlDisplay {
     pub(crate) action: &'static str,
-    pub(crate) keys: Vec<KeyDisplay>,
+    pub(crate) keys: &'static [KeyDisplay],
 }
 
 /// A key or keys which will be displayed to the user as part of spans
