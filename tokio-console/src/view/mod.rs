@@ -8,6 +8,7 @@ use tui::{
 };
 
 mod async_ops;
+mod controls;
 mod durations;
 mod mini_histogram;
 mod percentiles;

@@ -5,7 +5,8 @@ use crate::{
     },
     view::{
         self, bold,
-        table::{self, TableList, TableListState},
+        controls::Controls,
+        table::{view_controls, TableList, TableListState},
         DUR_LEN, DUR_TABLE_PRECISION,
     },
 };
@@ -212,13 +213,13 @@ impl TableList<12> for TasksTable {
             .direction(layout::Direction::Vertical)
             .margin(0);
 
-        let controls = table::Controls::for_area(&area, styles);
+        let controls = Controls::new(view_controls(), &area, styles);
 
         let (controls_area, tasks_area, warnings_area) = if warnings.is_empty() {
             let chunks = layout
                 .constraints(
                     [
-                        layout::Constraint::Length(controls.height),
+                        layout::Constraint::Length(controls.height()),
                         layout::Constraint::Max(area.height),
                     ]
                     .as_ref(),
@@ -230,7 +231,7 @@ impl TableList<12> for TasksTable {
             let chunks = layout
                 .constraints(
                     [
-                        layout::Constraint::Length(controls.height),
+                        layout::Constraint::Length(controls.height()),
                         layout::Constraint::Length(warnings_height),
                         layout::Constraint::Max(area.height),
                     ]
@@ -269,7 +270,7 @@ impl TableList<12> for TasksTable {
             .highlight_style(Style::default().add_modifier(style::Modifier::BOLD));
 
         frame.render_stateful_widget(table, tasks_area, &mut table_list_state.table_state);
-        frame.render_widget(controls.paragraph, controls_area);
+        frame.render_widget(controls.into_widget(), controls_area);
 
         if let Some(area) = warnings_area {
             let block = styles

@@ -4,15 +4,18 @@ use crate::{
     state::State,
     view::{
         self,
-        async_ops::{AsyncOpsTable, AsyncOpsTableCtx},
-        bold, TableListState,
+        async_ops::{self, AsyncOpsTable, AsyncOpsTableCtx},
+        bold,
+        controls::{ControlDisplay, Controls, KeyDisplay},
+        TableListState,
     },
 };
+use once_cell::sync::OnceCell;
 use std::{cell::RefCell, rc::Rc};
 use tui::{
     layout::{self, Layout},
     text::{Span, Spans, Text},
-    widgets::{Block, Paragraph},
+    widgets::Paragraph,
 };
 
 pub(crate) struct ResourceView {
@@ -42,6 +45,7 @@ impl ResourceView {
         state: &mut State,
     ) {
         let resource = &*self.resource.borrow();
+        let controls = Controls::new(view_controls(), &area, styles);
 
         let (controls_area, stats_area, async_ops_area) = {
             let chunks = Layout::default()
@@ -49,7 +53,7 @@ impl ResourceView {
                 .constraints(
                     [
                         // controls
-                        layout::Constraint::Length(1),
+                        layout::Constraint::Length(controls.height()),
                         // resource stats
                         layout::Constraint::Length(8),
                         // async ops
@@ -71,14 +75,6 @@ impl ResourceView {
                 .as_ref(),
             )
             .split(stats_area);
-
-        let controls = Spans::from(vec![
-            Span::raw("controls: "),
-            bold(styles.if_utf8("\u{238B} esc", "esc")),
-            Span::raw(" = return to task list, "),
-            bold("q"),
-            Span::raw(" = quit"),
-        ]);
 
         let overview = vec![
             Spans::from(vec![bold("ID: "), Span::raw(resource.id_str())]),
@@ -107,7 +103,7 @@ impl ResourceView {
             Paragraph::new(overview).block(styles.border_block().title("Resource"));
         let fields_widget = Paragraph::new(fields).block(styles.border_block().title("Attributes"));
 
-        frame.render_widget(Block::default().title(controls), controls_area);
+        frame.render_widget(controls.into_widget(), controls_area);
         frame.render_widget(resource_widget, stats_area[0]);
         frame.render_widget(fields_widget, stats_area[1]);
         let ctx = AsyncOpsTableCtx {
@@ -118,4 +114,21 @@ impl ResourceView {
             .render(styles, frame, async_ops_area, state, ctx);
         self.initial_render = false;
     }
+}
+
+fn view_controls() -> &'static Vec<ControlDisplay> {
+    static VIEW_CONTROLS: OnceCell<Vec<ControlDisplay>> = OnceCell::new();
+
+    VIEW_CONTROLS.get_or_init(|| {
+        let mut resource_controls = vec![ControlDisplay {
+            action: "return to task list",
+            keys: vec![KeyDisplay {
+                base: "esc",
+                utf8: Some("\u{238B} esc"),
+            }],
+        }];
+        resource_controls.extend(async_ops::view_controls().to_owned());
+
+        resource_controls
+    })
 }
