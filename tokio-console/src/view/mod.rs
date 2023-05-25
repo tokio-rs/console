@@ -11,6 +11,7 @@ use tui::{
 };
 
 mod async_ops;
+mod controls;
 mod durations;
 mod help;
 mod mini_histogram;
