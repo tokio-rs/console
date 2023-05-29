@@ -9,7 +9,6 @@ use crate::{
         help::HelpText,
     },
 };
-use once_cell::sync::OnceCell;
 use std::{
     cell::RefCell,
     cmp,
@@ -261,16 +260,12 @@ impl HelpText for TaskView {
     }
 }
 
-pub(crate) fn view_controls() -> &'static Vec<ControlDisplay> {
-    static VIEW_CONTROLS: OnceCell<Vec<ControlDisplay>> = OnceCell::new();
-
-    VIEW_CONTROLS.get_or_init(|| {
-        vec![ControlDisplay {
-            action: "return to task list",
-            keys: vec![KeyDisplay {
-                base: "esc",
-                utf8: Some("\u{238B} esc"),
-            }],
-        }]
-    })
+const fn view_controls() -> &'static [ControlDisplay] {
+    &[ControlDisplay {
+        action: "return to task list",
+        keys: &[KeyDisplay {
+            base: "esc",
+            utf8: Some("\u{238B} esc"),
+        }],
+    }]
 }

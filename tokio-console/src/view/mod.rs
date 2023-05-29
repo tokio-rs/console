@@ -47,7 +47,7 @@ pub struct View {
     tasks_list: TableListState<TasksTable, 12>,
     resources_list: TableListState<ResourcesTable, 9>,
     state: ViewState,
-    show_help_toggle: bool,
+    show_help_modal: bool,
     pub(crate) styles: Styles,
 }
 
@@ -101,7 +101,7 @@ impl View {
             state: ViewState::TasksList,
             tasks_list: TableListState::<TasksTable, 12>::default(),
             resources_list: TableListState::<ResourcesTable, 9>::default(),
-            show_help_toggle: false,
+            show_help_modal: false,
             styles,
         }
     }
@@ -110,7 +110,10 @@ impl View {
         use ViewState::*;
         let mut update_kind = UpdateKind::Other;
 
-        self.handl_help_popup(event);
+        if self.should_toggle_help_modal(event) {
+            self.show_help_modal = !self.show_help_modal;
+            return update_kind;
+        }
 
         if matches!(event, key!(Char('t'))) {
             self.state = TasksList;
@@ -188,15 +191,9 @@ impl View {
         update_kind
     }
 
-    fn handl_help_popup(&mut self, event: crossterm::event::Event) {
-        if input::is_help_toggle(&event) {
-            // TODO: Pause state if we are about to show the help toggle
-            self.show_help_toggle = !self.show_help_toggle;
-        }
-        if self.show_help_toggle && !input::is_help_toggle(&event) {
-            // We have some other key pressed; clear the help popup.
-            self.show_help_toggle = !self.show_help_toggle;
-        }
+    /// The help modal should toggle on the `?` key and should exit on `Esc`
+    fn should_toggle_help_modal(&mut self, event: crossterm::event::Event) -> bool {
+        input::is_help_toggle(&event) || (self.show_help_modal && input::is_esc(&event))
     }
 
     pub(crate) fn render<B: tui::backend::Backend>(
@@ -230,7 +227,7 @@ impl View {
 
         state.retain_active();
 
-        if self.show_help_toggle {
+        if self.show_help_modal {
             let mut help_view = HelpView::new(help_text.render_help_content(&self.styles));
             help_view.render(&self.styles, frame, area, state);
         }

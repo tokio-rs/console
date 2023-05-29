@@ -1,3 +1,4 @@
+pub(crate) use crate::view::table::view_controls;
 use crate::{
     state::{
         async_ops::{AsyncOp, SortBy},
@@ -7,7 +8,7 @@ use crate::{
     view::{
         self, bold,
         controls::Controls,
-        table::{view_controls, TableList, TableListState},
+        table::{TableList, TableListState},
         DUR_LEN, DUR_TABLE_PRECISION,
     },
 };

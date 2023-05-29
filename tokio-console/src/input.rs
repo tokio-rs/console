@@ -41,3 +41,13 @@ pub(crate) fn is_help_toggle(event: &Event) -> bool {
         })
     )
 }
+
+pub(crate) fn is_esc(event: &Event) -> bool {
+    matches!(
+        event,
+        Event::Key(KeyEvent {
+            code: KeyCode::Esc,
+            ..
+        })
+    )
+}
