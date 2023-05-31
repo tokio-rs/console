@@ -1,6 +1,6 @@
 use crate::view::{self, bold};
 
-use tui::{
+use ratatui::{
     layout,
     text::{Span, Spans, Text},
     widgets::{Paragraph, Widget},

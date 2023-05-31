@@ -1,4 +1,4 @@
-use tui::{
+use ratatui::{
     layout::{self, Constraint, Direction, Layout},
     widgets::{Clear, Paragraph},
 };
@@ -21,10 +21,10 @@ impl<'a> HelpView<'a> {
         }
     }
 
-    pub(crate) fn render<B: tui::backend::Backend>(
+    pub(crate) fn render<B: ratatui::backend::Backend>(
         &mut self,
         styles: &view::Styles,
-        frame: &mut tui::terminal::Frame<B>,
+        frame: &mut ratatui::terminal::Frame<B>,
         _area: layout::Rect,
         _state: &mut State,
     ) {

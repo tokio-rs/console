@@ -183,8 +183,8 @@ impl Connection {
         }
     }
 
-    pub fn render(&self, styles: &crate::view::Styles) -> tui::text::Spans {
-        use tui::{
+    pub fn render(&self, styles: &crate::view::Styles) -> ratatui::text::Spans {
+        use ratatui::{
             style::{Color, Modifier},
             text::{Span, Spans},
         };

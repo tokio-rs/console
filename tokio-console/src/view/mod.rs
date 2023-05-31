@@ -3,12 +3,12 @@ use crate::view::{
     help::HelpText, resources::ResourcesTable, table::TableListState, tasks::TasksTable,
 };
 use crate::{input, state::State};
-use std::{borrow::Cow, cmp};
-use tui::{
+use ratatui::{
     layout,
     style::{self, Style},
     text::Span,
 };
+use std::{borrow::Cow, cmp};
 
 mod async_ops;
 mod controls;
@@ -110,7 +110,7 @@ impl View {
         use ViewState::*;
         let mut update_kind = UpdateKind::Other;
 
-        if self.should_toggle_help_modal(event) {
+        if self.should_toggle_help_modal(&event) {
             self.show_help_modal = !self.show_help_modal;
             return update_kind;
         }
@@ -192,13 +192,13 @@ impl View {
     }
 
     /// The help modal should toggle on the `?` key and should exit on `Esc`
-    fn should_toggle_help_modal(&mut self, event: crossterm::event::Event) -> bool {
+    fn should_toggle_help_modal(&mut self, event: &crossterm::event::Event) -> bool {
         input::is_help_toggle(&event) || (self.show_help_modal && input::is_esc(&event))
     }
 
-    pub(crate) fn render<B: tui::backend::Backend>(
+    pub(crate) fn render<B: ratatui::backend::Backend>(
         &mut self,
-        frame: &mut tui::terminal::Frame<B>,
+        frame: &mut ratatui::terminal::Frame<B>,
         area: layout::Rect,
         state: &mut State,
     ) {

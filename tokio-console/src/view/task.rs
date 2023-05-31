@@ -9,16 +9,16 @@ use crate::{
         help::HelpText,
     },
 };
+use ratatui::{
+    layout::{self, Layout},
+    text::{Span, Spans, Text},
+    widgets::{List, ListItem, Paragraph},
+};
 use std::{
     cell::RefCell,
     cmp,
     rc::Rc,
     time::{Duration, SystemTime},
-};
-use tui::{
-    layout::{self, Layout},
-    text::{Span, Spans, Text},
-    widgets::{List, ListItem, Paragraph},
 };
 
 pub(crate) struct TaskView {
@@ -35,10 +35,10 @@ impl TaskView {
         // TODO :D
     }
 
-    pub(crate) fn render<B: tui::backend::Backend>(
+    pub(crate) fn render<B: ratatui::backend::Backend>(
         &mut self,
         styles: &view::Styles,
-        frame: &mut tui::terminal::Frame<B>,
+        frame: &mut ratatui::terminal::Frame<B>,
         area: layout::Rect,
         now: SystemTime,
     ) {

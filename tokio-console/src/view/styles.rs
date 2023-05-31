@@ -1,10 +1,10 @@
 use crate::config;
-use serde::{Deserialize, Serialize};
-use std::{str::FromStr, time::Duration};
-use tui::{
+use ratatui::{
     style::{Color, Modifier, Style},
     text::Span,
 };
+use serde::{Deserialize, Serialize};
+use std::{str::FromStr, time::Duration};
 
 #[derive(Debug, Clone)]
 pub struct Styles {
@@ -332,11 +332,11 @@ impl Styles {
         }
     }
 
-    pub fn border_block(&self) -> tui::widgets::Block<'_> {
+    pub fn border_block(&self) -> ratatui::widgets::Block<'_> {
         if self.utf8 {
-            tui::widgets::Block::default()
-                .borders(tui::widgets::Borders::ALL)
-                .border_type(tui::widgets::BorderType::Rounded)
+            ratatui::widgets::Block::default()
+                .borders(ratatui::widgets::Borders::ALL)
+                .border_type(ratatui::widgets::BorderType::Rounded)
         } else {
             // TODO(eliza): configure an ascii-art border set instead?
             Default::default()
