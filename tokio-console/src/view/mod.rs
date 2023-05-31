@@ -1,4 +1,7 @@
-use crate::view::{resources::ResourcesTable, table::TableListState, tasks::TasksTable};
+use crate::view::help::HelpView;
+use crate::view::{
+    help::HelpText, resources::ResourcesTable, table::TableListState, tasks::TasksTable,
+};
 use crate::{input, state::State};
 use ratatui::{
     layout,
@@ -8,7 +11,9 @@ use ratatui::{
 use std::{borrow::Cow, cmp};
 
 mod async_ops;
+mod controls;
 mod durations;
+mod help;
 mod mini_histogram;
 mod percentiles;
 mod resource;
@@ -42,6 +47,7 @@ pub struct View {
     tasks_list: TableListState<TasksTable, 12>,
     resources_list: TableListState<ResourcesTable, 9>,
     state: ViewState,
+    show_help_modal: bool,
     pub(crate) styles: Styles,
 }
 
@@ -95,6 +101,7 @@ impl View {
             state: ViewState::TasksList,
             tasks_list: TableListState::<TasksTable, 12>::default(),
             resources_list: TableListState::<ResourcesTable, 9>::default(),
+            show_help_modal: false,
             styles,
         }
     }
@@ -102,6 +109,11 @@ impl View {
     pub(crate) fn update_input(&mut self, event: input::Event, state: &State) -> UpdateKind {
         use ViewState::*;
         let mut update_kind = UpdateKind::Other;
+
+        if self.should_toggle_help_modal(&event) {
+            self.show_help_modal = !self.show_help_modal;
+            return update_kind;
+        }
 
         if matches!(event, key!(Char('t'))) {
             self.state = TasksList;
@@ -179,32 +191,46 @@ impl View {
         update_kind
     }
 
+    /// The help modal should toggle on the `?` key and should exit on `Esc`
+    fn should_toggle_help_modal(&mut self, event: &crossterm::event::Event) -> bool {
+        input::is_help_toggle(event) || (self.show_help_modal && input::is_esc(event))
+    }
+
     pub(crate) fn render<B: ratatui::backend::Backend>(
         &mut self,
         frame: &mut ratatui::terminal::Frame<B>,
         area: layout::Rect,
         state: &mut State,
     ) {
-        match self.state {
+        let help_text: &dyn HelpText = match self.state {
             ViewState::TasksList => {
                 self.tasks_list.render(&self.styles, frame, area, state, ());
+                &self.tasks_list
             }
             ViewState::ResourcesList => {
                 self.resources_list
                     .render(&self.styles, frame, area, state, ());
+                &self.resources_list
             }
             ViewState::TaskInstance(ref mut view) => {
                 let now = state
                     .last_updated_at()
                     .expect("task view implies we've received an update");
                 view.render(&self.styles, frame, area, now);
+                view
             }
             ViewState::ResourceInstance(ref mut view) => {
                 view.render(&self.styles, frame, area, state);
+                view
             }
-        }
+        };
 
         state.retain_active();
+
+        if self.show_help_modal {
+            let mut help_view = HelpView::new(help_text.render_help_content(&self.styles));
+            help_view.render(&self.styles, frame, area, state);
+        }
     }
 
     pub(crate) fn current_view(&self) -> &ViewState {
