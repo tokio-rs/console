@@ -8,12 +8,12 @@ use crate::{
         bold, TableListState,
     },
 };
-use std::{cell::RefCell, rc::Rc};
 use ratatui::{
     layout::{self, Layout},
     text::{Span, Spans, Text},
     widgets::{Block, Paragraph},
 };
+use std::{cell::RefCell, rc::Rc};
 
 pub(crate) struct ResourceView {
     resource: Rc<RefCell<Resource>>,

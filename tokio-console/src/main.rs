@@ -3,13 +3,13 @@ use console_api::tasks::TaskDetails;
 use state::State;
 
 use futures::stream::StreamExt;
-use tokio::sync::{mpsc, watch};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::Color,
     text::{Span, Spans},
     widgets::{Paragraph, Wrap},
 };
+use tokio::sync::{mpsc, watch};
 
 use crate::view::{bold, UpdateKind};
 

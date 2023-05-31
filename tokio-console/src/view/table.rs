@@ -2,12 +2,12 @@ use crate::{
     input, state,
     view::{self, bold},
 };
-use std::convert::TryFrom;
 use ratatui::{
     layout,
     text::{self, Span, Spans, Text},
     widgets::{Paragraph, TableState, Wrap},
 };
+use std::convert::TryFrom;
 
 use std::cell::RefCell;
 use std::rc::Weak;

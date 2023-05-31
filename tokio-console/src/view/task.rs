@@ -4,16 +4,16 @@ use crate::{
     util::Percentage,
     view::{self, bold, durations::Durations},
 };
+use ratatui::{
+    layout::{self, Layout},
+    text::{Span, Spans, Text},
+    widgets::{Block, List, ListItem, Paragraph},
+};
 use std::{
     cell::RefCell,
     cmp,
     rc::Rc,
     time::{Duration, SystemTime},
-};
-use ratatui::{
-    layout::{self, Layout},
-    text::{Span, Spans, Text},
-    widgets::{Block, List, ListItem, Paragraph},
 };
 
 pub(crate) struct TaskView {

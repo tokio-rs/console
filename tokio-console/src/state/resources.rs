@@ -6,13 +6,13 @@ use crate::state::{
 };
 use crate::view;
 use console_api as proto;
+use ratatui::{style::Color, text::Span};
 use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},
     rc::Rc,
     time::{Duration, SystemTime},
 };
-use ratatui::{style::Color, text::Span};
 
 #[derive(Default, Debug)]
 pub(crate) struct ResourcesState {

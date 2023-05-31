@@ -1,11 +1,11 @@
 use crate::view::{resources::ResourcesTable, table::TableListState, tasks::TasksTable};
 use crate::{input, state::State};
-use std::{borrow::Cow, cmp};
 use ratatui::{
     layout,
     style::{self, Style},
     text::Span,
 };
+use std::{borrow::Cow, cmp};
 
 mod async_ops;
 mod durations;

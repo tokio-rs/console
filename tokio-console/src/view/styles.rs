@@ -1,10 +1,10 @@
 use crate::config;
-use serde::{Deserialize, Serialize};
-use std::{str::FromStr, time::Duration};
 use ratatui::{
     style::{Color, Modifier, Style},
     text::Span,
 };
+use serde::{Deserialize, Serialize};
+use std::{str::FromStr, time::Duration};
 
 #[derive(Debug, Clone)]
 pub struct Styles {

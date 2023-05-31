@@ -5,6 +5,10 @@ use crate::{
     warnings::Linter,
 };
 use console_api as proto;
+use ratatui::{
+    style::{Color, Modifier},
+    text::Span,
+};
 use std::{
     cell::RefCell,
     cmp::Ordering,
@@ -15,10 +19,6 @@ use std::{
     time::{Duration, SystemTime},
 };
 use tasks::{Details, Task, TasksState};
-use ratatui::{
-    style::{Color, Modifier},
-    text::Span,
-};
 
 pub mod async_ops;
 pub mod histogram;
