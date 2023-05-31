@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use tui::{
+use ratatui::{
     text::{Spans, Text},
     widgets::{Paragraph, Widget},
 };
@@ -10,7 +10,7 @@ use crate::{
     view::{self, bold},
 };
 
-/// This is a tui-rs widget to display duration percentiles in a list form.
+/// This is a Ratatui widget to display duration percentiles in a list form.
 /// It wraps the [`Paragraph`] widget.
 pub(crate) struct Percentiles<'a> {
     /// Widget style
@@ -22,7 +22,7 @@ pub(crate) struct Percentiles<'a> {
 }
 
 impl<'a> Widget for Percentiles<'a> {
-    fn render(self, area: tui::layout::Rect, buf: &mut tui::buffer::Buffer) {
+    fn render(self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
         let inner = Paragraph::new(self.make_percentiles_inner())
             .block(self.styles.border_block().title(self.title));
 

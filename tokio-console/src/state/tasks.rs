@@ -12,6 +12,7 @@ use crate::{
     warnings::Linter,
 };
 use console_api as proto;
+use ratatui::{style::Color, text::Span};
 use std::{
     cell::RefCell,
     collections::HashMap,
@@ -19,7 +20,6 @@ use std::{
     rc::{Rc, Weak},
     time::{Duration, SystemTime},
 };
-use tui::{style::Color, text::Span};
 
 #[derive(Default, Debug)]
 pub(crate) struct TasksState {

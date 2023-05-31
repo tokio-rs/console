@@ -10,6 +10,7 @@ use crate::{
     view,
 };
 use console_api as proto;
+use ratatui::text::Span;
 use std::{
     cell::RefCell,
     collections::HashMap,
@@ -17,7 +18,6 @@ use std::{
     rc::{Rc, Weak},
     time::{Duration, SystemTime},
 };
-use tui::text::Span;
 
 #[derive(Default, Debug)]
 pub(crate) struct AsyncOpsState {
