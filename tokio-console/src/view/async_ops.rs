@@ -199,7 +199,7 @@ impl TableList<9> for AsyncOpsTable {
             .direction(layout::Direction::Vertical)
             .margin(0);
 
-        let controls = Controls::new(&view_controls(), &area, styles);
+        let controls = Controls::new(view_controls(), &area, styles);
         let chunks = layout
             .constraints(
                 [

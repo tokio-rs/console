@@ -127,9 +127,7 @@ impl ControlDisplay {
     pub(crate) fn to_spans(&self, styles: &view::Styles, indent: usize) -> Spans<'static> {
         let mut spans = Vec::new();
 
-        spans.push(Span::from(
-            std::iter::repeat(" ").take(indent).collect::<String>(),
-        ));
+        spans.push(Span::from(" ".repeat(indent)));
         spans.push(Span::from(self.action));
         spans.push(Span::from(" = "));
         for (idx, key_display) in self.keys.iter().enumerate() {

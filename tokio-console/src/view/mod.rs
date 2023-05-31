@@ -193,7 +193,7 @@ impl View {
 
     /// The help modal should toggle on the `?` key and should exit on `Esc`
     fn should_toggle_help_modal(&mut self, event: &crossterm::event::Event) -> bool {
-        input::is_help_toggle(&event) || (self.show_help_modal && input::is_esc(&event))
+        input::is_help_toggle(event) || (self.show_help_modal && input::is_esc(event))
     }
 
     pub(crate) fn render<B: ratatui::backend::Backend>(
