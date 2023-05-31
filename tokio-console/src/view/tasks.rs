@@ -9,7 +9,7 @@ use crate::{
         DUR_LEN, DUR_TABLE_PRECISION,
     },
 };
-use tui::{
+use ratatui::{
     layout,
     style::{self, Color, Style},
     text::{Span, Spans, Text},
@@ -44,10 +44,10 @@ impl TableList<12> for TasksTable {
         Self::HEADER[11].len() + 1,
     ];
 
-    fn render<B: tui::backend::Backend>(
+    fn render<B: ratatui::backend::Backend>(
         table_list_state: &mut TableListState<Self, 12>,
         styles: &view::Styles,
-        frame: &mut tui::terminal::Frame<B>,
+        frame: &mut ratatui::terminal::Frame<B>,
         area: layout::Rect,
         state: &mut State,
         _: Self::Context,

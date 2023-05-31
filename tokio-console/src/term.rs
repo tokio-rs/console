@@ -1,6 +1,6 @@
 pub use color_eyre::eyre::WrapErr;
+pub use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
-pub use tui::{backend::CrosstermBackend, Terminal};
 
 pub fn init_crossterm() -> color_eyre::Result<(Terminal<CrosstermBackend<io::Stdout>>, OnShutdown)>
 {

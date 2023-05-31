@@ -1,6 +1,6 @@
 use std::cmp;
 
-use tui::{
+use ratatui::{
     layout::{self},
     widgets::Widget,
 };
@@ -15,7 +15,7 @@ use crate::{
 // This also gives at characters for the sparkline itself.
 const MIN_HISTOGRAM_BLOCK_WIDTH: u16 = 22;
 
-/// This is a tui-rs widget to visualize durations as a list of percentiles
+/// This is a Ratatui widget to visualize durations as a list of percentiles
 /// and if possible, a mini-histogram too.
 ///
 /// This widget wraps the [`Percentiles`] and [`MiniHistogram`] widgets which
@@ -41,7 +41,7 @@ pub(crate) struct Durations<'a> {
 }
 
 impl<'a> Widget for Durations<'a> {
-    fn render(self, area: tui::layout::Rect, buf: &mut tui::buffer::Buffer) {
+    fn render(self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
         // Only split the durations area in half if we're also drawing a
         // sparkline. We require UTF-8 to draw the sparkline and also enough width.
         let (percentiles_area, histogram_area) = if self.styles.utf8 {

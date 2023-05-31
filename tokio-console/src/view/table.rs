@@ -2,12 +2,12 @@ use crate::{
     input, state,
     view::{self, bold},
 };
-use std::convert::TryFrom;
-use tui::{
+use ratatui::{
     layout,
     text::{self, Span, Spans, Text},
     widgets::{Paragraph, TableState, Wrap},
 };
+use std::convert::TryFrom;
 
 use std::cell::RefCell;
 use std::rc::Weak;
@@ -20,10 +20,10 @@ pub(crate) trait TableList<const N: usize> {
     const HEADER: &'static [&'static str; N];
     const WIDTHS: &'static [usize; N];
 
-    fn render<B: tui::backend::Backend>(
+    fn render<B: ratatui::backend::Backend>(
         state: &mut TableListState<Self, N>,
         styles: &view::Styles,
-        frame: &mut tui::terminal::Frame<B>,
+        frame: &mut ratatui::terminal::Frame<B>,
         area: layout::Rect,
         state: &mut state::State,
         cx: Self::Context,
@@ -170,10 +170,10 @@ impl<T: TableList<N>, const N: usize> TableListState<T, N> {
             .unwrap_or_default()
     }
 
-    pub(in crate::view) fn render<B: tui::backend::Backend>(
+    pub(in crate::view) fn render<B: ratatui::backend::Backend>(
         &mut self,
         styles: &view::Styles,
-        frame: &mut tui::terminal::Frame<B>,
+        frame: &mut ratatui::terminal::Frame<B>,
         area: layout::Rect,
         state: &mut state::State,
         ctx: T::Context,
