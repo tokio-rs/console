@@ -6,6 +6,24 @@ use ratatui::{
     widgets::{Paragraph, Widget},
 };
 
+/// Returns a list of controls which are available in all views.
+const UNIVERSAL_CONTROLS: &[ControlDisplay] = &[
+    ControlDisplay {
+        action: "toggle pause",
+        keys: &[KeyDisplay {
+            base: "space",
+            utf8: None,
+        }],
+    },
+    ControlDisplay {
+        action: "quit",
+        keys: &[KeyDisplay {
+            base: "q",
+            utf8: None,
+        }],
+    },
+];
+
 /// Construct a widget to display the controls available to the user in the
 /// current view.
 pub(crate) struct Controls {
@@ -19,7 +37,7 @@ impl Controls {
         area: &layout::Rect,
         styles: &view::Styles,
     ) -> Self {
-        let universal_controls = universal_controls();
+        let universal_controls = UNIVERSAL_CONTROLS;
 
         let mut spans_controls = Vec::with_capacity(view_controls.len() + universal_controls.len());
         spans_controls.extend(view_controls.iter().map(|c| c.to_spans(styles)));
@@ -126,24 +144,4 @@ impl ControlDisplay {
 
         Spans::from(spans)
     }
-}
-
-/// Returns a list of controls which are available in all views.
-const fn universal_controls() -> &'static [ControlDisplay] {
-    &[
-        ControlDisplay {
-            action: "toggle pause",
-            keys: &[KeyDisplay {
-                base: "space",
-                utf8: None,
-            }],
-        },
-        ControlDisplay {
-            action: "quit",
-            keys: &[KeyDisplay {
-                base: "q",
-                utf8: None,
-            }],
-        },
-    ]
 }
