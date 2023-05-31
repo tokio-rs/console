@@ -11,7 +11,7 @@ use crate::{
     },
 };
 
-use tui::{
+use ratatui::{
     layout,
     style::{self, Color, Style},
     text::Spans,
@@ -55,10 +55,10 @@ impl TableList<9> for AsyncOpsTable {
         Self::HEADER[8].len() + 1,
     ];
 
-    fn render<B: tui::backend::Backend>(
+    fn render<B: ratatui::backend::Backend>(
         table_list_state: &mut TableListState<Self, 9>,
         styles: &view::Styles,
-        frame: &mut tui::terminal::Frame<B>,
+        frame: &mut ratatui::terminal::Frame<B>,
         area: layout::Rect,
         state: &mut State,
         ctx: Self::Context,
