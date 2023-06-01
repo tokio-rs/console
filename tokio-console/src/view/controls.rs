@@ -37,11 +37,9 @@ impl Controls {
         area: &layout::Rect,
         styles: &view::Styles,
     ) -> Self {
-        let universal_controls = UNIVERSAL_CONTROLS;
-
-        let mut spans_controls = Vec::with_capacity(view_controls.len() + universal_controls.len());
+        let mut spans_controls = Vec::with_capacity(view_controls.len() + UNIVERSAL_CONTROLS.len());
         spans_controls.extend(view_controls.iter().map(|c| c.to_spans(styles)));
-        spans_controls.extend(universal_controls.iter().map(|c| c.to_spans(styles)));
+        spans_controls.extend(UNIVERSAL_CONTROLS.iter().map(|c| c.to_spans(styles)));
 
         let mut lines = vec![Spans::from(vec![Span::from("controls: ")])];
         let mut current_line = lines.last_mut().expect("This vector is never empty");
