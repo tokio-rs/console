@@ -217,7 +217,7 @@ impl TaskStats {
 
         self.wakes.fetch_add(1, Release);
         if self_wake {
-            self.wakes.fetch_add(1, Release);
+            self.self_wakes.fetch_add(1, Release);
         }
 
         self.make_dirty();
