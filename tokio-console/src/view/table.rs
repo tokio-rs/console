@@ -1,15 +1,14 @@
 use crate::{
     input, state,
-    view::{self, bold},
+    view::{
+        self,
+        controls::{ControlDisplay, KeyDisplay},
+    },
 };
-use ratatui::{
-    layout,
-    text::{self, Span, Spans, Text},
-    widgets::{Paragraph, TableState, Wrap},
-};
-use std::convert::TryFrom;
 
+use ratatui::{layout, widgets::TableState};
 use std::cell::RefCell;
+use std::convert::TryFrom;
 use std::rc::Weak;
 
 pub(crate) trait TableList<const N: usize> {
@@ -43,11 +42,6 @@ pub(crate) struct TableListState<T: TableList<N>, const N: usize> {
     pub(crate) table_state: TableState,
 
     last_key_event: Option<input::KeyEvent>,
-}
-
-pub(crate) struct Controls {
-    pub(crate) paragraph: Paragraph<'static>,
-    pub(crate) height: u16,
 }
 
 impl<T: TableList<N>, const N: usize> TableListState<T, N> {
@@ -201,52 +195,61 @@ where
     }
 }
 
-impl Controls {
-    pub(in crate::view) fn for_area(area: &layout::Rect, styles: &view::Styles) -> Self {
-        let text = Text::from(Spans::from(vec![
-            Span::raw("controls: "),
-            bold(styles.if_utf8("\u{2190}\u{2192}", "left, right")),
-            Span::raw(" or "),
-            bold("h, l"),
-            text::Span::raw(" = select column (sort), "),
-            bold(styles.if_utf8("\u{2191}\u{2193}", "up, down")),
-            Span::raw(" or "),
-            bold("k, j"),
-            text::Span::raw(" = scroll, "),
-            bold(styles.if_utf8("\u{21B5}", "enter")),
-            text::Span::raw(" = view details, "),
-            bold("i"),
-            text::Span::raw(" = invert sort (highest/lowest), "),
-            bold("q"),
-            text::Span::raw(" = quit "),
-            bold("gg"),
-            text::Span::raw(" = scroll to top, "),
-            bold("G"),
-            text::Span::raw(" = scroll to bottom"),
-        ]));
-
-        // how many lines do we need to display the controls?
-        let mut height = 1;
-
-        // if the area is narrower than the width of the controls text, we need
-        // to wrap the text across multiple lines.
-        let width = text.width() as u16;
-        if area.width < width {
-            height = width / area.width;
-
-            // if the text's width is not neatly divisible by the area's width
-            // (and it almost never will be), round up for the remaining text.
-            if width % area.width > 0 {
-                height += 1
-            };
-        }
-
-        Self {
-            // TODO(eliza): it would be nice if we could wrap this on commas,
-            // specifically, rather than whitespace...but that seems like a
-            // bunch of additional work...
-            paragraph: Paragraph::new(text).wrap(Wrap { trim: true }),
-            height,
-        }
-    }
+pub(crate) const fn view_controls() -> &'static [ControlDisplay] {
+    &[
+        ControlDisplay {
+            action: "select column (sort)",
+            keys: &[
+                KeyDisplay {
+                    base: "left, right",
+                    utf8: Some("\u{2190}\u{2192}"),
+                },
+                KeyDisplay {
+                    base: "h, l",
+                    utf8: None,
+                },
+            ],
+        },
+        ControlDisplay {
+            action: "scroll",
+            keys: &[
+                KeyDisplay {
+                    base: "up, down",
+                    utf8: Some("\u{2191}\u{2193}"),
+                },
+                KeyDisplay {
+                    base: "k, j",
+                    utf8: None,
+                },
+            ],
+        },
+        ControlDisplay {
+            action: "view details",
+            keys: &[KeyDisplay {
+                base: "enter",
+                utf8: Some("\u{21B5}"),
+            }],
+        },
+        ControlDisplay {
+            action: "invert sort (highest/lowest)",
+            keys: &[KeyDisplay {
+                base: "i",
+                utf8: None,
+            }],
+        },
+        ControlDisplay {
+            action: "scroll to top",
+            keys: &[KeyDisplay {
+                base: "gg",
+                utf8: None,
+            }],
+        },
+        ControlDisplay {
+            action: "scroll to bottom",
+            keys: &[KeyDisplay {
+                base: "G",
+                utf8: None,
+            }],
+        },
+    ]
 }

@@ -5,7 +5,8 @@ use crate::{
     },
     view::{
         self, bold,
-        table::{self, TableList, TableListState},
+        controls::Controls,
+        table::{view_controls, TableList, TableListState},
         DUR_LEN, DUR_TABLE_PRECISION,
     },
 };
@@ -163,7 +164,7 @@ impl TableList<9> for ResourcesTable {
             table_list_state.len()
         ))]);
 
-        let controls = table::Controls::for_area(&area, styles);
+        let controls = Controls::new(view_controls(), &area, styles);
 
         let layout = layout::Layout::default()
             .direction(layout::Direction::Vertical)
@@ -172,7 +173,7 @@ impl TableList<9> for ResourcesTable {
         let chunks = layout
             .constraints(
                 [
-                    layout::Constraint::Length(controls.height),
+                    layout::Constraint::Length(controls.height()),
                     layout::Constraint::Max(area.height),
                 ]
                 .as_ref(),
@@ -202,7 +203,7 @@ impl TableList<9> for ResourcesTable {
             .highlight_style(Style::default().add_modifier(style::Modifier::BOLD));
 
         frame.render_stateful_widget(table, tasks_area, &mut table_list_state.table_state);
-        frame.render_widget(controls.paragraph, controls_area);
+        frame.render_widget(controls.into_widget(), controls_area);
 
         table_list_state
             .sorted_items
