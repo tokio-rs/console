@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{Paragraph, Widget},
 };
 
-/// Returns a list of controls which are available in all views.
+/// A list of controls which are available in all views.
 const UNIVERSAL_CONTROLS: &[ControlDisplay] = &[
     ControlDisplay {
         action: "toggle pause",
