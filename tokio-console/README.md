@@ -97,30 +97,88 @@ tokio-console http://my.instrumented.application.local:6669
 
 See [here][cli-ref] for a complete list of all command-line arguments.
 
+Tokio Console has a numnber of different views:
+* [Tasks List](#tasks-list)
+* [Task Details](#task-details)
+* [Resources List](#resources-list)
+* [Resource Details](#resource-details)
+
+### Tasks List
+
 When the console CLI is launched, it displays a list of all [asynchronous tasks]
 in the program:
 
 ![tasks list](https://raw.githubusercontent.com/tokio-rs/console/main/assets/tokio-console-0.1.8/tasks_list.png)
 
+Tasks are displayed in a table.
+
+* `Warn` - The number of warnings active for the task
+* `ID` - The ID of the task. This is the same as the unstable API: [`task::Id`](https://docs.rs/tokio/latest/tokio/task/struct.Id.html) (see documentation for details)
+* `State` - The state of the task
+  * `RUNNING` ▶ - Task is currently being polled
+  * `IDLE` ⏸ - Task is waiting on some resource
+  * `SCHED` ⏫ - Task is scheduled, it has been woken but not yet polled
+  * `DONE` ⏹ - Task has completed
+* `Name` - The name of the task, which can be set via the unstable [`task::Builder`](https://docs.rs/tokio/latest/tokio/task/struct.Builder.html) API
+* `Total` - Duration the task has been alive (sum of Busy, Sched, and Idle)
+* `Busy` - Total duration the task has been busy
+* `Sched` - Total duration the task has been scheduled
+* `Idle` - Total duration the task has been idle
+* `Polls` - Number of times the task has been polled
+* `Target` - The taget of the span used to record the task
+  * `tokio::task` - Async task
+  * `tokio::task::blocking` - A blocking task
+* `Location` - The source code location where the task was spawned from
+* `Fields` - Additional fields on the task span
+  * `kind` - may be `task` or `blocking`
+  * `fn` - function signature of the blocking task, non-blocking tasks don't have this field as it can be very large
+
 Using the <kbd>&#8593;</kbd> and <kbd>&#8595;</kbd> arrow keys, an individual task can be highlighted.
 Pressing<kbd>enter</kbd> while a task is highlighted displays details about that
-task:
+task.
+
+### Task Details
+
+This view shows details about a specific task:
 
 ![task details](https://raw.githubusercontent.com/tokio-rs/console/main/assets/tokio-console-0.1.8/task_details.png)
 
+The task details view includes percentiles and a visual histogram of the polling (busy) times
+and scheduled times.
+
 Pressing the <kbd>escape</kbd> key returns to the task list.
+
+### Resources List
 
 The <kbd>r</kbd> key switches from the list of tasks to a list of [resources],
 such as synchronization primitives, I/O resources, et cetera:
 
 ![resource list](https://raw.githubusercontent.com/tokio-rs/console/main/assets/tokio-console-0.1.8/resources_list.png)
 
+Resources are displayed in a table similar to the task list.
+
+* `ID` - The ID of the resource, this is a display ID as there is no internal resource ID to reference
+* `Parent` - The ID of the parent resource if it exists
+* `Kind` - The resource kind, this is a high level grouping of resources
+  * `Sync` - Synchronization resources from [`tokio::sync`](https://docs.rs/tokio/latest/tokio/sync/index.html) such as [`Mutex`](https://docs.rs/tokio/latest/tokio/sync/struct.Mutex.html)
+  * `Timer` - Timer resources from [`tokio::time`](https://docs.rs/tokio/latest/tokio/time/index.html) such as [`Sleep`](https://docs.rs/tokio/latest/tokio/time/struct.Sleep.html)
+ possible values depend on the resources instrumented in Tokio, which may vary between versions
+* `Total` - Duration the resource has been alive
+* `Target` - The module of the resource
+* `Type` - The specific type of the resource
+* `Vis` - The visibility of the resource
+  * `INT` 🔒 - Internal, this resource is only used by other resources
+  * `PUB` ✅ - Public, available in the public Tokio API
+* `Location` - The source code location where the resource was created
+* `Attributes` - Additional resource-dependent attributes, these will vary by resource type
 
 Pressing the <kbd>t</kbd> key switches the view back to the task list.
 
 Like the task list view, the resource list view can be navigated using the
 <kbd>&#8593;</kbd> and <kbd>&#8595;</kbd> arrow keys. Pressing <kbd>enter</kbd>
-while a resource is highlighted displays details about that resource:
+while a resource is highlighted displays details about that resource.
+
+### Resource Details
 
 ![resource details --- sleep](https://raw.githubusercontent.com/tokio-rs/console/main/assets/tokio-console-0.1.8/resource_details_sleep.png)
 
@@ -129,6 +187,18 @@ This may be a single task, as in the [`tokio::time::Sleep`] above, or
 a large number of tasks, such as this private `tokio::sync::batch_semaphore::Semaphore`:
 
 ![resource details --- semaphore](https://raw.githubusercontent.com/tokio-rs/console/main/assets/tokio-console-0.1.8/resource_details_semaphore.png)
+
+The resource details view includes a table of async ops belonging to the resource.
+
+* `ID` - The ID of the async op, this is a display ID similar to the one for resources
+* `Parent` - The ID of the parent async op if it exists
+* `Task` - The ID and name of the task which performed this async op
+* `Source` - The method where the async op is being called from
+* `Total` - Duration the async op has been alive (sum of Busy and Idle, an async op has no scheduled state)
+* `Busy` - Total duration the async op has been busy
+* `Idle` - Total duration the async op has been idle
+* `Polls` - Number of times the async op has been polled
+* `Attributes` - Additional attributes from the async op, these will vary by type
 
 Like the task details view, pressing the <kbd>escape</kbd> key while viewing a resource's details
 returns to the resource list.
