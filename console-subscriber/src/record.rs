@@ -95,7 +95,7 @@ fn record_io(file: File, rx: Receiver<Event>) -> io::Result<()> {
         },
     )?;
 
-    // wait to recieve an event...
+    // wait to receive an event...
     while let Ok(event) = rx.recv() {
         // TODO: what to do if file error?
         write(&mut file, &event)?;
