@@ -34,7 +34,7 @@ system consists of two primary components:
 * _instrumentation_, embedded in the application, which collects data from the
   async runtime and exposes it over the console's [wire format]
 * _consumers_, such as the [`tokio-console`] command-line application, which
-  connect to the instrumented application, recieve telemetry data, and display
+  connect to the instrumented application, receive telemetry data, and display
   it to the user
 
 This crate implements the instrumentation-side interface using data
