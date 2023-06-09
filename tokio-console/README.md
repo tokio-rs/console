@@ -35,7 +35,7 @@ system consists of two primary components:
   collects data from the async runtime and exposes it over the console's wire
   format
 * &#x1f6f0;&#xfe0f; _consumers_, which connect to the instrumented application,
-  recieve telemetry data, and display it to the user
+  receive telemetry data, and display it to the user
 
 This crate is the primary consumer of `tokio-console` telemetry, a command-line
 application that provides an interactive debugging interface.
