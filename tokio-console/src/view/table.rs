@@ -2,13 +2,17 @@ use crate::{
     input, state,
     view::{
         self,
-        controls::{ControlDisplay, KeyDisplay},
+        controls::{controls_paragraph, ControlDisplay, KeyDisplay},
+        help::HelpText,
     },
 };
-
-use ratatui::{layout, widgets::TableState};
-use std::cell::RefCell;
+use ratatui::{
+    layout,
+    widgets::{Paragraph, TableState},
+};
 use std::convert::TryFrom;
+
+use std::cell::RefCell;
 use std::rc::Weak;
 
 pub(crate) trait TableList<const N: usize> {
@@ -192,6 +196,15 @@ where
             sort_descending: false,
             last_key_event: None,
         }
+    }
+}
+
+impl<T, const N: usize> HelpText for TableListState<T, N>
+where
+    T: TableList<N>,
+{
+    fn render_help_content(&self, styles: &view::Styles) -> Paragraph<'static> {
+        controls_paragraph(view_controls(), styles)
     }
 }
 

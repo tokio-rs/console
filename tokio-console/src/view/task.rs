@@ -4,8 +4,9 @@ use crate::{
     util::Percentage,
     view::{
         self, bold,
-        controls::{ControlDisplay, Controls, KeyDisplay},
+        controls::{controls_paragraph, ControlDisplay, Controls, KeyDisplay},
         durations::Durations,
+        help::HelpText,
     },
 };
 use ratatui::{
@@ -250,6 +251,12 @@ impl TaskView {
         frame.render_widget(poll_durations_widget, poll_dur_area);
         frame.render_widget(scheduled_durations_widget, scheduled_dur_area);
         frame.render_widget(fields_widget, fields_area);
+    }
+}
+
+impl HelpText for TaskView {
+    fn render_help_content(&self, styles: &view::Styles) -> Paragraph<'static> {
+        controls_paragraph(view_controls(), styles)
     }
 }
 
