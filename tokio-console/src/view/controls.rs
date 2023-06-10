@@ -38,8 +38,8 @@ impl Controls {
         styles: &view::Styles,
     ) -> Self {
         let mut spans_controls = Vec::with_capacity(view_controls.len() + UNIVERSAL_CONTROLS.len());
-        spans_controls.extend(view_controls.iter().map(|c| c.to_spans(styles)));
-        spans_controls.extend(UNIVERSAL_CONTROLS.iter().map(|c| c.to_spans(styles)));
+        spans_controls.extend(view_controls.iter().map(|c| c.to_spans(styles, 0)));
+        spans_controls.extend(UNIVERSAL_CONTROLS.iter().map(|c| c.to_spans(styles, 0)));
 
         let mut lines = vec![Spans::from(vec![Span::from("controls: ")])];
         let mut current_line = lines.last_mut().expect("This vector is never empty");
@@ -101,6 +101,18 @@ impl Controls {
     }
 }
 
+pub(crate) fn controls_paragraph<'a>(
+    view_controls: &[ControlDisplay],
+    styles: &view::Styles,
+) -> Paragraph<'a> {
+    let mut spans = Vec::with_capacity(1 + view_controls.len() + UNIVERSAL_CONTROLS.len());
+    spans.push(Spans::from(vec![Span::raw("controls:")]));
+    spans.extend(view_controls.iter().map(|c| c.to_spans(styles, 2)));
+    spans.extend(UNIVERSAL_CONTROLS.iter().map(|c| c.to_spans(styles, 2)));
+
+    Paragraph::new(spans)
+}
+
 /// Construct span to display a control.
 ///
 /// A control is made up of an action and one or more keys that will trigger
@@ -125,9 +137,10 @@ pub(crate) struct KeyDisplay {
 }
 
 impl ControlDisplay {
-    pub(crate) fn to_spans(&self, styles: &view::Styles) -> Spans<'static> {
+    pub(crate) fn to_spans(&self, styles: &view::Styles, indent: usize) -> Spans<'static> {
         let mut spans = Vec::new();
 
+        spans.push(Span::from(" ".repeat(indent)));
         spans.push(Span::from(self.action));
         spans.push(Span::from(" = "));
         for (idx, key_display) in self.keys.iter().enumerate() {

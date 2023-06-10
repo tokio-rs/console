@@ -6,7 +6,8 @@ use crate::{
         self,
         async_ops::{self, AsyncOpsTable, AsyncOpsTableCtx},
         bold,
-        controls::{ControlDisplay, Controls, KeyDisplay},
+        controls::{controls_paragraph, ControlDisplay, Controls, KeyDisplay},
+        help::HelpText,
         TableListState,
     },
 };
@@ -113,6 +114,12 @@ impl ResourceView {
         self.async_ops_table
             .render(styles, frame, async_ops_area, state, ctx);
         self.initial_render = false;
+    }
+}
+
+impl HelpText for ResourceView {
+    fn render_help_content(&self, styles: &view::Styles) -> Paragraph<'static> {
+        controls_paragraph(view_controls(), styles)
     }
 }
 
