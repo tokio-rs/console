@@ -127,7 +127,7 @@ Tasks are displayed in a table.
 * `Polls` - Number of times the task has been polled
 * `Target` - The target of the span used to record the task
   * `tokio::task` - Async task
-  * `tokio::task::blocking` - A blocking task
+  * `tokio::task::blocking` - A blocking task (created with [tokio::task::spawn_blocking](https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html))
 * `Location` - The source code location where the task was spawned from
 * `Fields` - Additional fields on the task span
   * `kind` - may be `task` (for async tasks) or `blocking` (for blocking tasks)
@@ -162,15 +162,14 @@ Resources are displayed in a table similar to the task list.
 * `Kind` - The resource kind, this is a high level grouping of resources
   * `Sync` - Synchronization resources from [`tokio::sync`](https://docs.rs/tokio/latest/tokio/sync/index.html) such as [`Mutex`](https://docs.rs/tokio/latest/tokio/sync/struct.Mutex.html)
   * `Timer` - Timer resources from [`tokio::time`](https://docs.rs/tokio/latest/tokio/time/index.html) such as [`Sleep`](https://docs.rs/tokio/latest/tokio/time/struct.Sleep.html)
- possible values depend on the resources instrumented in Tokio, which may vary between versions
 * `Total` - Total duration that this resource has been alive
 * `Target` - The module path of the resource type
-* `Type` - The specific type of the resource
+* `Type` - The specific type of the resource, possible values depend on the resources instrumented in Tokio, which may vary between versions
 * `Vis` - The visibility of the resource
   * `INT` 🔒 - Internal, this resource is only used by other resources
   * `PUB` ✅ - Public, available in the public Tokio API
 * `Location` - The source code location where the resource was created
-* `Attributes` - Additional resource-dependent attributes, these will vary by resource type
+* `Attributes` - Additional resource-dependent attributes, for example a resource of type `Sleep` record the `duration` of the sleep
 
 Pressing the <kbd>t</kbd> key switches the view back to the task list.
 
@@ -190,7 +189,7 @@ a large number of tasks, such as this private `tokio::sync::batch_semaphore::Sem
 
 The resource details view includes a table of async ops belonging to the resource.
 
-* `ID` - The ID of the async op, this is a display ID similar to the one for resources
+* `ID` - The ID of the async op, this is a display ID similar to those recorded for resources
 * `Parent` - The ID of the parent async op, if it exists
 * `Task` - The ID and name of the task which performed this async op
 * `Source` - The method where the async op is being called from
@@ -198,7 +197,7 @@ The resource details view includes a table of async ops belonging to the resourc
 * `Busy` - Total duration for which the async op has been busy (its future is actively being polled)
 * `Idle` - Total duration for which the async op has been idle (the future exists but is not being polled)
 * `Polls` - Number of times the async op has been polled
-* `Attributes` - Additional attributes from the async op, these will vary by type
+* `Attributes` - Additional attributes from the async op, these will vary based on the type of the async op
 
 Like the task details view, pressing the <kbd>escape</kbd> key while viewing a resource's details
 returns to the resource list.
