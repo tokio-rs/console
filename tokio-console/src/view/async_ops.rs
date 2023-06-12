@@ -7,6 +7,7 @@ use crate::{
     },
     view::{
         self, bold,
+        controls::Controls,
         table::{TableList, TableListState},
         DUR_LEN, DUR_TABLE_PRECISION,
     },
@@ -194,6 +195,24 @@ impl TableList<9> for AsyncOpsTable {
             table_list_state.len()
         ))]);
 
+        let layout = layout::Layout::default()
+            .direction(layout::Direction::Vertical)
+            .margin(0);
+
+        let controls = Controls::new(view_controls(), &area, styles);
+        let chunks = layout
+            .constraints(
+                [
+                    layout::Constraint::Length(controls.height()),
+                    layout::Constraint::Max(area.height),
+                ]
+                .as_ref(),
+            )
+            .split(area);
+
+        let controls_area = chunks[0];
+        let async_ops_area = chunks[1];
+
         let attributes_width = layout::Constraint::Percentage(100);
         let widths = &[
             id_width.constraint(),
@@ -214,7 +233,8 @@ impl TableList<9> for AsyncOpsTable {
             .highlight_symbol(view::TABLE_HIGHLIGHT_SYMBOL)
             .highlight_style(Style::default().add_modifier(style::Modifier::BOLD));
 
-        frame.render_stateful_widget(table, area, &mut table_list_state.table_state);
+        frame.render_stateful_widget(table, async_ops_area, &mut table_list_state.table_state);
+        frame.render_widget(controls.into_widget(), controls_area);
 
         table_list_state
             .sorted_items

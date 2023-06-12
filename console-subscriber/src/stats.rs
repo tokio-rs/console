@@ -518,17 +518,8 @@ impl<H: RecordDuration> PollStats<H> {
             None => return, // Async operations record polls, but not wakes
         };
 
-        let elapsed = match at.checked_duration_since(scheduled) {
-            Some(elapsed) => elapsed,
-            None => {
-                eprintln!(
-                    "possible Instant clock skew detected: a poll's start timestamp \
-                    was before the wake time/last poll end timestamp\nwake = {:?}\n  start = {:?}",
-                    scheduled, at
-                );
-                return;
-            }
-        };
+        // `at < scheduled` is possible when a task switches threads between polls.
+        let elapsed = at.saturating_duration_since(scheduled);
 
         // if we have a scheduled time histogram, add the timestamp
         timestamps.scheduled_histogram.record_duration(elapsed);
