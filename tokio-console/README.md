@@ -113,25 +113,25 @@ in the program:
 Tasks are displayed in a table.
 
 * `Warn` - The number of warnings active for the task
-* `ID` - The ID of the task. This is the same as the unstable API: [`task::Id`](https://docs.rs/tokio/latest/tokio/task/struct.Id.html) (see documentation for details)
+* `ID` - The ID of the task. This is the same as the value returned by the unstable [`tokio::task::Id`](https://docs.rs/tokio/latest/tokio/task/struct.Id.html) API (see documentation for details)
 * `State` - The state of the task
   * `RUNNING` ▶ - Task is currently being polled
   * `IDLE` ⏸ - Task is waiting on some resource
-  * `SCHED` ⏫ - Task is scheduled, it has been woken but not yet polled
+  * `SCHED` ⏫ - Task is scheduled (it has been woken but not yet polled)
   * `DONE` ⏹ - Task has completed
-* `Name` - The name of the task, which can be set via the unstable [`task::Builder`](https://docs.rs/tokio/latest/tokio/task/struct.Builder.html) API
+* `Name` - The name of the task, which can be set when spawning a task using the unstable [`tokio::task::Builder::name()`](https://docs.rs/tokio/latest/tokio/task/struct.Builder.html#method.name) API
 * `Total` - Duration the task has been alive (sum of Busy, Sched, and Idle)
-* `Busy` - Total duration the task has been busy
-* `Sched` - Total duration the task has been scheduled
-* `Idle` - Total duration the task has been idle
+* `Busy` - Total duration for which the task has been actively executing
+* `Sched` - Total duration for which the task has been scheduled to be polled by the runtime
+* `Idle` - Total duration for which the task has been idle (waiting to be woken)
 * `Polls` - Number of times the task has been polled
-* `Target` - The taget of the span used to record the task
+* `Target` - The target of the span used to record the task
   * `tokio::task` - Async task
   * `tokio::task::blocking` - A blocking task
 * `Location` - The source code location where the task was spawned from
 * `Fields` - Additional fields on the task span
-  * `kind` - may be `task` or `blocking`
-  * `fn` - function signature of the blocking task, non-blocking tasks don't have this field as it can be very large
+  * `kind` - may be `task` (for async tasks) or `blocking` (for blocking tasks)
+  * `fn` - function signature for blocking tasks. Async tasks don't record this field, as it is generally very large when using `async`/`await`.
 
 Using the <kbd>&#8593;</kbd> and <kbd>&#8595;</kbd> arrow keys, an individual task can be highlighted.
 Pressing<kbd>enter</kbd> while a task is highlighted displays details about that
@@ -163,8 +163,8 @@ Resources are displayed in a table similar to the task list.
   * `Sync` - Synchronization resources from [`tokio::sync`](https://docs.rs/tokio/latest/tokio/sync/index.html) such as [`Mutex`](https://docs.rs/tokio/latest/tokio/sync/struct.Mutex.html)
   * `Timer` - Timer resources from [`tokio::time`](https://docs.rs/tokio/latest/tokio/time/index.html) such as [`Sleep`](https://docs.rs/tokio/latest/tokio/time/struct.Sleep.html)
  possible values depend on the resources instrumented in Tokio, which may vary between versions
-* `Total` - Duration the resource has been alive
-* `Target` - The module of the resource
+* `Total` - Total duration that this resource has been alive
+* `Target` - The module path of the resource type
 * `Type` - The specific type of the resource
 * `Vis` - The visibility of the resource
   * `INT` 🔒 - Internal, this resource is only used by other resources
@@ -191,12 +191,12 @@ a large number of tasks, such as this private `tokio::sync::batch_semaphore::Sem
 The resource details view includes a table of async ops belonging to the resource.
 
 * `ID` - The ID of the async op, this is a display ID similar to the one for resources
-* `Parent` - The ID of the parent async op if it exists
+* `Parent` - The ID of the parent async op, if it exists
 * `Task` - The ID and name of the task which performed this async op
 * `Source` - The method where the async op is being called from
-* `Total` - Duration the async op has been alive (sum of Busy and Idle, an async op has no scheduled state)
-* `Busy` - Total duration the async op has been busy
-* `Idle` - Total duration the async op has been idle
+* `Total` - Total duration for which the async op has been alive (sum of Busy and Idle, as an async op has no scheduled state)
+* `Busy` - Total duration for which the async op has been busy (its future is actively being polled)
+* `Idle` - Total duration for which the async op has been idle (the future exists but is not being polled)
 * `Polls` - Number of times the async op has been polled
 * `Attributes` - Additional attributes from the async op, these will vary by type
 
