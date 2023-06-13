@@ -115,10 +115,10 @@ Tasks are displayed in a table.
 * `Warn` - The number of warnings active for the task.
 * `ID` - The ID of the task. This is the same as the value returned by the unstable [`tokio::task::Id`](https://docs.rs/tokio/latest/tokio/task/struct.Id.html) API (see documentation for details).
 * `State` - The state of the task.
-  * `RUNNING` ▶ - Task is currently being polled.
-  * `IDLE` ⏸ - Task is waiting on some resource.
-  * `SCHED` ⏫ - Task is scheduled (it has been woken but not yet polled).
-  * `DONE` ⏹ - Task has completed.
+  * `RUNNING`/▶ - Task is currently being polled.
+  * `IDLE`/⏸ - Task is waiting on some resource.
+  * `SCHED`/⏫ - Task is scheduled (it has been woken but not yet polled).
+  * `DONE`/⏹ - Task has completed.
 * `Name` - The name of the task, which can be set when spawning a task using the unstable [`tokio::task::Builder::name()`](https://docs.rs/tokio/latest/tokio/task/struct.Builder.html#method.name) API.
 * `Total` - Duration the task has been alive (sum of Busy, Sched, and Idle).
 * `Busy` - Total duration for which the task has been actively executing.
@@ -166,8 +166,8 @@ Resources are displayed in a table similar to the task list.
 * `Target` - The module path of the resource type.
 * `Type` - The specific type of the resource, possible values depend on the resources instrumented in Tokio, which may vary between versions.
 * `Vis` - The visibility of the resource.
-  * `INT` 🔒 - Internal, this resource is only used by other resources.
-  * `PUB` ✅ - Public, available in the public Tokio API.
+  * `INT`/🔒 - Internal, this resource is only used by other resources.
+  * `PUB`/✅ - Public, available in the public Tokio API.
 * `Location` - The source code location where the resource was created.
 * `Attributes` - Additional resource-dependent attributes, for example a resource of type `Sleep` record the `duration` of the sleep.
 
