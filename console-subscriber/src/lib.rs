@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 use console_api as proto;
-use proto::resources::resource;
+use proto::{instrument::instrument_server::InstrumentServer, resources::resource};
 use serde::Serialize;
 use std::{
     cell::RefCell,
@@ -15,7 +15,10 @@ use std::{
 use thread_local::ThreadLocal;
 #[cfg(unix)]
 use tokio::net::UnixListener;
-use tokio::sync::{mpsc, oneshot};
+use tokio::{
+    sync::{mpsc, oneshot},
+    task::JoinHandle,
+};
 #[cfg(unix)]
 use tokio_stream::wrappers::UnixListenerStream;
 use tracing_core::{
@@ -961,18 +964,12 @@ impl Server {
     ///
     /// [`tonic`]: https://docs.rs/tonic/
     pub async fn serve_with(
-        mut self,
+        self,
         mut builder: tonic::transport::Server,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let aggregate = self
-            .aggregator
-            .take()
-            .expect("cannot start server multiple times");
-        let aggregate = spawn_named(aggregate.run(), "console::aggregate");
         let addr = self.addr.clone();
-        let router = builder.add_service(
-            proto::instrument::instrument_server::InstrumentServer::new(self),
-        );
+        let (service, aggregate) = self.into_parts();
+        let router = builder.add_service(service);
         let res = match addr {
             ServerAddr::Tcp(addr) => {
                 let serve = router.serve(addr);
@@ -985,8 +982,50 @@ impl Server {
                 spawn_named(serve, "console::serve").await
             }
         };
-        aggregate.abort();
+        drop(aggregate);
         res?.map_err(Into::into)
+    }
+
+    /// Returns the parts needed to spawn a gRPC server and keep the aggregation
+    /// worker running.
+    ///
+    /// The `InstrumentServer<Server>` can be used to construct a router which
+    /// can be added to a [`tonic`] gRPC server.
+    ///
+    /// The [`AggregatorGuard`] must be kept until after the server has been
+    /// shut down.
+    ///
+    /// [`tonic`]: https://docs.rs/tonic/
+    pub fn into_parts(mut self) -> (InstrumentServer<Server>, AggregatorGuard) {
+        let aggregate = self
+            .aggregator
+            .take()
+            .expect("cannot start server multiple times");
+        let aggregate = spawn_named(aggregate.run(), "console::aggregate");
+
+        let service = proto::instrument::instrument_server::InstrumentServer::new(self);
+
+        (
+            service,
+            AggregatorGuard {
+                join_handle: aggregate,
+            },
+        )
+    }
+}
+
+/// Aggregator guard.
+///
+/// This object is returned from [`Server::into_parts`] and must be
+/// kept as long as the `InstrumentServer<Server>` - which is also
+/// returned - is in use.
+pub struct AggregatorGuard {
+    join_handle: JoinHandle<()>,
+}
+
+impl Drop for AggregatorGuard {
+    fn drop(&mut self) {
+        self.join_handle.abort();
     }
 }
 
