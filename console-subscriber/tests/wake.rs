@@ -1,11 +1,33 @@
-use std::{thread, time::Duration};
+use std::{collections::HashMap, thread, time::Duration};
 
-use console_api::instrument::{instrument_client::InstrumentClient, InstrumentRequest};
+use console_api::{
+    field::Value,
+    instrument::{instrument_client::InstrumentClient, InstrumentRequest},
+};
 use futures::stream::StreamExt;
 use tokio::{sync::broadcast, task};
 use tonic::transport::{Endpoint, Server, Uri};
 use tower::service_fn;
 use tracing_subscriber::prelude::*;
+
+#[derive(Clone, Debug)]
+struct ActualTask {
+    id: u64,
+    name: Option<String>,
+    wakes: u64,
+    self_wakes: u64,
+}
+
+impl ActualTask {
+    fn new(id: u64) -> Self {
+        Self {
+            id,
+            name: None,
+            wakes: 0,
+            self_wakes: 0,
+        }
+    }
+}
 
 #[test]
 fn self_wake() {
@@ -82,11 +104,57 @@ fn self_wake() {
                             }
                         };
 
+                        let mut tasks = HashMap::new();
+
                         let mut i: usize = 0;
                         while let Some(update) = stream.next().await {
                             match update {
                                 Ok(update) => {
-                                    println!("UPDATE {}: {:#?}", i, update.task_update);
+                                    println!("----==== UPDATE {i} ====----");
+                                    if let Some(register_metadata) = &update.new_metadata {
+                                        for new_metadata in &register_metadata.metadata {
+                                            if let Some(metadata) = &new_metadata.metadata {
+                                                println!("New metadata: name: {:?}", metadata.name);
+                                                if metadata.name == "runtime.spawn" {
+                                                    println!("New metadata: {:?}", metadata);
+                                                }
+                                            }
+                                        }
+                                        // println!("metadata: {metadata:#?}");
+                                    }
+                                    if let Some(task_update) = &update.task_update {
+                                        for new_task in &task_update.new_tasks {
+                                            // println!("New task: {new_task:#?}");
+                                            println!("New task!");
+
+                                            if let Some(id) = &new_task.id {
+                                                let mut actual_task = ActualTask::new(id.id);
+                                                println!("  -> id = {id:?}");
+                                                for field in &new_task.fields {
+                                                    if let Some(console_api::field::Name::StrName(field_name)) = &field.name {
+                                                        println!("  -> {field:?}");
+                                                        if field_name == "task.name" {
+                                                            actual_task.name = match &field.value {
+                                                                Some(Value::DebugVal(value)) => Some(value.clone()),
+                                                                Some(Value::StrVal(value)) => Some(value.clone()),
+                                                                _ => None, // Anything that isn't string-like shouldn't be used as a name.
+                                                            };
+                                                        }
+                                                    }
+                                                }
+                                                tasks.insert(actual_task.id, actual_task);
+                                            }
+                                        }
+
+                                        for (id, stats) in &task_update.stats_update {
+                                            if let Some(mut task) = tasks.get_mut(id) {
+                                                task.wakes = stats.wakes;
+                                                task.self_wakes = stats.self_wakes;
+                                            }
+                                            println!("{id} --> {stats:?}");
+                                        }
+                                    }
+                                    // println!("{:#?}", update.task_update);
                                     if let Some(task_update) = update.task_update {
                                         println!(
                                             "UPDATE: new task count: {}, update count: {}, dropped count: {}",
@@ -105,6 +173,8 @@ fn self_wake() {
                                 break;
                             }
                         }
+
+                        println!("{tasks:#?}");
                         match finish_tx.send(()) {
                             Ok(_) => println!("Send finish message!"),
                             Err(err) => println!("Could not send finish message: {err:?}"),
