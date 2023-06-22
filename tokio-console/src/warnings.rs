@@ -1,5 +1,9 @@
-use crate::state::tasks::Task;
-use std::{fmt::Debug, rc::Rc};
+use crate::state::tasks::{Task, TaskState};
+use std::{
+    fmt::Debug,
+    rc::Rc,
+    time::{Duration, SystemTime},
+};
 
 /// A warning for a particular type of monitored entity (e.g. task or resource).
 ///
@@ -148,5 +152,58 @@ impl Warn<Task> for LostWaker {
 
     fn format(&self, _: &Task) -> String {
         "This task has lost its waker, and will never be woken again.".into()
+    }
+}
+
+/// Warning for if a task has never yielded
+#[derive(Clone, Debug)]
+pub(crate) struct NeverYielded {
+    min_duration: Duration,
+    description: String,
+}
+
+impl NeverYielded {
+    pub(crate) const DEFAULT_DURATION: Duration = Duration::from_millis(10);
+    pub(crate) fn new(min_duration: Duration) -> Self {
+        Self {
+            min_duration,
+            description: format!(
+                "tasks have never yielded (threshold {}ms)",
+                min_duration.as_millis()
+            ),
+        }
+    }
+}
+
+impl Default for NeverYielded {
+    fn default() -> Self {
+        Self::new(Self::DEFAULT_DURATION)
+    }
+}
+
+impl Warn<Task> for NeverYielded {
+    fn summary(&self) -> &str {
+        self.description.as_str()
+    }
+
+    fn check(&self, task: &Task) -> bool {
+        // Don't fire warning for tasks that are waiting to run
+        if task.state() != TaskState::Running {
+            return false;
+        }
+
+        if task.yielded() {
+            return false;
+        }
+
+        // Avoid short-lived task false positives
+        task.busy(SystemTime::now()) >= self.min_duration
+    }
+
+    fn format(&self, task: &Task) -> String {
+        format!(
+            "This task has never yielded ({:?})",
+            task.busy(SystemTime::now()),
+        )
     }
 }

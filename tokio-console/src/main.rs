@@ -65,6 +65,7 @@ async fn main() -> color_eyre::Result<()> {
         .with_task_linters(vec![
             warnings::Linter::new(warnings::SelfWakePercent::default()),
             warnings::Linter::new(warnings::LostWaker),
+            warnings::Linter::new(warnings::NeverYielded::default()),
         ])
         .with_retain_for(retain_for);
     let mut input = input::EventStream::new();
