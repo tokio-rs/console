@@ -789,33 +789,27 @@ where
     }
 
     fn on_enter(&self, id: &span::Id, cx: Context<'_, S>) {
-        fn update<S: Subscriber + for<'a> LookupSpan<'a>>(
-            span: &SpanRef<S>,
-            at: Option<Instant>,
-        ) -> Option<Instant> {
+        if let Some(span) = cx.span(id) {
+            let now = Instant::now();
             let exts = span.extensions();
             // if the span we are entering is a task or async op, record the
             // poll stats.
-            if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
-                let at = at.unwrap_or_else(Instant::now);
-                stats.start_poll(at);
-                Some(at)
+            let is_relevant = if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
+                stats.start_poll(now);
+                true
             } else if let Some(stats) = exts.get::<Arc<stats::AsyncOpStats>>() {
-                let at = at.unwrap_or_else(Instant::now);
-                stats.start_poll(at);
-                Some(at)
+                stats.start_poll(now);
+                true
             // otherwise, is the span a resource? in that case, we also want
             // to enter it, although we don't care about recording poll
             // stats.
             } else if exts.get::<Arc<stats::ResourceStats>>().is_some() {
-                Some(at.unwrap_or_else(Instant::now))
+                true
             } else {
-                None
-            }
-        }
+                false
+            };
 
-        if let Some(span) = cx.span(id) {
-            if let Some(now) = update(&span, None) {
+            if is_relevant {
                 self.current_spans
                     .get_or_default()
                     .borrow_mut()
@@ -830,33 +824,27 @@ where
     }
 
     fn on_exit(&self, id: &span::Id, cx: Context<'_, S>) {
-        fn update<S: Subscriber + for<'a> LookupSpan<'a>>(
-            span: &SpanRef<S>,
-            at: Option<Instant>,
-        ) -> Option<Instant> {
+        if let Some(span) = cx.span(id) {
             let exts = span.extensions();
+            let now = Instant::now();
             // if the span we are entering is a task or async op, record the
             // poll stats.
-            if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
-                let at = at.unwrap_or_else(Instant::now);
-                stats.end_poll(at);
-                Some(at)
+            let is_relevant = if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
+                stats.end_poll(now);
+                true
             } else if let Some(stats) = exts.get::<Arc<stats::AsyncOpStats>>() {
-                let at = at.unwrap_or_else(Instant::now);
-                stats.end_poll(at);
-                Some(at)
+                stats.end_poll(now);
+                true
                 // otherwise, is the span a resource? in that case, we also want
                 // to enter it, although we don't care about recording poll
                 // stats.
             } else if exts.get::<Arc<stats::ResourceStats>>().is_some() {
-                Some(at.unwrap_or_else(Instant::now))
+                true
             } else {
-                None
-            }
-        }
+                false
+            };
 
-        if let Some(span) = cx.span(id) {
-            if let Some(now) = update(&span, None) {
+            if is_relevant {
                 self.current_spans.get_or_default().borrow_mut().pop(id);
 
                 self.record(|| record::Event::Exit {
