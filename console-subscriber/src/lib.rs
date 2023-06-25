@@ -816,9 +816,6 @@ where
 
         if let Some(span) = cx.span(id) {
             if let Some(now) = update(&span, None) {
-                if let Some(parent) = span.parent() {
-                    update(&parent, Some(now));
-                }
                 self.current_spans
                     .get_or_default()
                     .borrow_mut()
@@ -860,9 +857,6 @@ where
 
         if let Some(span) = cx.span(id) {
             if let Some(now) = update(&span, None) {
-                if let Some(parent) = span.parent() {
-                    update(&parent, Some(now));
-                }
                 self.current_spans.get_or_default().borrow_mut().pop(id);
 
                 self.record(|| record::Event::Exit {
