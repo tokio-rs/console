@@ -25,7 +25,7 @@ use tracing_core::{
 };
 use tracing_subscriber::{
     layer::Context,
-    registry::{Extensions, LookupSpan, SpanRef},
+    registry::{Extensions, LookupSpan},
     Layer,
 };
 
@@ -794,32 +794,27 @@ where
             let exts = span.extensions();
             // if the span we are entering is a task or async op, record the
             // poll stats.
-            let is_relevant = if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
+            if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
                 stats.start_poll(now);
-                true
             } else if let Some(stats) = exts.get::<Arc<stats::AsyncOpStats>>() {
                 stats.start_poll(now);
-                true
             // otherwise, is the span a resource? in that case, we also want
             // to enter it, although we don't care about recording poll
             // stats.
             } else if exts.get::<Arc<stats::ResourceStats>>().is_some() {
-                true
             } else {
-                false
+                return;
             };
 
-            if is_relevant {
-                self.current_spans
-                    .get_or_default()
-                    .borrow_mut()
-                    .push(id.clone());
+            self.current_spans
+                .get_or_default()
+                .borrow_mut()
+                .push(id.clone());
 
-                self.record(|| record::Event::Enter {
-                    id: id.into_u64(),
-                    at: self.base_time.to_system_time(now),
-                });
-            }
+            self.record(|| record::Event::Enter {
+                id: id.into_u64(),
+                at: self.base_time.to_system_time(now),
+            });
         }
     }
 
@@ -829,29 +824,24 @@ where
             let now = Instant::now();
             // if the span we are entering is a task or async op, record the
             // poll stats.
-            let is_relevant = if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
+            if let Some(stats) = exts.get::<Arc<stats::TaskStats>>() {
                 stats.end_poll(now);
-                true
             } else if let Some(stats) = exts.get::<Arc<stats::AsyncOpStats>>() {
                 stats.end_poll(now);
-                true
-                // otherwise, is the span a resource? in that case, we also want
-                // to enter it, although we don't care about recording poll
-                // stats.
+            // otherwise, is the span a resource? in that case, we also want
+            // to enter it, although we don't care about recording poll
+            // stats.
             } else if exts.get::<Arc<stats::ResourceStats>>().is_some() {
-                true
             } else {
-                false
+                return;
             };
 
-            if is_relevant {
-                self.current_spans.get_or_default().borrow_mut().pop(id);
+            self.current_spans.get_or_default().borrow_mut().pop(id);
 
-                self.record(|| record::Event::Exit {
-                    id: id.into_u64(),
-                    at: self.base_time.to_system_time(now),
-                });
-            }
+            self.record(|| record::Event::Exit {
+                id: id.into_u64(),
+                at: self.base_time.to_system_time(now),
+            });
         }
     }
 
