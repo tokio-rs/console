@@ -798,10 +798,10 @@ where
                 stats.start_poll(now);
             } else if let Some(stats) = exts.get::<Arc<stats::AsyncOpStats>>() {
                 stats.start_poll(now);
-            // otherwise, is the span a resource? in that case, we also want
-            // to enter it, although we don't care about recording poll
-            // stats.
             } else if exts.get::<Arc<stats::ResourceStats>>().is_some() {
+                // otherwise, is the span a resource? in that case, we also want
+                // to enter it, although we don't care about recording poll
+                // stats.
             } else {
                 return;
             };
@@ -828,10 +828,10 @@ where
                 stats.end_poll(now);
             } else if let Some(stats) = exts.get::<Arc<stats::AsyncOpStats>>() {
                 stats.end_poll(now);
-            // otherwise, is the span a resource? in that case, we also want
-            // to enter it, although we don't care about recording poll
-            // stats.
             } else if exts.get::<Arc<stats::ResourceStats>>().is_some() {
+                // otherwise, is the span a resource? in that case, we also want
+                // to enter it, although we don't care about recording poll
+                // stats.
             } else {
                 return;
             };
