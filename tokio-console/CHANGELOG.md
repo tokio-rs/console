@@ -3,9 +3,28 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## tokio-console-v0.1.9 - (2023-07-03)
+
+[5900300](https://github.com/tokio-rs/console/commit/59003004a6f2f2857be267061f23d34e2257e0f0)...[daa3d51](https://github.com/tokio-rs/console/commit/daa3d51895b52c11e1fd216becbc37b083e9758f)
+
+
+### Added
+
+- Help view modal ([#432](https://github.com/tokio-rs/console/issues/432)) ([5156e8e](https://github.com/tokio-rs/console/commit/5156e8e951521d1858929d4f52addda5f1a43941))
+
+### Documented
+
+- Add column descriptions for all tables ([#431](https://github.com/tokio-rs/console/issues/431)) ([2de5b68](https://github.com/tokio-rs/console/commit/2de5b68d1a00a77d03a4817f955f385e494368bd))
+
+### Fixed
+
+- Remove histogram minimum count ([#424](https://github.com/tokio-rs/console/issues/424)) ([2617504](https://github.com/tokio-rs/console/commit/26175044cca81cb4a8289841a0c3b458f2d287f1))
+- Remove trailing space from task/resource location ([#443](https://github.com/tokio-rs/console/issues/443)) ([29a09ad](https://github.com/tokio-rs/console/commit/29a09adf07eeb56be6233a7333d4cdee4fa954a2))
+- Make long locations readable ([#441](https://github.com/tokio-rs/console/issues/441)) ([daa3d51](https://github.com/tokio-rs/console/commit/daa3d51895b52c11e1fd216becbc37b083e9758f), closes [#411](https://github.com/tokio-rs/console/issues/411))
+
 ## tokio-console-v0.1.8 - (2023-05-09)
 
-[3bf60bc](https://github.com/tokio-rs/console/commit/3bf60bce7b478c189a3145311e06f14cb2fc1e11)...[c8a69e9](https://github.com/tokio-rs/console/commit/c8a69e9269c113bdde909ad1f4aab4156adfd5f4)
+[3bf60bc](https://github.com/tokio-rs/console/commit/3bf60bce7b478c189a3145311e06f14cb2fc1e11)...[5900300](https://github.com/tokio-rs/console/commit/59003004a6f2f2857be267061f23d34e2257e0f0)
 
 
 ### Added
