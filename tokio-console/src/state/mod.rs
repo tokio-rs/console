@@ -522,7 +522,7 @@ fn format_location(loc: Option<proto::Location>) -> String {
             let truncated = truncate_registry_path(file);
             l.file = Some(truncated);
         }
-        format!("{} ", l)
+        format!("{}", l)
     })
     .unwrap_or_else(|| "<unknown location>".to_string())
 }
