@@ -155,10 +155,17 @@ impl TaskView {
             Span::raw(task.target()),
         ]));
 
-        overview.push(Spans::from(vec![
-            bold("Location: "),
-            Span::raw(task.location()),
-        ]));
+        let title = "Location: ";
+        let location_max_width = stats_area[0].width as usize - 2 - title.len(); // NOTE: -2 for the border
+        let location = if task.location().len() > location_max_width {
+            let ellipsis = styles.if_utf8("\u{2026}", "...");
+            let start = task.location().len() - location_max_width + ellipsis.chars().count();
+            format!("{}{}", ellipsis, &task.location()[start..])
+        } else {
+            task.location().to_string()
+        };
+
+        overview.push(Spans::from(vec![bold(title), Span::raw(location)]));
 
         let total = task.total(now);
 
