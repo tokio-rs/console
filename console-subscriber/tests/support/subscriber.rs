@@ -1,4 +1,4 @@
-use std::{collections::HashMap, future::Future, thread, time::Duration, fmt};
+use std::{collections::HashMap, fmt, future::Future, thread, time::Duration};
 
 use console_api::{
     field::Value,
@@ -6,7 +6,7 @@ use console_api::{
 };
 use futures::stream::StreamExt;
 use tokio::{sync::broadcast, task};
-use tonic::transport::{Endpoint, Server, Uri};
+use tonic::transport::{Channel, Endpoint, Server, Uri};
 use tower::service_fn;
 use tracing_subscriber::prelude::*;
 
@@ -17,7 +17,9 @@ pub const MAIN_TASK_NAME: &str = "main";
 #[derive(Debug)]
 enum TestFailure {
     NoTasksMatched,
-    TasksFailedValidation { failures: Vec<TaskValidationFailure> },
+    TasksFailedValidation {
+        failures: Vec<TaskValidationFailure>,
+    },
 }
 
 impl fmt::Display for TestFailure {
@@ -34,7 +36,6 @@ impl fmt::Display for TestFailure {
         }
     }
 }
-
 
 #[track_caller]
 pub fn assert_tasks<Fut>(expected_tasks: Vec<ExpectedTask>, future: Fut)
@@ -62,149 +63,77 @@ where
                 .expect("console subscriber runtime initialization failed");
 
             let mut console_server_finish_rx = finish_tx.subscribe();
-            runtime
-                .block_on(async move {
-                    task::Builder::new()
-                        .name("console_server")
-                        .spawn(async move {
-                            let (service, aggregate) = server.into_parts();
-                            Server::builder()
-                                .add_service(service)
-                                .serve_with_incoming(futures::stream::iter(vec![Ok::<_, std::io::Error>(server_stream)]))
-                                .await
-                                .expect("console subscriber failed.");
-                            println!("Waiting for finish signal");
-                            match console_server_finish_rx.recv().await {
-                                Ok(_) => println!("Getting ready to drop the aggregate handle."),
-                                Err(err) => println!("Error waiting for finish signal: {err:?}"),
-                            }
-                            drop(aggregate);
-                        })
-                        .unwrap();
+            runtime.block_on(async move {
+                task::Builder::new()
+                    .name("console_server")
+                    .spawn(async move {
+                        let (service, aggregate) = server.into_parts();
+                        Server::builder()
+                            .add_service(service)
+                            .serve_with_incoming(futures::stream::iter(vec![
+                                Ok::<_, std::io::Error>(server_stream),
+                            ]))
+                            .await
+                            .expect("console subscriber failed.");
+                        println!("Waiting for finish signal");
+                        match console_server_finish_rx.recv().await {
+                            Ok(_) => println!("Getting ready to drop the aggregate handle."),
+                            Err(err) => println!("Error waiting for finish signal: {err:?}"),
+                        }
+                        drop(aggregate);
+                    })
+                    .unwrap();
 
-                    let expect = task::Builder::new().name("expect").spawn(async move {
+                let expect = task::Builder::new()
+                    .name("expect")
+                    .spawn(async move {
                         tokio::time::sleep(Duration::from_millis(200)).await;
 
                         let mut client_stream = Some(client_stream);
                         let channel = Endpoint::try_from("http://[::]:6669")
-                        .expect("Could not create endpoint")
-                        .connect_with_connector(service_fn(move |_: Uri| {
-                            let client = client_stream.take();
+                            .expect("Could not create endpoint")
+                            .connect_with_connector(service_fn(move |_: Uri| {
+                                let client = client_stream.take();
 
-                            async move {
-                                if let Some(client) = client {
-                                    Ok(client)
-                                } else {
-                                    Err(std::io::Error::new(
-                                        std::io::ErrorKind::Other,
-                                        "Client already taken",
-                                    ))
-                                }
-                            }
-                        }))
-                        .await
-                        .expect("Could not create client");
-
-                        let mut client = InstrumentClient::new(channel);
-
-                        let mut stream = loop {
-                            let request = tonic::Request::new(InstrumentRequest {});
-                            match client.watch_updates(request).await {
-                                Ok(stream) => break stream.into_inner(),
-                                Err(err) => panic!("Client cannot connect to watch updates: {err}"),
-                            }
-                        };
-
-                        let mut tasks = HashMap::new();
-
-                        let mut i: usize = 0;
-                        while let Some(update) = stream.next().await {
-                            match update {
-                                Ok(update) => {
-                                    println!("----==== UPDATE {i} ====----");
-                                    if let Some(register_metadata) = &update.new_metadata {
-                                        for new_metadata in &register_metadata.metadata {
-                                            if let Some(metadata) = &new_metadata.metadata {
-                                                println!("New metadata: name: {:?}", metadata.name);
-                                                if metadata.name == "runtime.spawn" {
-                                                    println!("New metadata: {:?}", metadata);
-                                                }
-                                            }
-                                        }
+                                async move {
+                                    if let Some(client) = client {
+                                        Ok(client)
+                                    } else {
+                                        Err(std::io::Error::new(
+                                            std::io::ErrorKind::Other,
+                                            "Client already taken",
+                                        ))
                                     }
-                                    if let Some(task_update) = &update.task_update {
-                                        for new_task in &task_update.new_tasks {
-                                            println!("New task!");
-
-                                            if let Some(id) = &new_task.id {
-                                                let mut actual_task = ActualTask::new(id.id);
-                                                println!("  -> id = {id:?}");
-                                                for field in &new_task.fields {
-                                                    if let Some(console_api::field::Name::StrName(field_name)) = &field.name {
-                                                        println!("  -> {field:?}");
-                                                        if field_name == "task.name" {
-                                                            actual_task.name = match &field.value {
-                                                                Some(Value::DebugVal(value)) => Some(value.clone()),
-                                                                Some(Value::StrVal(value)) => Some(value.clone()),
-                                                                _ => None, // Anything that isn't string-like shouldn't be used as a name.
-                                                            };
-                                                        }
-                                                    }
-                                                }
-                                                tasks.insert(actual_task.id, actual_task);
-                                            }
-                                        }
-
-                                        for (id, stats) in &task_update.stats_update {
-                                            if let Some(mut task) = tasks.get_mut(id) {
-                                                task.wakes = stats.wakes;
-                                                task.self_wakes = stats.self_wakes;
-                                            }
-                                            println!("{id} --> {stats:?}");
-                                        }
-                                    }
-
-                                    if let Some(task_update) = update.task_update {
-                                        println!(
-                                            "UPDATE: new task count: {}, update count: {}, dropped count: {}",
-                                            task_update.new_tasks.len(),
-                                            task_update.stats_update.len(),
-                                            task_update.dropped_events
-                                        );
-                                    }
-                                    i += 1;
                                 }
-                                Err(e) => {
-                                    panic!("update stream error: {}", e);
-                                }
-                            }
-                            if i > 2 {
-                                break;
-                            }
-                        }
+                            }))
+                            .await
+                            .expect("Could not create client");
+
+                        let actual_tasks = record_actual_tasks(channel, 2).await;
 
                         let mut validation_results = Vec::new();
                         for expected in &expected_tasks {
-                            for (_, actual) in &tasks {
+                            for actual in &actual_tasks {
                                 if expected.matches_actual_task(actual) {
-
                                     validation_results.push(expected.validate_actual_task(actual));
-                                    
+
                                     // We only match a single task.
                                     // FIXME(hds): We should probably create an error or a warning if multiple tasks match.
-                                    continue; 
+                                    continue;
                                 }
                             }
                         }
 
                         let result = if validation_results.is_empty() {
                             Err(TestFailure::NoTasksMatched)
-                        }
-                        else {
-                            let failures: Vec<_> = validation_results.into_iter().filter_map(|r| match r {
-                                Ok(_) => None,
-                                Err(validation_error) => Some(validation_error),
-                            }).collect();
+                        } else {
+                            let failures: Vec<_> = validation_results
+                                .into_iter()
+                                .filter_map(|r| match r {
+                                    Ok(_) => None,
+                                    Err(validation_error) => Some(validation_error),
+                                })
+                                .collect();
 
                             if failures.is_empty() {
                                 Ok(())
@@ -219,13 +148,14 @@ where
                         }
 
                         result
-                    }).unwrap();
+                    })
+                    .unwrap();
 
-                    match expect.await {
-                        Ok(test_result) => test_result,
-                        Err(err) => panic!("Error awaiting expect task: {err:?}"),
-                    }
-                })
+                match expect.await {
+                    Ok(test_result) => test_result,
+                    Err(err) => panic!("Error awaiting expect task: {err:?}"),
+                }
+            })
         })
         .expect("console subscriber could not spawn thread");
 
@@ -253,4 +183,88 @@ where
         Ok(Err(test_failure)) => panic!("Test failed: {test_failure}"),
         Err(err) => panic!("Error joining console subscriber thread: {err:?}"),
     }
+}
+
+async fn record_actual_tasks(channel: Channel, update_limit: usize) -> Vec<ActualTask> {
+    let mut client = InstrumentClient::new(channel);
+
+    let mut stream = loop {
+        let request = tonic::Request::new(InstrumentRequest {});
+        match client.watch_updates(request).await {
+            Ok(stream) => break stream.into_inner(),
+            Err(err) => panic!("Client cannot connect to watch updates: {err}"),
+        }
+    };
+
+    let mut tasks = HashMap::new();
+
+    let mut i: usize = 0;
+    while let Some(update) = stream.next().await {
+        match update {
+            Ok(update) => {
+                println!("----==== UPDATE {i} ====----");
+                if let Some(register_metadata) = &update.new_metadata {
+                    for new_metadata in &register_metadata.metadata {
+                        if let Some(metadata) = &new_metadata.metadata {
+                            println!("New metadata: name: {:?}", metadata.name);
+                            if metadata.name == "runtime.spawn" {
+                                println!("New metadata: {:?}", metadata);
+                            }
+                        }
+                    }
+                }
+                if let Some(task_update) = &update.task_update {
+                    for new_task in &task_update.new_tasks {
+                        println!("New task!");
+
+                        if let Some(id) = &new_task.id {
+                            let mut actual_task = ActualTask::new(id.id);
+                            println!("  -> id = {id:?}");
+                            for field in &new_task.fields {
+                                if let Some(console_api::field::Name::StrName(field_name)) =
+                                    &field.name
+                                {
+                                    println!("  -> {field:?}");
+                                    if field_name == "task.name" {
+                                        actual_task.name = match &field.value {
+                                            Some(Value::DebugVal(value)) => Some(value.clone()),
+                                            Some(Value::StrVal(value)) => Some(value.clone()),
+                                            _ => None, // Anything that isn't string-like shouldn't be used as a name.
+                                        };
+                                    }
+                                }
+                            }
+                            tasks.insert(actual_task.id, actual_task);
+                        }
+                    }
+
+                    for (id, stats) in &task_update.stats_update {
+                        if let Some(mut task) = tasks.get_mut(id) {
+                            task.wakes = stats.wakes;
+                            task.self_wakes = stats.self_wakes;
+                        }
+                        println!("{id} --> {stats:?}");
+                    }
+                }
+
+                if let Some(task_update) = update.task_update {
+                    println!(
+                        "UPDATE: new task count: {}, update count: {}, dropped count: {}",
+                        task_update.new_tasks.len(),
+                        task_update.stats_update.len(),
+                        task_update.dropped_events
+                    );
+                }
+                i += 1;
+            }
+            Err(e) => {
+                panic!("update stream error: {}", e);
+            }
+        }
+        if i > update_limit {
+            break;
+        }
+    }
+
+    tasks.into_values().collect()
 }
