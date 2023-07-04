@@ -65,7 +65,7 @@ where
             let mut console_server_finish_rx = finish_tx.subscribe();
             runtime.block_on(async move {
                 task::Builder::new()
-                    .name("console_server")
+                    .name("console-server")
                     .spawn(async move {
                         let (service, aggregate) = server.into_parts();
                         Server::builder()
@@ -82,10 +82,10 @@ where
                         }
                         drop(aggregate);
                     })
-                    .unwrap();
+                    .expect("console-test error: could not spawn 'console-server' task");
 
-                let expect = task::Builder::new()
-                    .name("expect")
+                let console_client = task::Builder::new()
+                    .name("console-client")
                     .spawn(async move {
                         tokio::time::sleep(Duration::from_millis(200)).await;
 
@@ -124,18 +124,17 @@ where
                             }
                         }
 
-                        match finish_tx.send(()) {
-                            Ok(_) => println!("Send finish message!"),
-                            Err(err) => println!("Could not send finish message: {err:?}"),
-                        }
+                        finish_tx
+                            .send(())
+                            .expect("console-test error: failed to send completion message");
 
                         test_result(validation_results)
                     })
-                    .expect("console-test error: could not spawn 'expect' task");
+                    .expect("console-test error: could not spawn 'console-client' task");
 
-                expect
+                console_client
                     .await
-                    .expect("console-test error: failed to await 'expect' task")
+                    .expect("console-test error: failed to await 'console-client' task")
             })
         })
         .expect("console subscriber could not spawn thread");
