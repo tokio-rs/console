@@ -12,6 +12,8 @@ use tracing_subscriber::prelude::*;
 
 use super::task::{ActualTask, ExpectedTask, TaskValidationFailure};
 
+pub const MAIN_TASK_NAME: &str = "main";
+
 #[derive(Debug)]
 enum TestFailure {
     NoTasksMatched,
@@ -40,7 +42,6 @@ where
     Fut: Future + Send + 'static,
     Fut::Output: Send + 'static,
 {
-    // Everything else is here.
     let (client_stream, server_stream) = tokio::io::duplex(1024);
 
     let (console_layer, server) = console_subscriber::ConsoleLayer::builder().build();
@@ -116,9 +117,6 @@ where
 
                         let mut tasks = HashMap::new();
 
-                        // let expected_task = ExpectedTask::default().match_name("mog".into()).expect_wakes(1).expect_self_wakes(0);
-                        // let expected_tasks = vec![expected_task];
-
                         let mut i: usize = 0;
                         while let Some(update) = stream.next().await {
                             match update {
@@ -133,11 +131,9 @@ where
                                                 }
                                             }
                                         }
-                                        // println!("metadata: {metadata:#?}");
                                     }
                                     if let Some(task_update) = &update.task_update {
                                         for new_task in &task_update.new_tasks {
-                                            // println!("New task: {new_task:#?}");
                                             println!("New task!");
 
                                             if let Some(id) = &new_task.id {
@@ -188,7 +184,6 @@ where
                         }
 
                         let mut validation_results = Vec::new();
-                        // let mut test_passes = None;
                         for expected in &expected_tasks {
                             for (_, actual) in &tasks {
                                 if expected.matches_actual_task(actual) {
@@ -217,13 +212,7 @@ where
                                 Err(TestFailure::TasksFailedValidation { failures: failures })
                             }
                         };
-                        // match test_passes {
-                        //     Some(true) => println!("Test passes!!!"),
-                        //     Some(false) => println!("Test fails!!!"),
-                        //     None => println!("Nothing was tested..."),
-                        // }
 
-                        // println!("{tasks:#?}");
                         match finish_tx.send(()) {
                             Ok(_) => println!("Send finish message!"),
                             Err(err) => println!("Could not send finish message: {err:?}"),
@@ -247,7 +236,7 @@ where
             .unwrap();
 
         tokio::task::Builder::new()
-            .name("mog")
+            .name(MAIN_TASK_NAME)
             .spawn_on(future, runtime.handle())
             .unwrap();
         runtime.block_on(async {
