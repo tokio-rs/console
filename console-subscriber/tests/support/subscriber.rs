@@ -124,37 +124,18 @@ where
                             }
                         }
 
-                        let result = if validation_results.is_empty() {
-                            Err(TestFailure::NoTasksMatched)
-                        } else {
-                            let failures: Vec<_> = validation_results
-                                .into_iter()
-                                .filter_map(|r| match r {
-                                    Ok(_) => None,
-                                    Err(validation_error) => Some(validation_error),
-                                })
-                                .collect();
-
-                            if failures.is_empty() {
-                                Ok(())
-                            } else {
-                                Err(TestFailure::TasksFailedValidation { failures: failures })
-                            }
-                        };
-
                         match finish_tx.send(()) {
                             Ok(_) => println!("Send finish message!"),
                             Err(err) => println!("Could not send finish message: {err:?}"),
                         }
 
-                        result
+                        test_result(validation_results)
                     })
-                    .unwrap();
+                    .expect("console-test error: could not spawn 'expect' task");
 
-                match expect.await {
-                    Ok(test_result) => test_result,
-                    Err(err) => panic!("Error awaiting expect task: {err:?}"),
-                }
+                expect
+                    .await
+                    .expect("console-test error: failed to await 'expect' task")
             })
         })
         .expect("console subscriber could not spawn thread");
@@ -178,10 +159,12 @@ where
         });
     });
 
-    match join_handle.join() {
-        Ok(Ok(_)) => println!("Test was successful!"),
-        Ok(Err(test_failure)) => panic!("Test failed: {test_failure}"),
-        Err(err) => panic!("Error joining console subscriber thread: {err:?}"),
+    let test_result = join_handle
+        .join()
+        .expect("console-test error: failed to join 'console-subscriber' thread");
+
+    if let Err(test_failure) = test_result {
+        panic!("Test failed: {test_failure}")
     }
 }
 
@@ -267,4 +250,26 @@ async fn record_actual_tasks(channel: Channel, update_limit: usize) -> Vec<Actua
     }
 
     tasks.into_values().collect()
+}
+
+fn test_result(
+    validation_results: Vec<Result<(), TaskValidationFailure>>,
+) -> Result<(), TestFailure> {
+    if validation_results.is_empty() {
+        return Err(TestFailure::NoTasksMatched);
+    }
+
+    let failures: Vec<_> = validation_results
+        .into_iter()
+        .filter_map(|r| match r {
+            Ok(_) => None,
+            Err(validation_error) => Some(validation_error),
+        })
+        .collect();
+
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(TestFailure::TasksFailedValidation { failures: failures })
+    }
 }
