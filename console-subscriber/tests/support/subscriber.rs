@@ -4,87 +4,100 @@ use console_api::{
     field::Value,
     instrument::{instrument_client::InstrumentClient, InstrumentRequest},
 };
+use console_subscriber::ConsoleLayer;
 use futures::stream::StreamExt;
-use tokio::{sync::broadcast, task, time::sleep};
+use tokio::{sync::broadcast, task};
 use tonic::transport::{Endpoint, Server, Uri};
 use tower::service_fn;
-use tracing_subscriber::prelude::*;
+use tracing_subscriber::{layer::Layered, prelude::*, Registry};
 
-mod support {
-    pub mod subscriber;
-    pub mod task;
+use super::task::{ActualTask, ExpectedTask};
+
+struct TestEnvironment {
+    finish_tx: broadcast::Sender<()>,
+    server: console_subscriber::Server,
 }
 
-use support::subscriber::TestSubscriber;
-use support::task::{ActualTask, ExpectedTask};
-
-#[test]
-fn broken_self_wake() {
-    let expected_tasks = vec![ExpectedTask::default()
-        .match_name("main".into())
-        .expect_wakes(1)
-        .expect_self_wakes(1)];
-
-    TestSubscriber::new().assert(expected_tasks, async {
-        // The test starts here.
-        task::yield_now().await
-        // The test ends here.
-    });
+pub struct TestSubscriber {
+    // expected_tasks: Vec<ExpectedTask>,
+    // future: Fut,
+    pub registry: Layered<ConsoleLayer, Registry>,
+    pub finish_rx: broadcast::Receiver<()>,
+    // pub thread_join_handle: thread::JoinHandle<()>,
+    test_environment: TestEnvironment,
 }
 
-#[test]
-fn self_wake() {
-    // Test is here
-    let expected_task = ExpectedTask::default()
-        .match_name("mog".into())
-        .expect_wakes(1)
-        .expect_self_wakes(1);
-    let expected_tasks = vec![expected_task];
+impl TestSubscriber {
+    #[track_caller]
+    pub fn assert<Fut>(mut self, expected_tasks: Vec<ExpectedTask>, future: Fut)
+    where
+        Fut: Future + Send + 'static,
+        Fut::Output: Send + 'static,
+    {
+        let join_handle = run_subscriber(
+            expected_tasks,
+            self.test_environment.finish_tx,
+            self.test_environment.server,
+        );
 
-    let future = async {
-        // The test starts here.
-        task::yield_now().await
-        // The test ends here.
-    };
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
 
-    assert_tasks(expected_tasks, future);
+        tracing::subscriber::with_default(self.registry, || {
+            tokio::task::Builder::new()
+                .name("default")
+                .spawn_on(future, runtime.handle())
+                .unwrap();
+        });
+
+        runtime.block_on(async {
+            println!("Before await finish...");
+            match self.finish_rx.recv().await {
+                Ok(_) => println!("finish message received."),
+                Err(err) => println!("finish message could not be received: {err}"),
+            }
+        });
+
+        match join_handle.join() {
+            Ok(_) => println!("Successfully joined console subscriber thread"),
+            Err(err) => println!("Error joining console subscriber thread: {err:?}"),
+        }
+    }
+
+    pub fn new() -> Self {
+        let (console_layer, server) = console_subscriber::ConsoleLayer::builder().build();
+
+        let registry = tracing_subscriber::registry().with(console_layer);
+
+        let (finish_tx, finish_rx) = broadcast::channel(1);
+
+        let test_environment = TestEnvironment { finish_tx, server };
+
+        Self {
+            registry,
+            finish_rx,
+
+            test_environment,
+        }
+    }
+
+    // pub fn expect_task(mut self, task: ExpectedTask) -> Self {
+    //     self.expected_tasks.push(task);
+    //     self
+    // }
 }
 
-#[test]
-fn fail_self_wake() {
-    // Test is here
-    let expected_task = ExpectedTask::default()
-        .match_name("mog".into())
-        .expect_wakes(1)
-        .expect_self_wakes(1);
-    let expected_tasks = vec![expected_task];
-
-    let future = async {
-        // The test starts here.
-        sleep(Duration::ZERO).await;
-        // The test ends here.
-    };
-
-    assert_tasks(expected_tasks, future);
-}
-
-fn assert_tasks<Fut>(expected_tasks: Vec<ExpectedTask>, future: Fut)
-where
-    Fut: Future + Send + 'static,
-    Fut::Output: Send + 'static,
-{
-    // Everything else is here.
-    let (client_stream, server_stream) = tokio::io::duplex(1024);
-
-    let (console_layer, server) = console_subscriber::ConsoleLayer::builder().build();
-
-    let registry = tracing_subscriber::registry().with(console_layer);
-
-    let (finish_tx, mut finish_rx) = broadcast::channel(1);
-
-    let join_handle = thread::Builder::new()
+fn run_subscriber(
+    expected_tasks: Vec<ExpectedTask>,
+    completion_tx: broadcast::Sender<()>,
+    server: console_subscriber::Server,
+) -> thread::JoinHandle<()> {
+    let thread_join_handle = thread::Builder::new()
         .name("console_subscriber".into())
         .spawn(move || {
+            let (client_stream, server_stream) = tokio::io::duplex(1024);
             let _subscriber_guard =
                 tracing::subscriber::set_default(tracing_core::subscriber::NoSubscriber::default());
             let runtime = tokio::runtime::Builder::new_current_thread()
@@ -93,7 +106,7 @@ where
                 .build()
                 .expect("console subscriber runtime initialization failed");
 
-            let mut console_server_finish_rx = finish_tx.subscribe();
+            let mut console_server_finish_rx = completion_tx.subscribe();
             runtime
                 .block_on(async move {
                     task::Builder::new()
@@ -149,7 +162,7 @@ where
 
                         let mut tasks = HashMap::new();
 
-                        // let expected_task = ExpectedTask::default().match_name("mog".into()).expect_wakes(1).expect_self_wakes(0);
+                        // let expected_task = ExpectedTask::default().match_name("mog".into()).expect_wakes(1).expect_self_wakes(1);
                         // let expected_tasks = vec![expected_task];
 
                         let mut i: usize = 0;
@@ -244,8 +257,7 @@ where
                             None => println!("Nothing was tested..."),
                         }
 
-                        // println!("{tasks:#?}");
-                        match finish_tx.send(()) {
+                        match completion_tx.send(()) {
                             Ok(_) => println!("Send finish message!"),
                             Err(err) => println!("Could not send finish message: {err:?}"),
                         }
@@ -256,30 +268,9 @@ where
                         Err(err) => println!("Error awaiting expect task: {err:?}"),
                     }
                 });
+                println!("Completed subscriber thread!")
         })
         .expect("console subscriber could not spawn thread");
 
-    tracing::subscriber::with_default(registry, || {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        tokio::task::Builder::new()
-            .name("mog")
-            .spawn_on(future, runtime.handle())
-            .unwrap();
-        runtime.block_on(async {
-            println!("Before await finish...");
-            match finish_rx.recv().await {
-                Ok(_) => println!("finish message received."),
-                Err(err) => println!("finish message could not be received: {err}"),
-            }
-        });
-    });
-
-    match join_handle.join() {
-        Ok(_) => println!("Successfully joined console subscriber thread"),
-        Err(err) => println!("Error joining console subscriber thread: {err:?}"),
-    }
+    thread_join_handle
 }
