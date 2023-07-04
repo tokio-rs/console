@@ -1,103 +1,57 @@
-use std::{collections::HashMap, future::Future, thread, time::Duration};
+use std::{collections::HashMap, future::Future, thread, time::Duration, fmt};
 
 use console_api::{
     field::Value,
     instrument::{instrument_client::InstrumentClient, InstrumentRequest},
 };
-use console_subscriber::ConsoleLayer;
 use futures::stream::StreamExt;
 use tokio::{sync::broadcast, task};
 use tonic::transport::{Endpoint, Server, Uri};
 use tower::service_fn;
-use tracing_subscriber::{layer::Layered, prelude::*, Registry};
+use tracing_subscriber::prelude::*;
 
-use super::task::{ActualTask, ExpectedTask};
+use super::task::{ActualTask, ExpectedTask, TaskValidationFailure};
 
-struct TestEnvironment {
-    finish_tx: broadcast::Sender<()>,
-    server: console_subscriber::Server,
+#[derive(Debug)]
+enum TestFailure {
+    NoTasksMatched,
+    TasksFailedValidation { failures: Vec<TaskValidationFailure> },
 }
 
-pub struct TestSubscriber {
-    // expected_tasks: Vec<ExpectedTask>,
-    // future: Fut,
-    pub registry: Layered<ConsoleLayer, Registry>,
-    pub finish_rx: broadcast::Receiver<()>,
-    // pub thread_join_handle: thread::JoinHandle<()>,
-    test_environment: TestEnvironment,
-}
-
-impl TestSubscriber {
-    #[track_caller]
-    pub fn assert<Fut>(mut self, expected_tasks: Vec<ExpectedTask>, future: Fut)
-    where
-        Fut: Future + Send + 'static,
-        Fut::Output: Send + 'static,
-    {
-        let join_handle = run_subscriber(
-            expected_tasks,
-            self.test_environment.finish_tx,
-            self.test_environment.server,
-        );
-
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        tracing::subscriber::with_default(self.registry, || {
-            tokio::task::Builder::new()
-                .name("default")
-                .spawn_on(future, runtime.handle())
-                .unwrap();
-        });
-
-        runtime.block_on(async {
-            println!("Before await finish...");
-            match self.finish_rx.recv().await {
-                Ok(_) => println!("finish message received."),
-                Err(err) => println!("finish message could not be received: {err}"),
+impl fmt::Display for TestFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NoTasksMatched => write!(f, "No tasks matched the expected tasks."),
+            Self::TasksFailedValidation { failures } => {
+                write!(f, "Task validation failed:\n")?;
+                for failure in failures {
+                    write!(f, " - {failure}\n")?;
+                }
+                Ok(())
             }
-        });
-
-        match join_handle.join() {
-            Ok(_) => println!("Successfully joined console subscriber thread"),
-            Err(err) => println!("Error joining console subscriber thread: {err:?}"),
         }
     }
-
-    pub fn new() -> Self {
-        let (console_layer, server) = console_subscriber::ConsoleLayer::builder().build();
-
-        let registry = tracing_subscriber::registry().with(console_layer);
-
-        let (finish_tx, finish_rx) = broadcast::channel(1);
-
-        let test_environment = TestEnvironment { finish_tx, server };
-
-        Self {
-            registry,
-            finish_rx,
-
-            test_environment,
-        }
-    }
-
-    // pub fn expect_task(mut self, task: ExpectedTask) -> Self {
-    //     self.expected_tasks.push(task);
-    //     self
-    // }
 }
 
-fn run_subscriber(
-    expected_tasks: Vec<ExpectedTask>,
-    completion_tx: broadcast::Sender<()>,
-    server: console_subscriber::Server,
-) -> thread::JoinHandle<()> {
-    let thread_join_handle = thread::Builder::new()
+
+#[track_caller]
+pub fn assert_tasks<Fut>(expected_tasks: Vec<ExpectedTask>, future: Fut)
+where
+    Fut: Future + Send + 'static,
+    Fut::Output: Send + 'static,
+{
+    // Everything else is here.
+    let (client_stream, server_stream) = tokio::io::duplex(1024);
+
+    let (console_layer, server) = console_subscriber::ConsoleLayer::builder().build();
+
+    let registry = tracing_subscriber::registry().with(console_layer);
+
+    let (finish_tx, mut finish_rx) = broadcast::channel(1);
+
+    let join_handle = thread::Builder::new()
         .name("console_subscriber".into())
         .spawn(move || {
-            let (client_stream, server_stream) = tokio::io::duplex(1024);
             let _subscriber_guard =
                 tracing::subscriber::set_default(tracing_core::subscriber::NoSubscriber::default());
             let runtime = tokio::runtime::Builder::new_current_thread()
@@ -106,7 +60,7 @@ fn run_subscriber(
                 .build()
                 .expect("console subscriber runtime initialization failed");
 
-            let mut console_server_finish_rx = completion_tx.subscribe();
+            let mut console_server_finish_rx = finish_tx.subscribe();
             runtime
                 .block_on(async move {
                     task::Builder::new()
@@ -162,7 +116,7 @@ fn run_subscriber(
 
                         let mut tasks = HashMap::new();
 
-                        // let expected_task = ExpectedTask::default().match_name("mog".into()).expect_wakes(1).expect_self_wakes(1);
+                        // let expected_task = ExpectedTask::default().match_name("mog".into()).expect_wakes(1).expect_self_wakes(0);
                         // let expected_tasks = vec![expected_task];
 
                         let mut i: usize = 0;
@@ -233,44 +187,81 @@ fn run_subscriber(
                             }
                         }
 
-                        let mut test_passes = None;
-                        for (_, actual) in &tasks {
-                            for expected in &expected_tasks {
+                        let mut validation_results = Vec::new();
+                        // let mut test_passes = None;
+                        for expected in &expected_tasks {
+                            for (_, actual) in &tasks {
                                 if expected.matches_actual_task(actual) {
-                                    if expected.validate_actual_task(actual) {
-                                        test_passes = Some(true);
-                                    } else {
-                                        test_passes = Some(false);
-                                    }
-                                }
 
-                                match test_passes {
-                                    Some(false) => break,
-                                    _ => {},
+                                    validation_results.push(expected.validate_actual_task(actual));
+                                    
+                                    // We only match a single task.
+                                    // FIXME(hds): We should probably create an error or a warning if multiple tasks match.
+                                    continue; 
                                 }
                             }
                         }
 
-                        match test_passes {
-                            Some(true) => println!("Test passes!!!"),
-                            Some(false) => println!("Test fails!!!"),
-                            None => println!("Nothing was tested..."),
+                        let result = if validation_results.is_empty() {
+                            Err(TestFailure::NoTasksMatched)
                         }
+                        else {
+                            let failures: Vec<_> = validation_results.into_iter().filter_map(|r| match r {
+                                Ok(_) => None,
+                                Err(validation_error) => Some(validation_error),
+                            }).collect();
 
-                        match completion_tx.send(()) {
+                            if failures.is_empty() {
+                                Ok(())
+                            } else {
+                                Err(TestFailure::TasksFailedValidation { failures: failures })
+                            }
+                        };
+                        // match test_passes {
+                        //     Some(true) => println!("Test passes!!!"),
+                        //     Some(false) => println!("Test fails!!!"),
+                        //     None => println!("Nothing was tested..."),
+                        // }
+
+                        // println!("{tasks:#?}");
+                        match finish_tx.send(()) {
                             Ok(_) => println!("Send finish message!"),
                             Err(err) => println!("Could not send finish message: {err:?}"),
                         }
+
+                        result
                     }).unwrap();
 
                     match expect.await {
-                        Ok(_) => println!("Successfully awaited expect task!"),
-                        Err(err) => println!("Error awaiting expect task: {err:?}"),
+                        Ok(test_result) => test_result,
+                        Err(err) => panic!("Error awaiting expect task: {err:?}"),
                     }
-                });
-                println!("Completed subscriber thread!")
+                })
         })
         .expect("console subscriber could not spawn thread");
 
-    thread_join_handle
+    tracing::subscriber::with_default(registry, || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        tokio::task::Builder::new()
+            .name("mog")
+            .spawn_on(future, runtime.handle())
+            .unwrap();
+        runtime.block_on(async {
+            println!("Before await finish...");
+            match finish_rx.recv().await {
+                Ok(_) => println!("finish message received."),
+                Err(err) => println!("finish message could not be received: {err}"),
+            }
+        });
+    });
+
+    match join_handle.join() {
+        Ok(Ok(_)) => println!("Test was successful!"),
+        Ok(Err(test_failure)) => panic!("Test failed: {test_failure}"),
+        Err(err) => panic!("Error joining console subscriber thread: {err:?}"),
+    }
 }
