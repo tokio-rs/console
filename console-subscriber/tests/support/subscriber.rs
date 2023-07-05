@@ -1,14 +1,19 @@
-use std::{collections::HashMap, fmt, future::Future, thread, time::Duration};
+use std::{collections::HashMap, fmt, future::Future, thread};
 
 use console_api::{
     field::Value,
     instrument::{instrument_client::InstrumentClient, InstrumentRequest},
 };
 use futures::stream::StreamExt;
-use tokio::{sync::broadcast, task};
+use tokio::{
+    io::DuplexStream,
+    sync::{broadcast, oneshot},
+    task,
+};
 use tonic::transport::{Channel, Endpoint, Server, Uri};
 use tower::service_fn;
-use tracing_subscriber::prelude::*;
+use tracing_core::LevelFilter;
+use tracing_subscriber::{prelude::*, EnvFilter};
 
 use super::task::{ActualTask, ExpectedTask, TaskValidationFailure};
 
@@ -51,43 +56,44 @@ where
 
     let (finish_tx, mut finish_rx) = broadcast::channel(1);
 
+    let (client_connected_tx, client_connected_rx) = oneshot::channel();
+
     let join_handle = thread::Builder::new()
         .name("console_subscriber".into())
         .spawn(move || {
-            let _subscriber_guard =
-                tracing::subscriber::set_default(tracing_core::subscriber::NoSubscriber::default());
+            let file = std::fs::File::create("console_subscriber.log")
+                .expect("Couldn't create temporary log file");
+            let sub = tracing_subscriber::fmt()
+                .with_writer(file)
+                .with_env_filter(
+                    EnvFilter::builder()
+                        .with_default_directive(LevelFilter::DEBUG.into())
+                        .parse_lossy("wake=trace,console_subscriber=trace,info"),
+                )
+                .finish();
+            let _subscriber_guard = tracing::subscriber::set_default(sub);
+            // tracing::subscriber::set_default(tracing_core::subscriber::NoSubscriber::default());
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_io()
                 .enable_time()
                 .build()
-                .expect("console subscriber runtime initialization failed");
+                .expect("console-test error: failed to initialize console subscriber runtime");
 
-            let mut console_server_finish_rx = finish_tx.subscribe();
             runtime.block_on(async move {
                 task::Builder::new()
                     .name("console-server")
-                    .spawn(async move {
-                        let (service, aggregate) = server.into_parts();
-                        Server::builder()
-                            .add_service(service)
-                            .serve_with_incoming(futures::stream::iter(vec![
-                                Ok::<_, std::io::Error>(server_stream),
-                            ]))
-                            .await
-                            .expect("console subscriber failed.");
-                        println!("Waiting for finish signal");
-                        match console_server_finish_rx.recv().await {
-                            Ok(_) => println!("Getting ready to drop the aggregate handle."),
-                            Err(err) => println!("Error waiting for finish signal: {err:?}"),
-                        }
-                        drop(aggregate);
-                    })
+                    .spawn(console_server(server, server_stream, finish_tx.subscribe()))
                     .expect("console-test error: could not spawn 'console-server' task");
 
                 let console_client = task::Builder::new()
                     .name("console-client")
                     .spawn(async move {
-                        tokio::time::sleep(Duration::from_millis(200)).await;
+                        tracing::debug!("#### console-client: before sleep");
+                        // client_connected_rx
+                        //     .await
+                        //     .expect("console-test error: Failure awaiting start signal");
+                        // tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                        tracing::debug!("#### console-client: after sleep");
 
                         let mut client_stream = Some(client_stream);
                         let channel = Endpoint::try_from("http://[::]:6669")
@@ -107,9 +113,16 @@ where
                                 }
                             }))
                             .await
-                            .expect("Could not create client");
+                            .expect("client-console error: couldn't create client");
+                        tracing::debug!("### console-client: before send client connected");
+                        client_connected_tx
+                            .send(())
+                            .expect("console-client error: couldn't send client connected signal");
+                        tracing::debug!("### console-client: after send client connected");
 
-                        let actual_tasks = record_actual_tasks(channel, 2).await;
+                        tracing::debug!("#### console-client: before record actual tasks");
+                        let actual_tasks = record_actual_tasks(channel, 4).await;
+                        tracing::debug!("#### console-client: after record actual tasks");
 
                         let mut validation_results = Vec::new();
                         for expected in &expected_tasks {
@@ -145,16 +158,31 @@ where
             .build()
             .unwrap();
 
-        tokio::task::Builder::new()
-            .name(MAIN_TASK_NAME)
-            .spawn_on(future, runtime.handle())
-            .unwrap();
-        runtime.block_on(async {
-            println!("Before await finish...");
+        runtime.block_on(async move {
+            tracing::debug!("**** Before await client connected...");
+
+            client_connected_rx
+                .await
+                .expect("console-test error: couldn't receive client connected signal");
+
+            tracing::debug!("**** After await client connected...");
+
+            // Run the future that we are testing.
+            _ = tokio::task::Builder::new()
+                .name(MAIN_TASK_NAME)
+                .spawn(future)
+                .expect("console-test error: couldn't spawn test task")
+                .await;
+
+            // client_connected_tx
+            //     .send(())
+            //     .expect("console-test error: Could not send start signal");
+            tracing::debug!("**** After spawn task away - Before await finish...");
             match finish_rx.recv().await {
-                Ok(_) => println!("finish message received."),
-                Err(err) => println!("finish message could not be received: {err}"),
+                Ok(_) => tracing::debug!("finish message received."),
+                Err(err) => tracing::debug!("finish message could not be received: {err}"),
             }
+            tracing::debug!("**** After await finish");
         });
     });
 
@@ -165,6 +193,27 @@ where
     if let Err(test_failure) = test_result {
         panic!("Test failed: {test_failure}")
     }
+}
+
+async fn console_server(
+    server: console_subscriber::Server,
+    server_stream: DuplexStream,
+    mut completion_rx: broadcast::Receiver<()>,
+) {
+    let (service, aggregate) = server.into_parts();
+    Server::builder()
+        .add_service(service)
+        .serve_with_incoming(futures::stream::iter(vec![Ok::<_, std::io::Error>(
+            server_stream,
+        )]))
+        .await
+        .expect("console subscriber failed.");
+    tracing::debug!("Waiting for finish signal");
+    match completion_rx.recv().await {
+        Ok(_) => tracing::debug!("Getting ready to drop the aggregate handle."),
+        Err(err) => tracing::debug!("Error waiting for finish signal: {err:?}"),
+    }
+    drop(aggregate);
 }
 
 async fn record_actual_tasks(channel: Channel, update_limit: usize) -> Vec<ActualTask> {
@@ -184,29 +233,27 @@ async fn record_actual_tasks(channel: Channel, update_limit: usize) -> Vec<Actua
     while let Some(update) = stream.next().await {
         match update {
             Ok(update) => {
-                println!("----==== UPDATE {i} ====----");
+                tracing::debug!("----==== UPDATE {i} ====----");
                 if let Some(register_metadata) = &update.new_metadata {
                     for new_metadata in &register_metadata.metadata {
                         if let Some(metadata) = &new_metadata.metadata {
-                            println!("New metadata: name: {:?}", metadata.name);
+                            //tracing::debug!("New metadata: name: {:?}", metadata.name);
                             if metadata.name == "runtime.spawn" {
-                                println!("New metadata: {:?}", metadata);
+                                // tracing::debug!("New metadata: {:?}", metadata);
                             }
                         }
                     }
                 }
                 if let Some(task_update) = &update.task_update {
                     for new_task in &task_update.new_tasks {
-                        println!("New task!");
-
                         if let Some(id) = &new_task.id {
                             let mut actual_task = ActualTask::new(id.id);
-                            println!("  -> id = {id:?}");
+                            tracing::debug!("NEW TASK -> id = {id:?}");
                             for field in &new_task.fields {
                                 if let Some(console_api::field::Name::StrName(field_name)) =
                                     &field.name
                                 {
-                                    println!("  -> {field:?}");
+                                    tracing::debug!("  -> {field:?}");
                                     if field_name == "task.name" {
                                         actual_task.name = match &field.value {
                                             Some(Value::DebugVal(value)) => Some(value.clone()),
@@ -217,6 +264,8 @@ async fn record_actual_tasks(channel: Channel, update_limit: usize) -> Vec<Actua
                                 }
                             }
                             tasks.insert(actual_task.id, actual_task);
+                        } else {
+                            tracing::debug!("New task without ID");
                         }
                     }
 
@@ -225,12 +274,12 @@ async fn record_actual_tasks(channel: Channel, update_limit: usize) -> Vec<Actua
                             task.wakes = stats.wakes;
                             task.self_wakes = stats.self_wakes;
                         }
-                        println!("{id} --> {stats:?}");
+                        tracing::debug!("{id} --> {stats:?}");
                     }
                 }
 
                 if let Some(task_update) = update.task_update {
-                    println!(
+                    tracing::debug!(
                         "UPDATE: new task count: {}, update count: {}, dropped count: {}",
                         task_update.new_tasks.len(),
                         task_update.stats_update.len(),
