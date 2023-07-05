@@ -251,8 +251,9 @@ else
     exit 1
 fi
 
+cd "$rootdir"
 git add "Cargo.lock"
-git_push=(git push -u origin)
+git_push=(git push -u origin --force-with-lease)
 git_amend=(git commit --amend --reuse-message HEAD)
 if [[ "$dry_run" ]]; then
     echo ""

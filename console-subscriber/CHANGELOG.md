@@ -3,9 +3,23 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## console-subscriber-v0.1.10 - (2023-07-03)
+
+[05cdab0](https://github.com/tokio-rs/console/commit/05cdab07a3da603697520a56f0b99b2e2042d8bd)...[91929d0](https://github.com/tokio-rs/console/commit/91929d030768287b5f95595a757eea5eeb151022)
+
+
+### Fixed
+
+- Fix self wakes count ([#430](https://github.com/tokio-rs/console/issues/430)) ([ee0b8e2](https://github.com/tokio-rs/console/commit/ee0b8e28c7761edd277beb865b2a1e0a3bfa1851))
+- Do not report excessive polling ([#378](https://github.com/tokio-rs/console/issues/378)) ([#440](https://github.com/tokio-rs/console/issues/440)) ([91929d0](https://github.com/tokio-rs/console/commit/91929d030768287b5f95595a757eea5eeb151022), closes [#378](https://github.com/tokio-rs/console/issues/378))
+
+### Console_subscriber
+
+- Remove clock skew warning in start_poll ([#434](https://github.com/tokio-rs/console/issues/434)) ([fb45ca1](https://github.com/tokio-rs/console/commit/fb45ca16a77a9a63e88494a892076d41495e6bb2))
+
 ## console-subscriber-v0.1.9 - (2023-05-09)
 
-[8fb1732](https://github.com/tokio-rs/console/commit/8fb1732dfd78ec3a8e4945c453d1c127f63ecdc4)...[c8a69e9](https://github.com/tokio-rs/console/commit/c8a69e9269c113bdde909ad1f4aab4156adfd5f4)
+[8fb1732](https://github.com/tokio-rs/console/commit/8fb1732dfd78ec3a8e4945c453d1c127f63ecdc4)...[05cdab0](https://github.com/tokio-rs/console/commit/05cdab07a3da603697520a56f0b99b2e2042d8bd)
 
 
 ### Added
