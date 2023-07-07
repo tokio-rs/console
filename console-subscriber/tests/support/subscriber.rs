@@ -4,6 +4,7 @@ use console_api::{
     field::Value,
     instrument::{instrument_client::InstrumentClient, InstrumentRequest},
 };
+use console_subscriber::ServerParts;
 use futures::stream::StreamExt;
 use tokio::{
     io::DuplexStream,
@@ -68,7 +69,7 @@ where
                 .with_env_filter(
                     EnvFilter::builder()
                         .with_default_directive(LevelFilter::DEBUG.into())
-                        .parse_lossy("wake=trace,console_subscriber=trace,info"),
+                        .parse_lossy("framework=trace,console_subscriber=trace,info"),
                 )
                 .finish();
             let _subscriber_guard = tracing::subscriber::set_default(sub);
@@ -200,7 +201,11 @@ async fn console_server(
     server_stream: DuplexStream,
     mut completion_rx: broadcast::Receiver<()>,
 ) {
-    let (service, aggregate) = server.into_parts();
+    let ServerParts {
+        instrument_server: service,
+        aggregator_handle: aggregate,
+        ..
+    } = server.into_parts();
     Server::builder()
         .add_service(service)
         .serve_with_incoming(futures::stream::iter(vec![Ok::<_, std::io::Error>(

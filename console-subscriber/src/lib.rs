@@ -940,7 +940,10 @@ impl Server {
         mut builder: tonic::transport::Server,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         let addr = self.addr.clone();
-        let (service, aggregate) = self.into_parts();
+        let ServerParts {
+            instrument_server: service,
+            aggregator_handle: aggregate,
+        } = self.into_parts();
         let router = builder.add_service(service);
         let res = match addr {
             ServerAddr::Tcp(addr) => {
@@ -961,14 +964,42 @@ impl Server {
     /// Returns the parts needed to spawn a gRPC server and keep the aggregation
     /// worker running.
     ///
-    /// The `InstrumentServer<Server>` can be used to construct a router which
-    /// can be added to a [`tonic`] gRPC server.
+    /// # Examples
     ///
-    /// The [`AggregatorGuard`] must be kept until after the server has been
-    /// shut down.
+    /// The parts can be used to serve the instrument server together with
+    /// other endpoints from the same gRPC server.
     ///
-    /// [`tonic`]: https://docs.rs/tonic/
-    pub fn into_parts(mut self) -> (InstrumentServer<Server>, AggregatorGuard) {
+    /// ```
+    /// use console_subscriber::{ConsoleLayer, ServerParts};
+    ///
+    /// # let runtime = tokio::runtime::Builder::new_current_thread()
+    /// #     .enable_all()
+    /// #     .build()
+    /// #     .unwrap();
+    /// # runtime.block_on(async {
+    /// let (console_layer, server) = ConsoleLayer::builder().build();
+    /// let ServerParts {
+    ///     instrument_server,
+    ///     aggregator_handle,
+    ///     ..
+    /// } = server.into_parts();
+    ///
+    /// let router = tonic::transport::Server::builder()
+    ///     //.add_service(some_other_service)
+    ///     .add_service(instrument_server);
+    /// let serve = router.serve(std::net::SocketAddr::new(
+    ///     std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+    ///     6669,
+    /// ));
+    ///
+    /// // Finally, spawn the server.
+    /// tokio::spawn(serve);
+    /// # // Avoid a warning that `console_layer` and `aggregator_handle` are unused.
+    /// # drop(console_layer);
+    /// # drop(aggregator_handle);
+    /// # });
+    /// ```
+    pub fn into_parts(mut self) -> ServerParts {
         let aggregate = self
             .aggregator
             .take()
@@ -977,25 +1008,50 @@ impl Server {
 
         let service = proto::instrument::instrument_server::InstrumentServer::new(self);
 
-        (
-            service,
-            AggregatorGuard {
+        ServerParts {
+            instrument_server: service,
+            aggregator_handle: AggregatorHandle {
                 join_handle: aggregate,
             },
-        )
+        }
     }
 }
 
-/// Aggregator guard.
+/// Server Parts
+///
+/// This struct contains the parts returned by [`Server::into_parts`]. It may contain
+/// further parts in the future, an as such is marked as [`non_exhaustive`].
+///
+/// The `InstrumentServer<Server>` can be used to construct a router which
+/// can be added to a [`tonic`] gRPC server.
+///
+/// The [`AggregatorHandle`] must be kept until after the server has been
+/// shut down.
+///
+/// See the [`Server::into_parts`] documentation for usage.
+#[non_exhaustive]
+pub struct ServerParts {
+    /// The instrument server.
+    ///
+    /// See the documentation for [`InstrumentServer`] for details.
+    pub instrument_server: InstrumentServer<Server>,
+
+    /// The aggregate handle.
+    ///
+    /// See the documentation for [`AggregatorHandle`] for details.
+    pub aggregator_handle: AggregatorHandle,
+}
+
+/// Aggregator handle.
 ///
 /// This object is returned from [`Server::into_parts`] and must be
 /// kept as long as the `InstrumentServer<Server>` - which is also
 /// returned - is in use.
-pub struct AggregatorGuard {
+pub struct AggregatorHandle {
     join_handle: JoinHandle<()>,
 }
 
-impl Drop for AggregatorGuard {
+impl Drop for AggregatorHandle {
     fn drop(&mut self) {
         self.join_handle.abort();
     }

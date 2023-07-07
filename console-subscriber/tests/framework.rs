@@ -1,3 +1,10 @@
+//! Framework tests
+//!
+//! The tests in this module are here to verify the testing framework itself.
+//! As such, some of these tests may be repeated elsewhere (where we wish to
+//! actually test the functionality of `console-subscriber`) and others are
+//! negative tests that should panic.
+
 use std::time::Duration;
 
 use tokio::{task, time::sleep};
@@ -12,7 +19,6 @@ use support::task::ExpectedTask;
 
 #[test]
 fn self_wake() {
-    // Test is here
     let expected_task = ExpectedTask::default()
         .match_name(MAIN_TASK_NAME.into())
         .expect_wakes(1)
@@ -26,7 +32,6 @@ fn self_wake() {
 
 #[test]
 fn test_spawned_task() {
-    // Test is here
     let expected_task = ExpectedTask::default()
         .match_name("another-name".into())
         .expect_wakes(1)
@@ -45,7 +50,6 @@ fn test_spawned_task() {
 #[test]
 #[should_panic(expected = "Test failed: No tasks matched the expected tasks.")]
 fn fail_wrong_task_name() {
-    // Test is here
     let expected_task = ExpectedTask::default()
         .match_name("wrong-name".into())
         .expect_wakes(1)
@@ -62,7 +66,6 @@ fn fail_wrong_task_name() {
  - Task<name=main>: expected `self_wakes` to be 1, but actual was 0
 ")]
 fn fail_self_wake() {
-    // Test is here
     let expected_task = ExpectedTask::default()
         .match_name(MAIN_TASK_NAME.into())
         .expect_wakes(1)
@@ -70,9 +73,7 @@ fn fail_self_wake() {
     let expected_tasks = vec![expected_task];
 
     let future = async {
-        // The test starts here.
         sleep(Duration::ZERO).await;
-        // The test ends here.
     };
 
     assert_tasks(expected_tasks, future);
