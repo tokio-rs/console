@@ -167,6 +167,31 @@ impl View {
                         self.state = ResourcesList;
                         update_kind = UpdateKind::Other;
                     }
+                    key!(Enter) => {
+                        if let Some(op) = view.async_ops_table.selected_item().upgrade() {
+                            if let Some(task_id) = op.borrow().task_id() {
+                                let task: u64 = task_id.to_string().parse().unwrap();
+                                let item = self
+                                    .tasks_list
+                                    .sorted_items
+                                    .iter()
+                                    .filter_map(|i| i.upgrade())
+                                    .find(|t| {
+                                        let task_id: u64 =
+                                            t.borrow().id().to_string().parse().unwrap();
+                                        task_id == task
+                                    });
+
+                                if let Some(t) = item {
+                                    update_kind = UpdateKind::SelectTask(t.borrow().span_id());
+                                    self.state = TaskInstance(self::task::TaskView::new(
+                                        t,
+                                        state.task_details_ref(),
+                                    ));
+                                }
+                            }
+                        }
+                    }
                     _ => {
                         // otherwise pass on to view
                         view.update_input(event);

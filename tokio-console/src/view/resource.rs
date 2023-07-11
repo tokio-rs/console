@@ -21,7 +21,7 @@ use std::{cell::RefCell, rc::Rc};
 
 pub(crate) struct ResourceView {
     resource: Rc<RefCell<Resource>>,
-    async_ops_table: TableListState<AsyncOpsTable, 9>,
+    pub async_ops_table: TableListState<AsyncOpsTable, 9>,
     initial_render: bool,
 }
 
