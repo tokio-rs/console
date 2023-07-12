@@ -368,10 +368,6 @@ impl Task {
             .unwrap_or_default()
     }
 
-    pub(crate) fn yielded(&self) -> bool {
-        self.total_polls() > 1
-    }
-
     /// Returns the total number of times the task has been polled.
     pub(crate) fn total_polls(&self) -> u64 {
         self.stats.polls

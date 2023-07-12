@@ -192,7 +192,7 @@ impl Warn<Task> for NeverYielded {
             return false;
         }
 
-        if task.yielded() {
+        if task.total_polls() > 1 {
             return false;
         }
 
