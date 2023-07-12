@@ -163,7 +163,7 @@ pub(crate) struct NeverYielded {
 }
 
 impl NeverYielded {
-    pub(crate) const DEFAULT_DURATION: Duration = Duration::from_millis(10);
+    pub(crate) const DEFAULT_DURATION: Duration = Duration::from_secs(1);
     pub(crate) fn new(min_duration: Duration) -> Self {
         Self {
             min_duration,
