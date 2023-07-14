@@ -9,14 +9,8 @@ use std::time::Duration;
 
 use tokio::{task, time::sleep};
 
-mod support {
-    pub mod state;
-    pub mod subscriber;
-    pub mod task;
-}
-
-use support::subscriber::{assert_tasks, MAIN_TASK_NAME};
-use support::task::ExpectedTask;
+mod support;
+use support::{assert_tasks, ExpectedTask, MAIN_TASK_NAME};
 
 #[test]
 fn wakes() {
