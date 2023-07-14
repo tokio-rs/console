@@ -51,6 +51,7 @@ enum TestStep {
     Start,
     ServerStarted,
     ClientConnected,
+    TestFinished,
     Completed,
 }
 
@@ -94,8 +95,38 @@ impl TestState {
         }
     }
 
+    fn try_wait_for_step(&mut self, desired_step: TestStep) -> bool {
+        self.update_step();
+
+        self.step == desired_step
+    }
+
     #[track_caller]
     fn advance_to_step(&mut self, next_step: TestStep) {
+        self.update_step();
+
+        if self.step >= next_step {
+            panic!(
+                "cannot advance to previous or current step! current step: {current}, next step: {next_step}",
+                current = self.step);
+        }
+
+        match (&self.step, &next_step) {
+            (TestStep::Start, TestStep::ServerStarted) |
+            (TestStep::ServerStarted, TestStep::ClientConnected) |
+            (TestStep::ClientConnected, TestStep::TestFinished) |
+            (TestStep::TestFinished, TestStep::Completed) => {},
+            (_, _) => panic!(
+                "cannot advance more than one step! current step: {current}, next step: {next_step}",
+                current = self.step),
+        }
+
+        self.sender
+            .send(next_step)
+            .expect("failed to send the next test step, did the test abort?");
+    }
+
+    fn update_step(&mut self) {
         loop {
             match self.receiver.try_recv() {
                 Ok(step) => self.step = step,
@@ -108,24 +139,6 @@ impl TestState {
                 Err(TryRecvError::Empty) => break,
             }
         }
-        if self.step >= next_step {
-            panic!(
-                "cannot advance to a previous or equal step! current step: {current}, next step: {next_step}",
-                current = self.step);
-        }
-
-        match (&self.step, &next_step) {
-            (TestStep::Start, TestStep::ServerStarted) |
-            (TestStep::ServerStarted, TestStep::ClientConnected) |
-            (TestStep::ClientConnected, TestStep::Completed) => {},
-            (_, _) => panic!(
-                "cannot advance more than one step! current step: {current}, next step: {next_step}",
-                current = self.step),
-        }
-
-        self.sender
-            .send(next_step)
-            .expect("failed to send the next test step, did the test abort?");
     }
 }
 
@@ -216,7 +229,7 @@ where
                         tracing::debug!("### console-client: after send client connected");
 
                         tracing::debug!("#### console-client: before record actual tasks");
-                        let actual_tasks = record_actual_tasks(channel, 4).await;
+                        let actual_tasks = record_actual_tasks(channel, test_state.clone()).await;
                         tracing::debug!("#### console-client: after record actual tasks");
 
                         let mut validation_results = Vec::new();
@@ -266,6 +279,7 @@ where
                 .spawn(future)
                 .expect("console-test error: couldn't spawn test task")
                 .await;
+            test_state_test.advance_to_step(TestStep::TestFinished);
 
             tracing::debug!("**** After spawn task away - Before await finish...");
             test_state_test.wait_for_step(TestStep::Completed).await;
@@ -310,7 +324,7 @@ async fn console_server(
     drop(aggregate);
 }
 
-async fn record_actual_tasks(channel: Channel, update_limit: usize) -> Vec<ActualTask> {
+async fn record_actual_tasks(channel: Channel, mut test_state: TestState) -> Vec<ActualTask> {
     let mut client = InstrumentClient::new(channel);
 
     let mut stream = loop {
@@ -324,6 +338,7 @@ async fn record_actual_tasks(channel: Channel, update_limit: usize) -> Vec<Actua
     let mut tasks = HashMap::new();
 
     let mut i: usize = 0;
+    let mut last_update = false;
     while let Some(update) = stream.next().await {
         match update {
             Ok(update) => {
@@ -386,8 +401,14 @@ async fn record_actual_tasks(channel: Channel, update_limit: usize) -> Vec<Actua
                 panic!("update stream error: {}", e);
             }
         }
-        if i > update_limit {
+
+        if last_update {
             break;
+        }
+
+        if test_state.try_wait_for_step(TestStep::TestFinished) {
+            // Once the test finishes running, we will get one further update and finish.
+            last_update = true;
         }
     }
 
