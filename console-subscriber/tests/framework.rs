@@ -48,7 +48,9 @@ fn test_spawned_task() {
 }
 
 #[test]
-#[should_panic(expected = "Test failed: No tasks matched the expected tasks.")]
+#[should_panic(expected = "Test failed: Task validation failed:
+ - Task<name=wrong-name>: no matching actual task was found
+")]
 fn fail_wrong_task_name() {
     let expected_task = ExpectedTask::default()
         .match_name("wrong-name".into())

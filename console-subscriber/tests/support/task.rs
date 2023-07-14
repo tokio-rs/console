@@ -21,7 +21,7 @@ impl ActualTask {
 
 pub(super) struct TaskValidationFailure {
     expected: ExpectedTask,
-    actual: ActualTask,
+    actual: Option<ActualTask>,
     failure: String,
 }
 
@@ -35,10 +35,16 @@ impl fmt::Display for TaskValidationFailure {
 
 impl fmt::Debug for TaskValidationFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Task Validation Failed!\n  Expected Task: {expected:?}\n  Actual Task:   {actual:?}\n  Failure:       {failure}",
-            expected = self.expected, actual = self.actual, failure = self.failure)
+        match &self.actual {
+            Some(actual) => write!(
+                f,
+                "Task Validation Failed!\n  Expected Task: {expected:?}\n  Actual Task:   {actual:?}\n  Failure:       {failure}",
+                expected = self.expected, failure = self.failure),
+            None => write!(
+                f,
+                "Task Validation Failed!\n  Expected Task: {expected:?}\n  Failure:       {failure}",
+                expected = self.expected, failure = self.failure),
+        }
     }
 }
 
@@ -61,7 +67,7 @@ impl Default for ExpectedTask {
 }
 
 impl ExpectedTask {
-    pub fn matches_actual_task(&self, actual_task: &ActualTask) -> bool {
+    pub(super) fn matches_actual_task(&self, actual_task: &ActualTask) -> bool {
         if let Some(match_name) = &self.match_name {
             if Some(match_name) == actual_task.name.as_ref() {
                 return true;
@@ -69,6 +75,14 @@ impl ExpectedTask {
         }
 
         false
+    }
+
+    pub(super) fn no_match_error(&self) -> Result<(), TaskValidationFailure> {
+        Err(TaskValidationFailure {
+            expected: self.clone(),
+            actual: None,
+            failure: format!("{self}: no matching actual task was found"),
+        })
     }
 
     pub(super) fn validate_actual_task(
@@ -81,7 +95,7 @@ impl ExpectedTask {
             if expected_wakes != actual_task.wakes {
                 return Err(TaskValidationFailure {
                     expected: self.clone(),
-                    actual: actual_task.clone(),
+                    actual: Some(actual_task.clone()),
                     failure: format!(
                         "{self}: expected `wakes` to be {expected_wakes}, but actual was {actual_wakes}",
                         actual_wakes = actual_task.wakes),
@@ -94,7 +108,7 @@ impl ExpectedTask {
             if expected_self_wakes != actual_task.self_wakes {
                 return Err(TaskValidationFailure {
                     expected: self.clone(),
-                    actual: actual_task.clone(),
+                    actual: Some(actual_task.clone()),
                     failure: format!(
                         "{self}: expected `self_wakes` to be {expected_self_wakes}, but actual was {actual_self_wakes}",
                         actual_self_wakes = actual_task.self_wakes),

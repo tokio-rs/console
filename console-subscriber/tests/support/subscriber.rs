@@ -22,25 +22,17 @@ use super::task::{ActualTask, ExpectedTask, TaskValidationFailure};
 pub const MAIN_TASK_NAME: &str = "main";
 
 #[derive(Debug)]
-enum TestFailure {
-    NoTasksMatched,
-    TasksFailedValidation {
-        failures: Vec<TaskValidationFailure>,
-    },
+struct TestFailure {
+    failures: Vec<TaskValidationFailure>,
 }
 
 impl fmt::Display for TestFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::NoTasksMatched => write!(f, "No tasks matched the expected tasks."),
-            Self::TasksFailedValidation { failures } => {
-                write!(f, "Task validation failed:\n")?;
-                for failure in failures {
-                    write!(f, " - {failure}\n")?;
-                }
-                Ok(())
-            }
+        write!(f, "Task validation failed:\n")?;
+        for failure in &self.failures {
+            write!(f, " - {failure}\n")?;
         }
+        Ok(())
     }
 }
 
@@ -182,56 +174,15 @@ where
                     .spawn(console_server(server, server_stream, test_state.clone()))
                     .expect("console-test error: could not spawn 'console-server' task");
 
-                let console_client = task::Builder::new()
+                let actual_tasks = task::Builder::new()
                     .name("console-client")
-                    .spawn(async move {
-                        test_state.wait_for_step(TestStep::ServerStarted).await;
-
-                        let mut client_stream = Some(client_stream);
-                        let channel = Endpoint::try_from("http://[::]:6669")
-                            .expect("Could not create endpoint")
-                            .connect_with_connector(service_fn(move |_: Uri| {
-                                let client = client_stream.take();
-
-                                async move {
-                                    if let Some(client) = client {
-                                        Ok(client)
-                                    } else {
-                                        Err(std::io::Error::new(
-                                            std::io::ErrorKind::Other,
-                                            "Client already taken",
-                                        ))
-                                    }
-                                }
-                            }))
-                            .await
-                            .expect("client-console error: couldn't create client");
-                        test_state.advance_to_step(TestStep::ClientConnected);
-
-                        let actual_tasks = record_actual_tasks(channel, test_state.clone()).await;
-
-                        let mut validation_results = Vec::new();
-                        for expected in &expected_tasks {
-                            for actual in &actual_tasks {
-                                if expected.matches_actual_task(actual) {
-                                    validation_results.push(expected.validate_actual_task(actual));
-
-                                    // We only match a single task.
-                                    // FIXME(hds): We should probably create an error or a warning if multiple tasks match.
-                                    continue;
-                                }
-                            }
-                        }
-
-                        test_state.advance_to_step(TestStep::Completed);
-
-                        test_result(validation_results)
-                    })
-                    .expect("console-test error: could not spawn 'console-client' task");
-
-                console_client
+                    .spawn(console_client(client_stream, test_state.clone()))
+                    .expect("console-test error: could not spawn 'console-client' task")
                     .await
-                    .expect("console-test error: failed to await 'console-client' task")
+                    .expect("console-test error: failed to await 'console-client' task");
+
+                test_state.advance_to_step(TestStep::Completed);
+                actual_tasks
             })
         })
         .expect("console subscriber could not spawn thread");
@@ -259,15 +210,23 @@ where
         });
     });
 
-    let test_result = join_handle
+    let actual_tasks = join_handle
         .join()
         .expect("console-test error: failed to join 'console-subscriber' thread");
 
-    if let Err(test_failure) = test_result {
+    if let Err(test_failure) = validate_expected_tasks(expected_tasks, actual_tasks) {
         panic!("Test failed: {test_failure}")
     }
 }
 
+/// Starts the console server.
+///
+/// The server will start serving over its side of the duplex stream.
+///
+/// Once the server gets spawned into its task, the test state is advanced
+/// to the `ServerStarted` step. This function will then wait until the test
+/// state reaches the `Completed` step (indicating that all validation of the
+/// received updates has been completed) before dropping the aggregator.
 async fn console_server(
     server: console_subscriber::Server,
     server_stream: DuplexStream,
@@ -291,8 +250,51 @@ async fn console_server(
     drop(aggregate);
 }
 
-async fn record_actual_tasks(channel: Channel, mut test_state: TestState) -> Vec<ActualTask> {
-    let mut client = InstrumentClient::new(channel);
+/// Starts the console client and validates the expected tasks.
+///
+/// First we wait until the server has started (test step `ServerStarted`), then
+/// the client is connected to its half of the duplex stream and we start recording
+/// the actual tasks.
+///
+/// Once recording finishes (see [`record_actual_tasks()`] for details on the test
+/// state condition), the actual tasks returned.
+async fn console_client(client_stream: DuplexStream, mut test_state: TestState) -> Vec<ActualTask> {
+    test_state.wait_for_step(TestStep::ServerStarted).await;
+
+    let mut client_stream = Some(client_stream);
+    let channel = Endpoint::try_from("http://[::]:6669")
+        .expect("Could not create endpoint")
+        .connect_with_connector(service_fn(move |_: Uri| {
+            let client = client_stream.take();
+
+            async move {
+                if let Some(client) = client {
+                    Ok(client)
+                } else {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Client already taken",
+                    ))
+                }
+            }
+        }))
+        .await
+        .expect("client-console error: couldn't create client");
+    test_state.advance_to_step(TestStep::ClientConnected);
+
+    record_actual_tasks(channel, test_state.clone()).await
+}
+
+/// Records the actual tasks which are received by the client channel.
+///
+/// Updates will be received until the test state reaches the `TestFinished` step
+/// (indicating that the test itself has finished running), at which point we wait
+/// for a final update before returning all the actual tasks which were recorded.
+async fn record_actual_tasks(
+    client_channel: Channel,
+    mut test_state: TestState,
+) -> Vec<ActualTask> {
+    let mut client = InstrumentClient::new(client_channel);
 
     let mut stream = loop {
         let request = tonic::Request::new(InstrumentRequest {});
@@ -355,15 +357,21 @@ async fn record_actual_tasks(channel: Channel, mut test_state: TestState) -> Vec
     tasks.into_values().collect()
 }
 
-fn test_result(
-    validation_results: Vec<Result<(), TaskValidationFailure>>,
+/// Validate the expected tasks against the actual tasks.
+///
+/// Each expected task is checked in turn.
+///
+/// A matching actual task is searched for. If one is found it, the
+/// expected task is validated against the actual task.
+///
+/// Any validation errors result in failure. If no matches
+fn validate_expected_tasks(
+    expected_tasks: Vec<ExpectedTask>,
+    actual_tasks: Vec<ActualTask>,
 ) -> Result<(), TestFailure> {
-    if validation_results.is_empty() {
-        return Err(TestFailure::NoTasksMatched);
-    }
-
-    let failures: Vec<_> = validation_results
-        .into_iter()
+    let failures: Vec<_> = expected_tasks
+        .iter()
+        .map(|expected| validate_expected_task(expected, &actual_tasks))
         .filter_map(|r| match r {
             Ok(_) => None,
             Err(validation_error) => Some(validation_error),
@@ -373,6 +381,22 @@ fn test_result(
     if failures.is_empty() {
         Ok(())
     } else {
-        Err(TestFailure::TasksFailedValidation { failures: failures })
+        Err(TestFailure { failures: failures })
     }
+}
+
+fn validate_expected_task(
+    expected: &ExpectedTask,
+    actual_tasks: &Vec<ActualTask>,
+) -> Result<(), TaskValidationFailure> {
+    for actual in actual_tasks {
+        //println!("actual task: {actual:?}");
+        if expected.matches_actual_task(actual) {
+            // We only match a single task.
+            // FIXME(hds): We should probably create an error or a warning if multiple tasks match.
+            return expected.validate_actual_task(actual);
+        }
+    }
+
+    expected.no_match_error()
 }
