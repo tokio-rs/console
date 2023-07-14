@@ -52,6 +52,7 @@ impl fmt::Debug for TaskValidationFailure {
 pub struct ExpectedTask {
     match_name: Option<String>,
 
+    expect_present: Option<bool>,
     expect_wakes: Option<u64>,
     expect_self_wakes: Option<u64>,
 }
@@ -59,9 +60,10 @@ pub struct ExpectedTask {
 impl Default for ExpectedTask {
     fn default() -> Self {
         Self {
-            match_name: Default::default(),
-            expect_wakes: Default::default(),
-            expect_self_wakes: Default::default(),
+            match_name: None,
+            expect_present: None,
+            expect_wakes: None,
+            expect_self_wakes: None,
         }
     }
 }
@@ -90,6 +92,10 @@ impl ExpectedTask {
         actual_task: &ActualTask,
     ) -> Result<(), TaskValidationFailure> {
         let mut no_expectations = true;
+        if let Some(_expected) = self.expect_present {
+            no_expectations = false;
+        }
+
         if let Some(expected_wakes) = self.expect_wakes {
             no_expectations = false;
             if expected_wakes != actual_task.wakes {
@@ -117,7 +123,12 @@ impl ExpectedTask {
         }
 
         if no_expectations {
-            println!("{self}: validated, but no expectations found. Did you forget to set some?",);
+            return Err(TaskValidationFailure {
+                expected: self.clone(),
+                actual: Some(actual_task.clone()),
+                failure: format!(
+                    "{self}: no expectations set, if you want to just expect that a matching task is present, use `expect_present()`")
+            });
         }
 
         Ok(())
@@ -125,6 +136,11 @@ impl ExpectedTask {
 
     pub fn match_name(mut self, name: String) -> Self {
         self.match_name = Some(name);
+        self
+    }
+
+    pub fn expect_present(mut self) -> Self {
+        self.expect_present = Some(true);
         self
     }
 
