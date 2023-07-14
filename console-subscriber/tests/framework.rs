@@ -10,6 +10,7 @@ use std::time::Duration;
 use tokio::{task, time::sleep};
 
 mod support {
+    pub mod state;
     pub mod subscriber;
     pub mod task;
 }
