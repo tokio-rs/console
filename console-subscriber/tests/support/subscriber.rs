@@ -13,7 +13,7 @@ use tower::service_fn;
 use super::state::{TestState, TestStep};
 use super::task::{ActualTask, ExpectedTask, TaskValidationFailure};
 
-pub const MAIN_TASK_NAME: &str = "main";
+pub(crate) const MAIN_TASK_NAME: &str = "main";
 
 #[derive(Debug)]
 struct TestFailure {
@@ -31,7 +31,7 @@ impl fmt::Display for TestFailure {
 }
 
 #[track_caller]
-pub fn assert_tasks<Fut>(expected_tasks: Vec<ExpectedTask>, future: Fut)
+pub(super) fn run_test<Fut>(expected_tasks: Vec<ExpectedTask>, future: Fut)
 where
     Fut: Future + Send + 'static,
     Fut::Output: Send + 'static,

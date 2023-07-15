@@ -1,15 +1,17 @@
 use std::{error, fmt};
 
+use super::MAIN_TASK_NAME;
+
 #[derive(Clone, Debug)]
-pub struct ActualTask {
-    pub id: u64,
-    pub name: Option<String>,
-    pub wakes: u64,
-    pub self_wakes: u64,
+pub(super) struct ActualTask {
+    pub(super) id: u64,
+    pub(super) name: Option<String>,
+    pub(super) wakes: u64,
+    pub(super) self_wakes: u64,
 }
 
 impl ActualTask {
-    pub fn new(id: u64) -> Self {
+    pub(super) fn new(id: u64) -> Self {
         Self {
             id,
             name: None,
@@ -49,7 +51,7 @@ impl fmt::Debug for TaskValidationFailure {
 }
 
 #[derive(Clone, Debug)]
-pub struct ExpectedTask {
+pub(crate) struct ExpectedTask {
     match_name: Option<String>,
 
     expect_present: Option<bool>,
@@ -134,22 +136,32 @@ impl ExpectedTask {
         Ok(())
     }
 
-    pub fn match_name(mut self, name: String) -> Self {
+    #[allow(dead_code)]
+    pub(crate) fn match_name(mut self, name: String) -> Self {
         self.match_name = Some(name);
         self
     }
 
-    pub fn expect_present(mut self) -> Self {
+    #[allow(dead_code)]
+    pub(crate) fn match_default_name(mut self) -> Self {
+        self.match_name = Some(MAIN_TASK_NAME.into());
+        self
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn expect_present(mut self) -> Self {
         self.expect_present = Some(true);
         self
     }
 
-    pub fn expect_wakes(mut self, wakes: u64) -> Self {
+    #[allow(dead_code)]
+    pub(crate) fn expect_wakes(mut self, wakes: u64) -> Self {
         self.expect_wakes = Some(wakes);
         self
     }
 
-    pub fn expect_self_wakes(mut self, self_wakes: u64) -> Self {
+    #[allow(dead_code)]
+    pub(crate) fn expect_self_wakes(mut self, self_wakes: u64) -> Self {
         self.expect_self_wakes = Some(self_wakes);
         self
     }
