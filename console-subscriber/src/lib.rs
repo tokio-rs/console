@@ -964,8 +964,8 @@ impl Server {
     /// Returns the parts needed to spawn a gRPC server and keep the aggregation
     /// worker running.
     ///
-    /// Note that a server spawned in this way will overwrite any value set by
-    /// [`Builder::server_addr`] as the user becomes responsible for defining
+    /// Note that a server spawned in this way will disregard any value set by
+    /// [`Builder::server_addr`], as the user becomes responsible for defining
     /// the address when calling [`Router::serve`].
     ///
     /// # Examples
@@ -1042,7 +1042,7 @@ pub struct ServerParts {
     /// See the documentation for [`InstrumentServer`] for details.
     pub instrument_server: InstrumentServer<Server>,
 
-    /// The aggregate handle.
+    /// A handle to the background worker task responsible for aggregating trace data.
     ///
     /// See the documentation for [`AggregatorHandle`] for details.
     pub aggregator_handle: AggregatorHandle,
