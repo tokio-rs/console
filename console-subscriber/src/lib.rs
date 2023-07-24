@@ -1064,7 +1064,7 @@ pub struct ServerParts {
 /// of the API to stop the aggregator task by calling [`abort`] on this
 /// object.
 ///
-/// [`abort`]: fn@crate::Aggregator::abort
+/// [`abort`]: fn@crate::AggregatorHandle::abort
 pub struct AggregatorHandle {
     join_handle: JoinHandle<()>,
 }
