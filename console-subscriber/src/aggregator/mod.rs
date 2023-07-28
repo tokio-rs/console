@@ -22,7 +22,13 @@ mod shrink;
 use self::id_data::{IdData, Include};
 use self::shrink::{ShrinkMap, ShrinkVec};
 
-pub(crate) struct Aggregator {
+/// Aggregates instrumentation traces and prepares state for the instrument
+/// server.
+///
+/// The `Aggregator` is responsible for receiving and organizing the
+/// instrumentated events and preparing the data to be served to a instrument
+/// client.
+pub struct Aggregator {
     /// Channel of incoming events emitted by `TaskLayer`s.
     events: mpsc::Receiver<Event>,
 
@@ -157,7 +163,12 @@ impl Aggregator {
         }
     }
 
-    pub(crate) async fn run(mut self) {
+    /// Runs the aggregator.
+    ///
+    /// This method will start the aggregator loop and should run as long as
+    /// the instrument server is running. If the instrument server stops,
+    /// this future can be aborted.
+    pub async fn run(mut self) {
         let mut publish = tokio::time::interval(self.publish_interval);
         loop {
             let should_send = tokio::select! {
