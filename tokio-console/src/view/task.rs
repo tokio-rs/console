@@ -142,7 +142,7 @@ impl TaskView {
         let mut overview = Vec::with_capacity(8);
         overview.push(Spans::from(vec![
             bold("ID: "),
-            Span::raw(format!("{} ", task.id())),
+            Span::raw(format!("{} ", task.task_id())),
             task.state().render(styles),
         ]));
 

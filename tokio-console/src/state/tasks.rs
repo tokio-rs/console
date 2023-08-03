@@ -276,6 +276,10 @@ impl Task {
         self.id
     }
 
+    pub(crate) fn task_id(&self) -> TaskId {
+        self.task_id.unwrap_or(0)
+    }
+
     pub(crate) fn span_id(&self) -> SpanId {
         self.span_id
     }
