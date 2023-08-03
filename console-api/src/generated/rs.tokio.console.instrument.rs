@@ -272,7 +272,7 @@ pub mod instrument_server {
     #[async_trait]
     pub trait Instrument: Send + Sync + 'static {
         /// Server streaming response type for the WatchUpdates method.
-        type WatchUpdatesStream: futures_core::Stream<
+        type WatchUpdatesStream: tonic::codegen::tokio_stream::Stream<
                 Item = std::result::Result<super::Update, tonic::Status>,
             >
             + Send
@@ -286,7 +286,7 @@ pub mod instrument_server {
                 tonic::Status,
             >;
         /// Server streaming response type for the WatchTaskDetails method.
-        type WatchTaskDetailsStream: futures_core::Stream<
+        type WatchTaskDetailsStream: tonic::codegen::tokio_stream::Stream<
                 Item = std::result::Result<
                     super::super::tasks::TaskDetails,
                     tonic::Status,
@@ -412,7 +412,7 @@ pub mod instrument_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).watch_updates(request).await
+                                <T as Instrument>::watch_updates(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -459,7 +459,7 @@ pub mod instrument_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                (*inner).watch_task_details(request).await
+                                <T as Instrument>::watch_task_details(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -502,7 +502,9 @@ pub mod instrument_server {
                             request: tonic::Request<super::PauseRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).pause(request).await };
+                            let fut = async move {
+                                <T as Instrument>::pause(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -544,7 +546,9 @@ pub mod instrument_server {
                             request: tonic::Request<super::ResumeRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).resume(request).await };
+                            let fut = async move {
+                                <T as Instrument>::resume(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }

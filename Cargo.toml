@@ -6,3 +6,7 @@ members = [
     "xtask"
 ]
 resolver = "2"
+
+[patch.crates-io]
+tonic = { git = "https://github.com/hyperium/tonic" }
+tonic-build = { git = "https://github.com/hyperium/tonic" }
