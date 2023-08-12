@@ -224,7 +224,10 @@ impl TasksState {
         for (stats, mut task) in self.tasks.updated(stats_update) {
             tracing::trace!(?task, ?stats, "processing stats update for");
             task.stats = stats.into();
-            task.lint(linters);
+        }
+
+        for (_, task) in self.tasks.iter() {
+            task.borrow_mut().lint(linters);
         }
 
         self.dropped_events += update.dropped_events;
