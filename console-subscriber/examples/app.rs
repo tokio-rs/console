@@ -11,7 +11,7 @@ OPTIONS:
     blocks      Includes a (misbehaving) blocking task
     burn        Includes a (misbehaving) task that spins CPU with self-wakes
     coma        Includes a (misbehaving) task that forgets to register a waker
-    noyield      Includes a (misbehaving) task that spawns tasks that never yield
+    noyield     Includes a (misbehaving) task that spawns tasks that never yield
 "#;
 
 #[tokio::main]
