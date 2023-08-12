@@ -301,7 +301,7 @@ cargo run --example $name
 [`Layer`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html
 [`tracing` targets]: https://docs.rs/tracing/latest/tracing/struct.Metadata.html
 [`TRACE` level]: https://docs.rs/tracing/latest/tracing/struct.Level.html#associatedconstant.TRACE
-[builder]: https://docs.rs/console-subscriber/latest/console_subscriber/struct.builder.html
+[builder]: https://docs.rs/console-subscriber/latest/console_subscriber/struct.Builder.html
 [init]: https://docs.rs/console-subscriber/latest/console_subscriber/fn.init.html
 [`EnvFilter`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
 [`Targets`]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/targets/struct.Targets.html

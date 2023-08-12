@@ -104,18 +104,18 @@ impl<T: Unsent> IdData<T> {
             if let Some(dropped_at) = stats.dropped_at() {
                 let dropped_for = now.checked_duration_since(dropped_at).unwrap_or_default();
                 let dirty = stats.is_unsent();
-                let should_drop =
+                let should_retain =
                         // if there are any clients watching, retain all dirty tasks regardless of age
                         (dirty && has_watchers)
-                        || dropped_for > retention;
+                        || dropped_for <= retention;
                 tracing::trace!(
                     stats.id = ?id,
                     stats.dropped_at = ?dropped_at,
                     stats.dropped_for = ?dropped_for,
                     stats.dirty = dirty,
-                    should_drop,
+                    should_retain,
                 );
-                return !should_drop;
+                return should_retain;
             }
 
             true
