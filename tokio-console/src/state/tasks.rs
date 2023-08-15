@@ -204,7 +204,7 @@ impl TasksState {
                     (None, None) => "".to_owned(),
                 });
 
-                let mut task = Task {
+                let task = Task {
                     name,
                     id,
                     task_id,
@@ -217,7 +217,6 @@ impl TasksState {
                     warnings: Vec::new(),
                     location,
                 };
-                task.lint(linters);
                 Some((id, task))
             });
 
