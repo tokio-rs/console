@@ -23,6 +23,10 @@ pub struct Builder {
     /// the aggregator task.
     pub(super) event_buffer_capacity: usize,
 
+    /// Fraction of the event buffer needed before the aggregator task starts
+    /// to flush it more aggresively.
+    pub(super) event_buffer_flush_fraction: usize,
+
     /// The maximum number of updates to buffer per-client before the client is
     /// dropped.
     pub(super) client_buffer_capacity: usize,
@@ -62,6 +66,7 @@ impl Default for Builder {
     fn default() -> Self {
         Self {
             event_buffer_capacity: ConsoleLayer::DEFAULT_EVENT_BUFFER_CAPACITY,
+            event_buffer_flush_fraction: ConsoleLayer::DEFAULT_EVENT_BUFFER_FLUSH_FRACTION,
             client_buffer_capacity: ConsoleLayer::DEFAULT_CLIENT_BUFFER_CAPACITY,
             publish_interval: ConsoleLayer::DEFAULT_PUBLISH_INTERVAL,
             retention: ConsoleLayer::DEFAULT_RETENTION,
@@ -85,6 +90,21 @@ impl Builder {
     pub fn event_buffer_capacity(self, event_buffer_capacity: usize) -> Self {
         Self {
             event_buffer_capacity,
+            ..self
+        }
+    }
+
+    /// Sets the target fraction for the fill level of channel of events sent
+    /// from subscriber layers to the aggregator task.
+    ///
+    /// When the channel is over `1 / event_buffer_flush_fraction` fill
+    /// capacity , the aggregator task will be woken up more frequently.
+    ///
+    /// By default, this is
+    /// [`ConsoleLayer::DEFAULT_EVENT_BUFFER_FLUSH_FRACTION`].
+    pub fn event_buffer_flush_fraction(self, event_buffer_flush_fraction: usize) -> Self {
+        Self {
+            event_buffer_flush_fraction,
             ..self
         }
     }
