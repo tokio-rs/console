@@ -9,6 +9,8 @@ use futures::stream::StreamExt;
 use tokio::{io::DuplexStream, task};
 use tonic::transport::{Channel, Endpoint, Server, Uri};
 use tower::service_fn;
+use tracing_core::dispatcher::DefaultGuard;
+use tracing_subscriber::EnvFilter;
 
 use super::state::{TestState, TestStep};
 use super::task::{ActualTask, ExpectedTask, TaskValidationFailure};
@@ -30,6 +32,15 @@ impl fmt::Display for TestFailure {
     }
 }
 
+fn set_debug_subscriber() -> DefaultGuard {
+    let subscriber = tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::builder().parse_lossy("console_subscriber=trace,console_test=info,info"),
+        )
+        .finish();
+    tracing::subscriber::set_default(subscriber)
+}
+
 /// Runs the test
 ///
 /// This function runs the whole test. It sets up a `console-subscriber` layer
@@ -45,7 +56,11 @@ where
     Fut: Future + Send + 'static,
     Fut::Output: Send + 'static,
 {
+    let _subscriber_guard = set_debug_subscriber();
     use tracing_subscriber::prelude::*;
+
+    print!("\n\n");
+    tracing::info!(target: "console_test::support", ?expected_tasks, "run_test");
 
     let (client_stream, server_stream) = tokio::io::duplex(1024);
     let (console_layer, server) = console_subscriber::ConsoleLayer::builder().build();
@@ -57,8 +72,8 @@ where
     let join_handle = thread::Builder::new()
         .name("console::subscriber".into())
         .spawn(move || {
-            let _subscriber_guard =
-                tracing::subscriber::set_default(tracing_core::subscriber::NoSubscriber::default());
+            let _subscriber_guard = set_debug_subscriber();
+
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_io()
                 .enable_time()
@@ -223,7 +238,7 @@ async fn record_actual_tasks(
 
     let mut tasks = HashMap::new();
 
-    let mut last_update = false;
+    let mut last_updates: Option<u32> = None;
     while let Some(update) = stream.next().await {
         match update {
             Ok(update) => {
@@ -261,13 +276,20 @@ async fn record_actual_tasks(
             }
         }
 
-        if last_update {
-            break;
+        if let Some(count) = last_updates.as_mut() {
+            tracing::info!(count, "last updates");
+            *count -= 1;
+
+            if *count <= 0 {
+                break;
+            }
+            continue;
         }
 
         if test_state.try_wait_for_step(TestStep::TestFinished) {
-            // Once the test finishes running, we will get one further update and finish.
-            last_update = true;
+            // Once the test finishes running, we will check for 2 further updates and then finish.
+            // FIXME(hds): Why 2? Is there some way we can do this more deterministically?
+            last_updates = Some(2);
         }
     }
 

@@ -53,6 +53,13 @@ impl TestState {
     ///
     /// This function will panic if the underlying channel gets closed.
     pub(super) async fn wait_for_step(&mut self, desired_step: TestStep) {
+        self.update_step();
+        tracing::info!(
+            target: "console_test::support::state",
+            "wait_for_step: {current} -> {desired_step}",
+            current = self.step,
+        );
+
         loop {
             if self.step >= desired_step {
                 break;
@@ -73,6 +80,11 @@ impl TestState {
     /// Check whether the desired step has been reached without blocking.
     pub(super) fn try_wait_for_step(&mut self, desired_step: TestStep) -> bool {
         self.update_step();
+        tracing::info!(
+            target: "console_test::support::state",
+            "try_wait_for_step: {current} -> {desired_step}",
+            current = self.step,
+        );
 
         self.step == desired_step
     }
@@ -90,6 +102,11 @@ impl TestState {
     #[track_caller]
     pub(super) fn advance_to_step(&mut self, next_step: TestStep) {
         self.update_step();
+        tracing::info!(
+            target: "console_test::support::state",
+            "advance_to_step: {current} -> {next_step}",
+            current = self.step,
+        );
 
         if self.step >= next_step {
             panic!(
