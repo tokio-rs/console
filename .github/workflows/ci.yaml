@@ -78,7 +78,7 @@ jobs:
       #   run: cargo test -p console-api
 
       - name: Run cargo test (subscriber)
-        run: cargo test -p console-subscriber 
+        run: cargo test -p console-subscriber -- --nocapture --test-threads=1
 
       # - name: Run cargo test (console)
       #   run: cargo test -p tokio-console --locked
