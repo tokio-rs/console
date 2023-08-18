@@ -234,7 +234,16 @@ impl Aggregator {
                             Event::Metadata(_) => count_metadata += 1,
                             Event::PollOp { .. } => count_poll_op += 1,
                             Event::Resource { .. } => count_resource += 1,
-                            Event::Spawn { .. } => count_spawn += 1,
+                            Event::Spawn {
+                                id,
+                                metadata: _,
+                                stats: _,
+                                fields,
+                                location: _,
+                            } => {
+                                tracing::debug!(?id, ?fields, "spawn");
+                                count_spawn += 1;
+                            }
                         }
                         self.update_state(event);
                         drained = true;

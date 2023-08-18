@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt, future::Future, thread};
+use std::{collections::HashMap, fmt, fs::File, future::Future, panic, thread};
 
 use console_api::{
     field::Value,
@@ -32,10 +32,11 @@ impl fmt::Display for TestFailure {
     }
 }
 
-fn set_debug_subscriber() -> DefaultGuard {
+fn set_debug_subscriber(file: File) -> DefaultGuard {
     let subscriber = tracing_subscriber::fmt()
+        .with_writer(file)
         .with_env_filter(
-            EnvFilter::builder().parse_lossy("console_subscriber=trace,console_test=info,info"),
+            EnvFilter::builder().parse_lossy("console_subscriber=debug,console_test=info,info"),
         )
         .finish();
     tracing::subscriber::set_default(subscriber)
@@ -56,7 +57,25 @@ where
     Fut: Future + Send + 'static,
     Fut::Output: Send + 'static,
 {
-    let _subscriber_guard = set_debug_subscriber();
+    let caller = std::panic::Location::caller();
+    let caller_file = match caller.file().rfind("/") {
+        Some(index) => {
+            if index >= caller.file().len() {
+                "weird"
+            } else {
+                &caller.file()[index + 1..]
+            }
+        }
+        None => caller.file(),
+    };
+    let source_line = std::panic::Location::caller().line();
+    let writer = File::create(format!(
+        "console_test_log-file_{}-line_{}-run_test.log",
+        caller_file, source_line
+    ))
+    .unwrap();
+    let _subscriber_guard =
+        set_debug_subscriber(writer.try_clone().expect("couldn't clone file handle"));
     use tracing_subscriber::prelude::*;
 
     print!("\n\n");
@@ -72,7 +91,7 @@ where
     let join_handle = thread::Builder::new()
         .name("console::subscriber".into())
         .spawn(move || {
-            let _subscriber_guard = set_debug_subscriber();
+            let _subscriber_guard = set_debug_subscriber(writer);
 
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_io()
@@ -129,7 +148,10 @@ where
         .expect("console-test error: failed to join 'console-subscriber' thread");
 
     if let Err(test_failure) = validate_expected_tasks(expected_tasks, actual_tasks) {
+        tracing::info!(target: "console_test::support", "Test failed: {test_failure}", test_failure = test_failure);
         panic!("Test failed: {test_failure}")
+    } else {
+        tracing::info!(target: "console_test::support", "Test passed");
     }
 }
 
@@ -277,9 +299,8 @@ async fn record_actual_tasks(
         }
 
         if let Some(count) = last_updates.as_mut() {
-            tracing::info!(count, "last updates");
             *count -= 1;
-
+            tracing::info!(count, "last updates");
             if *count <= 0 {
                 break;
             }

@@ -457,6 +457,10 @@ impl ConsoleLayer {
             Err(TrySendError::Closed(_)) => {
                 // we should warn here eventually, but nop for now because we
                 // can't trigger tracing events...
+                println!(
+                    "send_stats<{obj_type}> closed",
+                    obj_type = std::any::type_name::<S>(),
+                );
                 None
             }
             Err(TrySendError::Full(_)) => {
@@ -470,6 +474,17 @@ impl ConsoleLayer {
         };
 
         let capacity = self.tx.capacity();
+        let stats_type = std::any::type_name::<S>();
+        if stats_type != "()" {
+            let time = std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .expect("whoops");
+            println!(
+                "{timestamp:.6} send_stats capacity={capacity} did_send={did_send} will_flush={will_flush} stats_type={stats_type}",
+                timestamp = time.as_secs_f64(),
+                did_send = sent.is_some(),
+                will_flush = (capacity <= self.flush_under_capacity));
+        }
         if capacity <= self.flush_under_capacity {
             self.shared.flush.trigger();
         }
