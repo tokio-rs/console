@@ -221,7 +221,7 @@ impl Aggregator {
             // to be woken when the flush interval has elapsed, or when the
             // channel is almost full.
             let mut drained = false;
-            while let Some(event) = self.events.recv().now_or_never() {
+            while let Some(event) = tokio::task::unconstrained(self.events.recv()).now_or_never() {
                 match event {
                     Some(event) => {
                         self.update_state(event);
