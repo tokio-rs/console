@@ -209,7 +209,7 @@ tracing_subscriber::registry()
 ### Using other runtimes
 
 If you are using a custom runtime that supports tokio-console, you may not need
-to enable "tokio_unstable". In this case, you need to enable cfg
+to enable the `tokio_unstable` cfg flag. In this case, you need to enable cfg
 `console_without_tokio_unstable` for console-subscriber to disable its check for
 `tokio_unstable`.
 
