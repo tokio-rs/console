@@ -134,11 +134,13 @@ where
                 .await;
 
             // Run the future that we are testing.
+            tracing::info!("Future under test: will spawn.");
             _ = tokio::task::Builder::new()
                 .name(MAIN_TASK_NAME)
                 .spawn(future)
                 .expect("console-test error: couldn't spawn test task")
                 .await;
+            tracing::info!("Future under test: completed.");
             test_state_test.advance_to_step(TestStep::TestFinished);
 
             test_state_test
