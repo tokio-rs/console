@@ -32,9 +32,9 @@ impl fmt::Display for TestFailure {
     }
 }
 
-fn set_debug_subscriber(file: File) -> DefaultGuard {
+fn set_debug_subscriber(_file: File) -> DefaultGuard {
     let subscriber = tracing_subscriber::fmt()
-        .with_writer(file)
+        // .with_writer(file)
         .with_env_filter(
             EnvFilter::builder().parse_lossy("console_subscriber=debug,console_test=info,info"),
         )
@@ -77,6 +77,8 @@ where
     let _subscriber_guard =
         set_debug_subscriber(writer.try_clone().expect("couldn't clone file handle"));
     use tracing_subscriber::prelude::*;
+    let span = tracing::info_span!(target: "console_test::support", "run_test", file = %caller_file, line = source_line);
+    let _span_guard = span.enter();
 
     print!("\n\n");
     tracing::info!(target: "console_test::support", ?expected_tasks, "run_test");
@@ -92,6 +94,8 @@ where
         .name("console::subscriber".into())
         .spawn(move || {
             let _subscriber_guard = set_debug_subscriber(writer);
+            let span = tracing::info_span!(target: "console_test::support", "run_test", file = %caller_file, line = source_line);
+            let _span_guard = span.enter();
 
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_io()
