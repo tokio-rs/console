@@ -274,6 +274,7 @@ dependencies = [
  "crossbeam-channel",
  "crossbeam-utils",
  "futures",
+ "futures-task",
  "hdrhistogram",
  "humantime",
  "parking_lot",
