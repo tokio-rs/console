@@ -245,9 +245,10 @@ async fn console_client(client_stream: DuplexStream, mut test_state: TestState) 
         }))
         .await
         .expect("client-console error: couldn't create client");
+    let record_test_state = test_state.clone();
     test_state.advance_to_step(TestStep::ClientConnected);
 
-    record_actual_tasks(channel, test_state.clone()).await
+    record_actual_tasks(channel, record_test_state).await
 }
 
 /// Records the actual tasks which are received by the client channel.
