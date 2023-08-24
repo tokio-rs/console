@@ -191,10 +191,7 @@ impl<T> fmt::Debug for Ids<T> {
 impl<T> Clone for Id<T> {
     #[inline]
     fn clone(&self) -> Self {
-        Self {
-            id: self.id,
-            _ty: PhantomData,
-        }
+        *self
     }
 }
 

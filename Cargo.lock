@@ -257,6 +257,7 @@ dependencies = [
 name = "console-api"
 version = "0.5.0"
 dependencies = [
+ "futures-core",
  "prost",
  "prost-build",
  "prost-types",
