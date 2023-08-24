@@ -85,7 +85,13 @@ where
 
     let (client_stream, server_stream) = tokio::io::duplex(1024);
     let (console_layer, server) = console_subscriber::ConsoleLayer::builder().build();
-    let registry = tracing_subscriber::registry().with(console_layer);
+    let fmt_layer = tracing_subscriber::fmt::layer().with_filter(
+        EnvFilter::builder().parse_lossy("console_subscriber=debug,console_test=info,info"),
+    );
+
+    let registry = tracing_subscriber::registry()
+        .with(console_layer)
+        .with(fmt_layer);
 
     let mut test_state = TestState::new();
     let mut test_state_test = test_state.clone();
@@ -129,6 +135,9 @@ where
             .unwrap();
 
         runtime.block_on(async move {
+            let span = tracing::info_span!(target: "console_test::support", "run_test", file = %caller_file, line = source_line);
+            let _span_guard = span.enter();
+
             test_state_test
                 .wait_for_step(TestStep::ClientConnected)
                 .await;
