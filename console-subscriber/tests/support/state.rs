@@ -39,7 +39,8 @@ pub(super) struct TestState {
 
 impl TestState {
     pub(super) fn new() -> Self {
-        let (sender, receiver) = broadcast::channel(1);
+        // Capacity sufficient for all states (will never lose anything)
+        let (sender, receiver) = broadcast::channel(5);
         Self {
             receiver,
             sender,
