@@ -267,7 +267,7 @@ impl ConsoleLayer {
         // depending on the build-time configuration...
         #![allow(clippy::assertions_on_constants)]
         assert!(
-            cfg!(tokio_unstable),
+            cfg!(any(tokio_unstable, console_without_tokio_unstable)),
             "task tracing requires Tokio to be built with RUSTFLAGS=\"--cfg tokio_unstable\"!"
         );
 
