@@ -40,7 +40,7 @@ tonic = { version = "0.9", features = ["transport"] }
 tracing-core = "0.1.24"
 tracing = "0.1.26"
 tracing-subscriber = { version = "0.3.11", default-features = false, features = ["fmt", "registry"] }
-futures = { version = "0.3", default-features = false }
+futures-task = { version = "0.3", default-features = false }
 hdrhistogram = { version = "7.3.0", default-features = false, features = ["serialization"] }
 # The parking_lot dependency is renamed, because we want our `parking_lot`
 # feature to also enable `tracing-subscriber`'s parking_lot feature flag.
