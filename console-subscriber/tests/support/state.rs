@@ -54,7 +54,6 @@ impl TestState {
     /// This function will panic if the underlying channel gets closed.
     pub(super) async fn wait_for_step(&mut self, desired_step: TestStep) {
         while self.step < desired_step {
-
             match self.receiver.recv().await {
                 Ok(step) => self.step = step,
                 Err(RecvError::Lagged(_)) => {

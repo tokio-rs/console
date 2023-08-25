@@ -27,7 +27,7 @@ fn expect_present() {
 
 #[test]
 #[should_panic(expected = "Test failed: Task validation failed:
- - Task<name=main>: no expectations set, if you want to just expect that a matching task is present, use `expect_present()`
+ - Task { name=console-test::main }: no expectations set, if you want to just expect that a matching task is present, use `expect_present()`
 ")]
 fn fail_no_expectations() {
     let expected_task = ExpectedTask::default().match_default_name();
@@ -52,7 +52,7 @@ fn wakes() {
 
 #[test]
 #[should_panic(expected = "Test failed: Task validation failed:
- - Task<name=main>: expected `wakes` to be 5, but actual was 1
+ - Task { name=console-test::main }: expected `wakes` to be 5, but actual was 1
 ")]
 fn fail_wakes() {
     let expected_task = ExpectedTask::default().match_default_name().expect_wakes(5);
@@ -77,7 +77,7 @@ fn self_wakes() {
 
 #[test]
 #[should_panic(expected = "Test failed: Task validation failed:
- - Task<name=main>: expected `self_wakes` to be 1, but actual was 0
+ - Task { name=console-test::main }: expected `self_wakes` to be 1, but actual was 0
 ")]
 fn fail_self_wake() {
     let expected_task = ExpectedTask::default()
@@ -108,7 +108,7 @@ fn test_spawned_task() {
 
 #[test]
 #[should_panic(expected = "Test failed: Task validation failed:
- - Task<name=wrong-name>: no matching actual task was found
+ - Task { name=wrong-name }: no matching actual task was found
 ")]
 fn fail_wrong_task_name() {
     let expected_task = ExpectedTask::default().match_name("wrong-name".into());
@@ -151,7 +151,7 @@ fn multiple_tasks() {
 
 #[test]
 #[should_panic(expected = "Test failed: Task validation failed:
- - Task<name=task-2>: expected `wakes` to be 2, but actual was 1
+ - Task { name=task-2 }: expected `wakes` to be 2, but actual was 1
 ")]
 fn fail_1_of_2_expected_tasks() {
     let expected_tasks = vec![

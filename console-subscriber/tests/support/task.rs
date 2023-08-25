@@ -229,6 +229,6 @@ impl fmt::Display for ExpectedTask {
             Some(name) => format!("name={name}"),
             None => "(no fields to match on)".into(),
         };
-        write!(f, "Task< {{ {fields} }}")
+        write!(f, "Task {{ {fields} }}")
     }
 }

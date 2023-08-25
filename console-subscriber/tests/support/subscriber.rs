@@ -13,7 +13,8 @@ use tower::service_fn;
 use super::state::{TestState, TestStep};
 use super::task::{ActualTask, ExpectedTask, TaskValidationFailure};
 
-pub(crate) const MAIN_TASK_NAME: &str = "main";
+pub(crate) const MAIN_TASK_NAME: &str = "console-test::main";
+const END_SIGNAL_TASK_NAME: &str = "console-test::signal";
 
 #[derive(Debug)]
 struct TestFailure {
@@ -96,10 +97,15 @@ where
                 .await;
 
             // Run the future that we are testing.
-            _ = tokio::task::Builder::new()
+            _ = task::Builder::new()
                 .name(MAIN_TASK_NAME)
                 .spawn(future)
                 .expect("console-test error: couldn't spawn test task")
+                .await;
+            _ = task::Builder::new()
+                .name(END_SIGNAL_TASK_NAME)
+                .spawn(futures::future::ready(()))
+                .expect("console-test error: couldn't spawn end signal task")
                 .await;
             test_state_test.advance_to_step(TestStep::TestFinished);
 
@@ -177,23 +183,24 @@ async fn console_client(client_stream: DuplexStream, mut test_state: TestState) 
     let mut client_stream = Some(client_stream);
     // Note: we won't actually try to connect to this port on localhost,
     // because we will call `connect_with_connector` with a service that
-    // just returns the `DuplexStream`, instead of making an actual 
+    // just returns the `DuplexStream`, instead of making an actual
     // network connection.
-    let endpoint = Endpoint::try_from("http://[::]:6669")
-        .expect("Could not create endpoint");
+    let endpoint = Endpoint::try_from("http://[::]:6669").expect("Could not create endpoint");
     let channel = endpoint
         .connect_with_connector(service_fn(move |_: Uri| {
             let client = client_stream.take();
 
             async move {
-                client.ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "Client already taken"))
+                client.ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::Other, "Client already taken")
+                })
             }
         }))
         .await
         .expect("client-console error: couldn't create client");
     test_state.advance_to_step(TestStep::ClientConnected);
 
-    record_actual_tasks(channel, test_state.clone()).await
+    record_actual_tasks(channel, test_state).await
 }
 
 /// Records the actual tasks which are received by the client channel.
@@ -211,14 +218,18 @@ async fn record_actual_tasks(
 ) -> Vec<ActualTask> {
     let mut client = InstrumentClient::new(client_channel);
 
-    let mut stream = match client.watch_updates(tonic::Request::new(InstrumentRequest {})).await {
+    let mut stream = match client
+        .watch_updates(tonic::Request::new(InstrumentRequest {}))
+        .await
+    {
         Ok(stream) => stream.into_inner(),
         Err(err) => panic!("Client cannot connect to watch updates: {err}"),
     };
 
     let mut tasks = HashMap::new();
 
-    let mut last_update = false;
+    let signal_task = ExpectedTask::default().match_name(END_SIGNAL_TASK_NAME.into());
+    let mut signal_task_read = false;
     while let Some(update) = stream.next().await {
         match update {
             Ok(update) => {
@@ -239,12 +250,16 @@ async fn record_actual_tasks(
                                     }
                                 }
                             }
-                            tasks.insert(actual_task.id, actual_task);
+                            if signal_task.matches_actual_task(&actual_task) {
+                                signal_task_read = true;
+                            } else {
+                                tasks.insert(actual_task.id, actual_task);
+                            }
                         }
                     }
 
                     for (id, stats) in &task_update.stats_update {
-                        if let Some(mut task) = tasks.get_mut(id) {
+                        if let Some(task) = tasks.get_mut(id) {
                             task.wakes = stats.wakes;
                             task.self_wakes = stats.self_wakes;
                         }
@@ -256,13 +271,9 @@ async fn record_actual_tasks(
             }
         }
 
-        if last_update {
+        if test_state.is_step(TestStep::TestFinished) && signal_task_read {
+            // Once the test finishes running and we've read the signal task, the test ends.
             break;
-        }
-
-        if test_state.try_wait_for_step(TestStep::TestFinished) {
-            // Once the test finishes running, we will get one further update and finish.
-            last_update = true;
         }
     }
 
