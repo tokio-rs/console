@@ -231,43 +231,42 @@ async fn record_actual_tasks(
     let signal_task = ExpectedTask::default().match_name(END_SIGNAL_TASK_NAME.into());
     let mut signal_task_read = false;
     while let Some(update) = stream.next().await {
-        match update {
-            Ok(update) => {
-                if let Some(task_update) = &update.task_update {
-                    for new_task in &task_update.new_tasks {
-                        if let Some(id) = &new_task.id {
-                            let mut actual_task = ActualTask::new(id.id);
-                            for field in &new_task.fields {
-                                if let Some(console_api::field::Name::StrName(field_name)) =
-                                    &field.name
-                                {
-                                    if field_name == "task.name" {
-                                        actual_task.name = match &field.value {
-                                            Some(Value::DebugVal(value)) => Some(value.clone()),
-                                            Some(Value::StrVal(value)) => Some(value.clone()),
-                                            _ => None, // Anything that isn't string-like shouldn't be used as a name.
-                                        };
-                                    }
-                                }
-                            }
-                            if signal_task.matches_actual_task(&actual_task) {
-                                signal_task_read = true;
-                            } else {
-                                tasks.insert(actual_task.id, actual_task);
-                            }
-                        }
-                    }
+        let update = update.expect("update stream error");
 
-                    for (id, stats) in &task_update.stats_update {
-                        if let Some(task) = tasks.get_mut(id) {
-                            task.wakes = stats.wakes;
-                            task.self_wakes = stats.self_wakes;
+        if let Some(task_update) = &update.task_update {
+            for new_task in &task_update.new_tasks {
+                let mut actual_task = match new_task.id {
+                    Some(id) => ActualTask::new(id.id),
+                    None => continue,
+                };
+                let name = new_task
+                    .fields
+                    .iter()
+                    .find_map(|field| match field.name.as_ref()? {
+                        console_api::field::Name::StrName(name) if name == "task.name" => {
+                            Some(field.value.clone())
                         }
-                    }
+                        _ => None,
+                    })
+                    .flatten();
+                actual_task.name = match name {
+                    Some(Value::DebugVal(value)) => Some(value.clone()),
+                    Some(Value::StrVal(value)) => Some(value.clone()),
+                    _ => None, // Anything that isn't string-like shouldn't be used as a name.
+                };
+
+                if signal_task.matches_actual_task(&actual_task) {
+                    signal_task_read = true;
+                } else {
+                    tasks.insert(actual_task.id, actual_task);
                 }
             }
-            Err(e) => {
-                panic!("update stream error: {}", e);
+
+            for (id, stats) in &task_update.stats_update {
+                if let Some(task) = tasks.get_mut(id) {
+                    task.wakes = stats.wakes;
+                    task.self_wakes = stats.self_wakes;
+                }
             }
         }
 
