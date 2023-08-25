@@ -39,8 +39,7 @@ pub(super) struct TestState {
 
 impl TestState {
     pub(super) fn new() -> Self {
-        // Capacity sufficient for all states (will never lose anything)
-        let (sender, receiver) = broadcast::channel(5);
+        let (sender, receiver) = broadcast::channel(1);
         Self {
             receiver,
             sender,
@@ -54,16 +53,6 @@ impl TestState {
     ///
     /// This function will panic if the underlying channel gets closed.
     pub(super) async fn wait_for_step(&mut self, desired_step: TestStep) {
-        {
-            let _guard = tracing::info_span!("wait_for_step").entered();
-            self.update_step();
-        }
-        tracing::info!(
-            target: "console_test::support::state",
-            "wait_for_step: {current} -> {desired_step}",
-            current = self.step,
-        );
-
         loop {
             if self.step >= desired_step {
                 break;
@@ -83,15 +72,7 @@ impl TestState {
 
     /// Check whether the desired step has been reached without blocking.
     pub(super) fn try_wait_for_step(&mut self, desired_step: TestStep) -> bool {
-        {
-            let _guard = tracing::info_span!("try_wait_for_step").entered();
-            self.update_step();
-        }
-        tracing::info!(
-            target: "console_test::support::state",
-            "try_wait_for_step: {current} -> {desired_step}",
-            current = self.step,
-        );
+        self.update_step();
 
         self.step == desired_step
     }
@@ -108,15 +89,7 @@ impl TestState {
     /// `next_step` or if the underlying channel is closed.
     #[track_caller]
     pub(super) fn advance_to_step(&mut self, next_step: TestStep) {
-        {
-            let _guard = tracing::info_span!("advance_to_step").entered();
-            self.update_step();
-        }
-        tracing::info!(
-            target: "console_test::support::state",
-            "advance_to_step: {current} -> {next_step}",
-            current = self.step,
-        );
+        self.update_step();
 
         if self.step >= next_step {
             panic!(
@@ -142,21 +115,9 @@ impl TestState {
     fn update_step(&mut self) {
         loop {
             match self.receiver.try_recv() {
-                Ok(step) => {
-                    tracing::info!(
-                        target: "console_test::support::state",
-                        "update_step: {previous} -> {current}.",
-                        previous = self.step,
-                        current = step,
-                    );
-                    self.step = step;
-                }
-                Err(TryRecvError::Lagged(count)) => {
-                    tracing::info!(
-                        target: "console_test::support::state",
-                        "update_step: lagged by {count}! This is actually a big problem.",
-                        count= count,
-                    );
+                Ok(step) => self.step = step,
+                Err(TryRecvError::Lagged(_)) => {
+                    // we don't mind being lagged, we'll just get the latest state
                 }
                 Err(TryRecvError::Closed) => {
                     panic!("failed to update current step, did the test abort?")

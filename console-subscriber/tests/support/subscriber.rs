@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt, fs::File, future::Future, panic, thread};
+use std::{collections::HashMap, fmt, future::Future, thread};
 
 use console_api::{
     field::Value,
@@ -9,8 +9,6 @@ use futures::stream::StreamExt;
 use tokio::{io::DuplexStream, task};
 use tonic::transport::{Channel, Endpoint, Server, Uri};
 use tower::service_fn;
-use tracing_core::dispatcher::DefaultGuard;
-use tracing_subscriber::EnvFilter;
 
 use super::state::{TestState, TestStep};
 use super::task::{ActualTask, ExpectedTask, TaskValidationFailure};
@@ -32,16 +30,6 @@ impl fmt::Display for TestFailure {
     }
 }
 
-fn set_debug_subscriber(_file: File) -> DefaultGuard {
-    let subscriber = tracing_subscriber::fmt()
-        // .with_writer(file)
-        .with_env_filter(
-            EnvFilter::builder().parse_lossy("console_subscriber=debug,console_test=info,info"),
-        )
-        .finish();
-    tracing::subscriber::set_default(subscriber)
-}
-
 /// Runs the test
 ///
 /// This function runs the whole test. It sets up a `console-subscriber` layer
@@ -57,41 +45,11 @@ where
     Fut: Future + Send + 'static,
     Fut::Output: Send + 'static,
 {
-    let caller = std::panic::Location::caller();
-    let caller_file = match caller.file().rfind("/") {
-        Some(index) => {
-            if index >= caller.file().len() {
-                "weird"
-            } else {
-                &caller.file()[index + 1..]
-            }
-        }
-        None => caller.file(),
-    };
-    let source_line = std::panic::Location::caller().line();
-    let writer = File::create(format!(
-        "console_test_log-file_{}-line_{}-run_test.log",
-        caller_file, source_line
-    ))
-    .unwrap();
-    let _subscriber_guard =
-        set_debug_subscriber(writer.try_clone().expect("couldn't clone file handle"));
     use tracing_subscriber::prelude::*;
-    let span = tracing::info_span!(target: "console_test::support", "run_test", file = %caller_file, line = source_line);
-    let _span_guard = span.enter();
-
-    print!("\n\n");
-    tracing::info!(target: "console_test::support", ?expected_tasks, "run_test");
 
     let (client_stream, server_stream) = tokio::io::duplex(1024);
     let (console_layer, server) = console_subscriber::ConsoleLayer::builder().build();
-    let fmt_layer = tracing_subscriber::fmt::layer().with_filter(
-        EnvFilter::builder().parse_lossy("console_subscriber=debug,console_test=info,info"),
-    );
-
-    let registry = tracing_subscriber::registry()
-        .with(console_layer)
-        .with(fmt_layer);
+    let registry = tracing_subscriber::registry().with(console_layer);
 
     let mut test_state = TestState::new();
     let mut test_state_test = test_state.clone();
@@ -99,10 +57,8 @@ where
     let join_handle = thread::Builder::new()
         .name("console::subscriber".into())
         .spawn(move || {
-            let _subscriber_guard = set_debug_subscriber(writer);
-            let span = tracing::info_span!(target: "console_test::support", "run_test", file = %caller_file, line = source_line);
-            let _span_guard = span.enter();
-
+            let _subscriber_guard =
+                tracing::subscriber::set_default(tracing_core::subscriber::NoSubscriber::default());
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_io()
                 .enable_time()
@@ -135,21 +91,16 @@ where
             .unwrap();
 
         runtime.block_on(async move {
-            let span = tracing::info_span!(target: "console_test::support", "run_test", file = %caller_file, line = source_line);
-            let _span_guard = span.enter();
-
             test_state_test
                 .wait_for_step(TestStep::ClientConnected)
                 .await;
 
             // Run the future that we are testing.
-            tracing::info!("Future under test: will spawn.");
             _ = tokio::task::Builder::new()
                 .name(MAIN_TASK_NAME)
                 .spawn(future)
                 .expect("console-test error: couldn't spawn test task")
                 .await;
-            tracing::info!("Future under test: completed.");
             test_state_test.advance_to_step(TestStep::TestFinished);
 
             test_state_test
@@ -163,10 +114,7 @@ where
         .expect("console-test error: failed to join 'console-subscriber' thread");
 
     if let Err(test_failure) = validate_expected_tasks(expected_tasks, actual_tasks) {
-        tracing::info!(target: "console_test::support", "Test failed: {test_failure}", test_failure = test_failure);
         panic!("Test failed: {test_failure}")
-    } else {
-        tracing::info!(target: "console_test::support", "Test passed");
     }
 }
 
@@ -245,10 +193,9 @@ async fn console_client(client_stream: DuplexStream, mut test_state: TestState) 
         }))
         .await
         .expect("client-console error: couldn't create client");
-    let record_test_state = test_state.clone();
     test_state.advance_to_step(TestStep::ClientConnected);
 
-    record_actual_tasks(channel, record_test_state).await
+    record_actual_tasks(channel, test_state.clone()).await
 }
 
 /// Records the actual tasks which are received by the client channel.
@@ -276,7 +223,7 @@ async fn record_actual_tasks(
 
     let mut tasks = HashMap::new();
 
-    let mut last_updates: Option<u32> = None;
+    let mut last_update = false;
     while let Some(update) = stream.next().await {
         match update {
             Ok(update) => {
@@ -302,7 +249,7 @@ async fn record_actual_tasks(
                     }
 
                     for (id, stats) in &task_update.stats_update {
-                        if let Some(task) = tasks.get_mut(id) {
+                        if let Some(mut task) = tasks.get_mut(id) {
                             task.wakes = stats.wakes;
                             task.self_wakes = stats.self_wakes;
                         }
@@ -314,19 +261,13 @@ async fn record_actual_tasks(
             }
         }
 
-        if let Some(count) = last_updates.as_mut() {
-            *count -= 1;
-            tracing::info!(count, "last updates");
-            if *count <= 0 {
-                break;
-            }
-            continue;
+        if last_update {
+            break;
         }
 
         if test_state.try_wait_for_step(TestStep::TestFinished) {
-            // Once the test finishes running, we will check for 2 further updates and then finish.
-            // FIXME(hds): Why 2? Is there some way we can do this more deterministically?
-            last_updates = Some(2);
+            // Once the test finishes running, we will get one further update and finish.
+            last_update = true;
         }
     }
 

@@ -221,30 +221,9 @@ impl Aggregator {
             // to be woken when the flush interval has elapsed, or when the
             // channel is almost full.
             let mut drained = false;
-            let mut count_async_op = 0;
-            let mut count_metadata = 0;
-            let mut count_poll_op = 0;
-            let mut count_resource = 0;
-            let mut count_spawn = 0;
             while let Some(event) = self.events.recv().now_or_never() {
                 match event {
                     Some(event) => {
-                        match &event {
-                            Event::AsyncResourceOp { .. } => count_async_op += 1,
-                            Event::Metadata(_) => count_metadata += 1,
-                            Event::PollOp { .. } => count_poll_op += 1,
-                            Event::Resource { .. } => count_resource += 1,
-                            Event::Spawn {
-                                id,
-                                metadata: _,
-                                stats: _,
-                                fields,
-                                location: _,
-                            } => {
-                                tracing::debug!(?id, ?fields, "spawn");
-                                count_spawn += 1;
-                            }
-                        }
                         self.update_state(event);
                         drained = true;
                     }
@@ -256,14 +235,7 @@ impl Aggregator {
                     }
                 };
             }
-            tracing::debug!(
-                count_async_op,
-                count_metadata,
-                count_poll_op,
-                count_resource,
-                count_spawn,
-                "received events"
-            );
+
             // flush data to clients, if there are any currently subscribed
             // watchers and we should send a new update.
             if !self.watchers.is_empty() && should_send {
