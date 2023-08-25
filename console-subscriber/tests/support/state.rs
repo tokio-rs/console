@@ -47,16 +47,13 @@ impl TestState {
         }
     }
 
-    /// Block asynchronously until the desired step has been reached.
+    /// Wait asynchronously until the desired step has been reached.
     ///
     /// # Panics
     ///
     /// This function will panic if the underlying channel gets closed.
     pub(super) async fn wait_for_step(&mut self, desired_step: TestStep) {
-        loop {
-            if self.step >= desired_step {
-                break;
-            }
+        while self.step < desired_step {
 
             match self.receiver.recv().await {
                 Ok(step) => self.step = step,
@@ -70,8 +67,8 @@ impl TestState {
         }
     }
 
-    /// Check whether the desired step has been reached without blocking.
-    pub(super) fn try_wait_for_step(&mut self, desired_step: TestStep) -> bool {
+    /// Returns `true` if the current step is `desired_step` or later.
+    pub(super) fn is_step(&mut self, desired_step: TestStep) -> bool {
         self.update_step();
 
         self.step == desired_step
@@ -86,25 +83,23 @@ impl TestState {
     /// # Panics
     ///
     /// This method will panic if the test state is not at the step prior to
-    /// `next_step` or if the underlying channel is closed.
+    /// `next_step`, or if the underlying channel is closed.
     #[track_caller]
     pub(super) fn advance_to_step(&mut self, next_step: TestStep) {
         self.update_step();
 
-        if self.step >= next_step {
-            panic!(
-                "cannot advance to previous or current step! current step: {current}, next step: {next_step}",
-                current = self.step);
-        }
+        assert!(
+            self.step < next_step,
+            "cannot advance to previous or current step! current step: {current}, next step: {next_step}",
+            current = self.step,
+        );
 
         match (&self.step, &next_step) {
             (TestStep::Start, TestStep::ServerStarted) |
             (TestStep::ServerStarted, TestStep::ClientConnected) |
             (TestStep::ClientConnected, TestStep::TestFinished) |
             (TestStep::TestFinished, TestStep::UpdatesRecorded) => {},
-            (_, _) => panic!(
-                "cannot advance more than one step! current step: {current}, next step: {next_step}",
-                current = self.step),
+            (current, _) => panic!("cannot advance more than one step! current step: {current}, next step: {next_step}"),
         }
 
         self.sender

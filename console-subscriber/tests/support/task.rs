@@ -50,11 +50,15 @@ impl fmt::Debug for TaskValidationFailure {
             Some(actual) => write!(
                 f,
                 "Task Validation Failed!\n  Expected Task: {expected:?}\n  Actual Task:   {actual:?}\n  Failure:       {failure}",
-                expected = self.expected, failure = self.failure),
+                expected = self.expected,
+                failure = self.failure,
+            ),
             None => write!(
                 f,
                 "Task Validation Failed!\n  Expected Task: {expected:?}\n  Failure:       {failure}",
-                expected = self.expected, failure = self.failure),
+                expected = self.expected,
+                failure = self.failure,
+            ),
         }
     }
 }
@@ -67,7 +71,6 @@ impl fmt::Debug for TaskValidationFailure {
 #[derive(Clone, Debug)]
 pub(crate) struct ExpectedTask {
     match_name: Option<String>,
-
     expect_present: Option<bool>,
     expect_wakes: Option<u64>,
     expect_self_wakes: Option<u64>,
@@ -134,7 +137,8 @@ impl ExpectedTask {
                     actual: Some(actual_task.clone()),
                     failure: format!(
                         "{self}: expected `wakes` to be {expected_wakes}, but actual was {actual_wakes}",
-                        actual_wakes = actual_task.wakes),
+                        actual_wakes = actual_task.wakes,
+                    ),
                 });
             }
         }
@@ -147,7 +151,8 @@ impl ExpectedTask {
                     actual: Some(actual_task.clone()),
                     failure: format!(
                         "{self}: expected `self_wakes` to be {expected_self_wakes}, but actual was {actual_self_wakes}",
-                        actual_self_wakes = actual_task.self_wakes),
+                        actual_self_wakes = actual_task.self_wakes,
+                    ),
                 });
             }
         }
@@ -157,7 +162,8 @@ impl ExpectedTask {
                 expected: self.clone(),
                 actual: Some(actual_task.clone()),
                 failure: format!(
-                    "{self}: no expectations set, if you want to just expect that a matching task is present, use `expect_present()`")
+                    "{self}: no expectations set, if you want to just expect that a matching task is present, use `expect_present()`",
+                ),
             });
         }
 
@@ -223,6 +229,6 @@ impl fmt::Display for ExpectedTask {
             Some(name) => format!("name={name}"),
             None => "(no fields to match on)".into(),
         };
-        write!(f, "Task<{fields}>")
+        write!(f, "Task< {{ {fields} }}")
     }
 }

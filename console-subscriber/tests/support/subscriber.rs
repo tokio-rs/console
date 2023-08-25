@@ -175,20 +175,18 @@ async fn console_client(client_stream: DuplexStream, mut test_state: TestState) 
     test_state.wait_for_step(TestStep::ServerStarted).await;
 
     let mut client_stream = Some(client_stream);
-    let channel = Endpoint::try_from("http://[::]:6669")
-        .expect("Could not create endpoint")
+    // Note: we won't actually try to connect to this port on localhost,
+    // because we will call `connect_with_connector` with a service that
+    // just returns the `DuplexStream`, instead of making an actual 
+    // network connection.
+    let endpoint = Endpoint::try_from("http://[::]:6669")
+        .expect("Could not create endpoint");
+    let channel = endpoint
         .connect_with_connector(service_fn(move |_: Uri| {
             let client = client_stream.take();
 
             async move {
-                if let Some(client) = client {
-                    Ok(client)
-                } else {
-                    Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Client already taken",
-                    ))
-                }
+                client.ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "Client already taken"))
             }
         }))
         .await
@@ -213,12 +211,9 @@ async fn record_actual_tasks(
 ) -> Vec<ActualTask> {
     let mut client = InstrumentClient::new(client_channel);
 
-    let mut stream = loop {
-        let request = tonic::Request::new(InstrumentRequest {});
-        match client.watch_updates(request).await {
-            Ok(stream) => break stream.into_inner(),
-            Err(err) => panic!("Client cannot connect to watch updates: {err}"),
-        }
+    let mut stream = match client.watch_updates(tonic::Request::new(InstrumentRequest {})).await {
+        Ok(stream) => stream.into_inner(),
+        Err(err) => panic!("Client cannot connect to watch updates: {err}"),
     };
 
     let mut tasks = HashMap::new();
