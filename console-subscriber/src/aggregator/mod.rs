@@ -171,8 +171,13 @@ impl Aggregator {
     pub async fn run(mut self) {
         let mut publish = tokio::time::interval(self.publish_interval);
         loop {
+            // We want to apply pressure to clear out the event queue faster,
+            // as the channel becomes more full.
             let fill_percentage = self.shared.fill_percentage.load(Relaxed) as u32;
-            let sleep = tokio::time::sleep(self.publish_interval * (100 - fill_percentage) / 100);
+            // The fuller the channel is, the smaller the sleep interval is,
+            // leading to more frequent wake-ups.
+            let pressure_sleep =
+                tokio::time::sleep(self.publish_interval * (100 - fill_percentage) / 100);
 
             let should_send = tokio::select! {
                 // if the flush interval elapses, flush data to the client
@@ -183,7 +188,8 @@ impl Aggregator {
                     }
                 }
 
-                _ = sleep => {
+                // if the pressure timer elapses, flush the queue
+                _ = pressure_sleep => {
                     false
                 }
 

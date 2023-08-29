@@ -23,9 +23,10 @@ pub struct Builder {
     /// the aggregator task.
     pub(super) event_buffer_capacity: usize,
 
-    /// Fraction of the event buffer needed before the aggregator task starts
-    /// to flush it more aggresively.
-    pub(super) event_buffer_flush_fraction: usize,
+    /// Percentage of the event buffer's fill level the aggregator task
+    /// attempts not to cross. As fill percentage gets closer to this value,
+    /// the aggregator will wake up more often.
+    pub(super) event_buffer_target_fill: f64,
 
     /// The maximum number of updates to buffer per-client before the client is
     /// dropped.
@@ -66,7 +67,7 @@ impl Default for Builder {
     fn default() -> Self {
         Self {
             event_buffer_capacity: ConsoleLayer::DEFAULT_EVENT_BUFFER_CAPACITY,
-            event_buffer_flush_fraction: ConsoleLayer::DEFAULT_EVENT_BUFFER_FLUSH_FRACTION,
+            event_buffer_target_fill: ConsoleLayer::DEFAULT_EVENT_BUFFER_TARGET_FILL,
             client_buffer_capacity: ConsoleLayer::DEFAULT_CLIENT_BUFFER_CAPACITY,
             publish_interval: ConsoleLayer::DEFAULT_PUBLISH_INTERVAL,
             retention: ConsoleLayer::DEFAULT_RETENTION,
@@ -94,17 +95,25 @@ impl Builder {
         }
     }
 
-    /// Sets the target fraction for the fill level of channel of events sent
-    /// from subscriber layers to the aggregator task.
+    /// Sets the target fraction for the desired fill level of channel of
+    /// events from subscriber layers to the aggregator task.
     ///
-    /// When the channel is over `1 / event_buffer_flush_fraction` fill
-    /// capacity , the aggregator task will be woken up more frequently.
+    /// Acceptable values are within `[0; 1]` range.
+    ///
+    /// When the channel's size approaches `event_buffer_target_fill`, the
+    /// aggregator task will be woken up more frequently to prevent the buffer
+    /// from overfilling.
+    ///
+    /// Having sufficient amount of spare capacity is a good idea to be able to
+    /// handle spikes of incoming events, because otherwise the buffer would
+    /// overflow and those events would get dropped.
     ///
     /// By default, this is
-    /// [`ConsoleLayer::DEFAULT_EVENT_BUFFER_FLUSH_FRACTION`].
-    pub fn event_buffer_flush_fraction(self, event_buffer_flush_fraction: usize) -> Self {
+    /// [`ConsoleLayer::DEFAULT_EVENT_BUFFER_TARGET_FILL`].
+    pub fn event_buffer_target_fill(self, event_buffer_target_fill: f64) -> Self {
+        assert!((0.0..=1.0).contains(&event_buffer_target_fill));
         Self {
-            event_buffer_flush_fraction,
+            event_buffer_target_fill,
             ..self
         }
     }

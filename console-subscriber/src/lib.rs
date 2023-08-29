@@ -163,9 +163,15 @@ struct Shared {
     /// flushed.
     flush: aggregator::Flush,
 
-    /// As fill percentage gets higher, aggregator task gets polled more often,
-    /// to avoid filling up to the flush point. While `flush` notifiew the
-    /// aggregator task to flush immediately, this value is used as a soft
+    /// Used to represent percentage of the target fill level the channel is
+    /// currently at.
+    ///
+    /// This is not a total fill level, given complete buffer capacity - this
+    /// value is scaled by `event_buffer_target_fill` value.
+    ///
+    /// As fill percentage gets higher, the aggregator task gets woken more
+    /// often, to avoid filling up to the flush point. While `flush` notifies
+    /// the aggregator task to flush immediately, this value is used as a soft
     /// pressure to avoid hard flushes.
     fill_percentage: AtomicUsize,
 
@@ -297,7 +303,11 @@ impl ConsoleLayer {
         let shared = Arc::new(Shared::default());
         let aggregator = Aggregator::new(events, rpcs, &config, shared.clone(), base_time.clone());
         // This tries to reduce the chance of losing events to a full channel.
-        let flush_under_len = config.event_buffer_capacity / config.event_buffer_flush_fraction;
+        // Note that `event_buffer_target_fill` is guaranteed to be in `0..=1`
+        // range, therefore the output valeus should be sane.
+        let flush_under_len = (config.event_buffer_capacity as f64
+            * config.event_buffer_target_fill)
+            .trunc() as usize;
         let recorder = config
             .recording_path
             .as_ref()
@@ -343,9 +353,9 @@ impl ConsoleLayer {
     /// Default fraction for the acceptable fill capacity of the events sent
     /// from [`ConsoleLayer`] to a [`Server`].
     ///
-    /// When `1 / fraction` of the buffer capacity is exhausted, the aggregator
+    /// When `fraction` of the buffer capacity is exhausted, the aggregator
     /// task will be woken up more frequently to bring the capacity down.
-    pub const DEFAULT_EVENT_BUFFER_FLUSH_FRACTION: usize = 10;
+    pub const DEFAULT_EVENT_BUFFER_TARGET_FILL: f64 = 0.1;
     /// Default maximum capacity for th echannel of events sent from a
     /// [`Server`] to each subscribed client.
     ///
