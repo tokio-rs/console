@@ -9,13 +9,13 @@ use crate::{
     },
     util::Percentage,
     view,
-    warnings::Linter,
+    warnings::{Lint, Linter},
 };
 use console_api as proto;
 use ratatui::{style::Color, text::Span};
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     convert::{TryFrom, TryInto},
     rc::{Rc, Weak},
     time::{Duration, SystemTime},
@@ -24,6 +24,7 @@ use std::{
 #[derive(Default, Debug)]
 pub(crate) struct TasksState {
     tasks: Store<Task>,
+    pending_lint: HashSet<Id<Task>>,
     pub(crate) linters: Vec<Linter<Task>>,
     dropped_events: u64,
 }
@@ -204,7 +205,7 @@ impl TasksState {
                     (None, None) => "".to_owned(),
                 });
 
-                let task = Task {
+                let mut task = Task {
                     name,
                     id,
                     task_id,
@@ -217,17 +218,37 @@ impl TasksState {
                     warnings: Vec::new(),
                     location,
                 };
+                let recheck = task.lint(linters);
+                if recheck {
+                    self.pending_lint.insert(task.id);
+                }
                 Some((id, task))
             });
 
+        let mut checked = HashSet::new();
         for (stats, mut task) in self.tasks.updated(stats_update) {
             tracing::trace!(?task, ?stats, "processing stats update for");
             task.stats = stats.into();
+            let recheck = task.lint(linters);
+            if !recheck {
+                self.pending_lint.remove(&task.id);
+            }
+            checked.insert(task.id);
         }
 
-        for (_, task) in self.tasks.iter() {
-            task.borrow_mut().lint(linters);
-        }
+        self.pending_lint.retain(|id| {
+            if checked.contains(id) {
+                true
+            } else {
+                let recheck = self
+                    .tasks
+                    .get(*id)
+                    .expect("task pending lint is not in task store")
+                    .borrow_mut()
+                    .lint(linters);
+                recheck
+            }
+        });
 
         self.dropped_events += update.dropped_events;
     }
@@ -432,15 +453,21 @@ impl Task {
         &self.warnings[..]
     }
 
-    fn lint(&mut self, linters: &[Linter<Task>]) {
+    fn lint(&mut self, linters: &[Linter<Task>]) -> bool {
         self.warnings.clear();
+        let mut recheck = false;
         for lint in linters {
             tracing::debug!(?lint, task = ?self, "checking...");
-            if let Some(warning) = lint.check(self) {
-                tracing::info!(?warning, task = ?self, "found a warning!");
-                self.warnings.push(warning)
+            match lint.check(self) {
+                Lint::Warning(warning) => {
+                    tracing::info!(?warning, task = ?self, "found a warning!");
+                    self.warnings.push(warning);
+                }
+                Lint::Ok => {}
+                Lint::Recheck => recheck = true,
             }
         }
+        recheck
     }
 
     pub(crate) fn location(&self) -> &str {

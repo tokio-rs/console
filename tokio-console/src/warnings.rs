@@ -11,8 +11,8 @@ use std::{
 /// generating a warning message describing it. The [`Linter`] type wraps an
 /// instance of this trait to track active instances of the warning.
 pub trait Warn<T>: Debug {
-    /// Returns `true` if the warning applies to `val`.
-    fn check(&self, val: &T) -> bool;
+    /// Returns if the warning applies to `val`.
+    fn check(&self, val: &T) -> Warning;
 
     /// Formats a description of the warning detected for a *specific* `val`.
     ///
@@ -50,6 +50,31 @@ pub trait Warn<T>: Debug {
     fn summary(&self) -> &str;
 }
 
+/// A result for a linter check
+pub(crate) enum Lint<T> {
+    /// No warning applies to the entity
+    Ok,
+
+    /// The cloned instance of `Self` should be held by the entity that
+    /// generated the warning, so that it can be formatted. Holding the clone of
+    /// `Self` will increment the warning count for that entity.
+    Warning(Linter<T>),
+
+    /// The lint should be rechecked as the conditions to allow for checking are
+    /// not satisfied yet
+    Recheck,
+}
+
+/// A result for a warning check
+pub enum Warning {
+    /// Set `true` if the warning applies or `false` otherwise
+    Check(bool),
+
+    /// The warning should be rechecked as the conditions to allow for checking
+    /// are not satisfied yet
+    Recheck,
+}
+
 #[derive(Debug)]
 pub(crate) struct Linter<T>(Rc<dyn Warn<T>>);
 
@@ -61,17 +86,12 @@ impl<T> Linter<T> {
         Self(Rc::new(warning))
     }
 
-    /// Checks if the warning applies to a particular entity, returning a clone
-    /// of `Self` if it does.
-    ///
-    /// The cloned instance of `Self` should be held by the entity that
-    /// generated the warning, so that it can be formatted. Holding the clone of
-    /// `Self` will increment the warning count for that entity.
-    pub(crate) fn check(&self, val: &T) -> Option<Self> {
-        if self.0.check(val) {
-            Some(Self(self.0.clone()))
-        } else {
-            None
+    /// Checks if the warning applies to a particular entity
+    pub(crate) fn check(&self, val: &T) -> Lint<T> {
+        match self.0.check(val) {
+            Warning::Check(false) => Lint::Ok,
+            Warning::Check(true) => Lint::Warning(Self(self.0.clone())),
+            Warning::Recheck => Lint::Recheck,
         }
     }
 
@@ -82,7 +102,7 @@ impl<T> Linter<T> {
 
     pub(crate) fn format(&self, val: &T) -> String {
         debug_assert!(
-            self.0.check(val),
+            matches!(self.0.check(val), Warning::Check(true)),
             "tried to format a warning for a {} that did not have that warning!",
             std::any::type_name::<T>()
         );
@@ -124,9 +144,9 @@ impl Warn<Task> for SelfWakePercent {
         self.description.as_str()
     }
 
-    fn check(&self, task: &Task) -> bool {
+    fn check(&self, task: &Task) -> Warning {
         let self_wakes = task.self_wake_percent();
-        self_wakes > self.min_percent
+        Warning::Check(self_wakes > self.min_percent)
     }
 
     fn format(&self, task: &Task) -> String {
@@ -146,8 +166,13 @@ impl Warn<Task> for LostWaker {
         "tasks have lost their waker"
     }
 
-    fn check(&self, task: &Task) -> bool {
-        !task.is_completed() && task.waker_count() == 0 && !task.is_running() && !task.is_awakened()
+    fn check(&self, task: &Task) -> Warning {
+        Warning::Check(
+            !task.is_completed()
+                && task.waker_count() == 0
+                && !task.is_running()
+                && !task.is_awakened(),
+        )
     }
 
     fn format(&self, _: &Task) -> String {
@@ -186,18 +211,22 @@ impl Warn<Task> for NeverYielded {
         self.description.as_str()
     }
 
-    fn check(&self, task: &Task) -> bool {
+    fn check(&self, task: &Task) -> Warning {
         // Don't fire warning for tasks that are waiting to run
         if task.state() != TaskState::Running {
-            return false;
+            return Warning::Check(false);
         }
 
         if task.total_polls() > 1 {
-            return false;
+            return Warning::Check(false);
         }
 
         // Avoid short-lived task false positives
-        task.busy(SystemTime::now()) >= self.min_duration
+        if task.busy(SystemTime::now()) >= self.min_duration {
+            Warning::Check(true)
+        } else {
+            Warning::Recheck
+        }
     }
 
     fn format(&self, task: &Task) -> String {
