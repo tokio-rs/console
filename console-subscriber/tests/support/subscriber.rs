@@ -160,14 +160,14 @@ async fn console_server(
     let aggregate = task::Builder::new()
         .name("console::aggregate")
         .spawn(aggregator.run())
-        .expect("client-console error: couldn't spawn aggregator");
+        .expect("console-test error: couldn't spawn aggregator");
     Server::builder()
         .add_service(service)
         .serve_with_incoming(futures::stream::iter(vec![Ok::<_, std::io::Error>(
             server_stream,
         )]))
         .await
-        .expect("client-console error: couldn't start instrument server.");
+        .expect("console-test error: couldn't start instrument server.");
     test_state.advance_to_step(TestStep::ServerStarted);
 
     test_state.wait_for_step(TestStep::UpdatesRecorded).await;
@@ -201,13 +201,11 @@ async fn console_client(client_stream: DuplexStream, mut test_state: TestState) 
             let client = client_stream.take();
 
             async move {
-                client.ok_or_else(|| {
-                    std::io::Error::new(std::io::ErrorKind::Other, "Client already taken")
-                })
+                Ok(client.expect("console-test error: client already taken (this shouldn't happen)"))
             }
         }))
         .await
-        .expect("client-console error: couldn't create client");
+        .expect("console-test client error: couldn't create client");
     test_state.advance_to_step(TestStep::ClientConnected);
 
     record_actual_tasks(channel, test_state).await
@@ -241,7 +239,7 @@ async fn record_actual_tasks(
     let signal_task = ExpectedTask::default().match_name(END_SIGNAL_TASK_NAME.into());
     let mut signal_task_read = false;
     while let Some(update) = stream.next().await {
-        let update = update.expect("update stream error");
+        let update = update.expect("console-test error: update stream error");
 
         if let Some(task_update) = &update.task_update {
             for new_task in &task_update.new_tasks {
@@ -249,21 +247,18 @@ async fn record_actual_tasks(
                     Some(id) => ActualTask::new(id.id),
                     None => continue,
                 };
-                let name = new_task
-                    .fields
-                    .iter()
-                    .find_map(|field| match field.name.as_ref()? {
+                for field in new_task.fields {
+                    match field.name.as_ref() {
                         console_api::field::Name::StrName(name) if name == "task.name" => {
-                            Some(field.value.clone())
-                        }
-                        _ => None,
-                    })
-                    .flatten();
-                actual_task.name = match name {
-                    Some(Value::DebugVal(value)) => Some(value.clone()),
-                    Some(Value::StrVal(value)) => Some(value.clone()),
-                    _ => None, // Anything that isn't string-like shouldn't be used as a name.
-                };
+                            actual_task.name = match field.value.as_ref() {
+                                Value::DebugVal(value) => actual_task.name = Some(value),
+                                Value::StrVal(value) => actual_task.name = Some(value),
+                                _ => continue;
+                            }
+                        },
+                        _ => {}
+                    }
+                }
 
                 if signal_task.matches_actual_task(&actual_task) {
                     signal_task_read = true;
@@ -304,10 +299,7 @@ fn validate_expected_tasks(
     let failures: Vec<_> = expected_tasks
         .iter()
         .map(|expected| validate_expected_task(expected, &actual_tasks))
-        .filter_map(|r| match r {
-            Ok(_) => None,
-            Err(validation_error) => Some(validation_error),
-        })
+        .filter_map(Result::err)
         .collect();
 
     if failures.is_empty() {
