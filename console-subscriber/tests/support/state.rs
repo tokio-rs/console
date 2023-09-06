@@ -59,9 +59,11 @@ impl TestState {
                 Err(RecvError::Lagged(_)) => {
                     // we don't mind being lagged, we'll just get the latest state
                 }
-                Err(RecvError::Closed) => {
-                    panic!("failed to receive current step, waiting for step: {desired_step}, did the test abort?");
-                }
+                Err(RecvError::Closed) => panic!(
+                    "console-test error: failed to receive current  step, \
+                    waiting for step: {desired_step}. This shouldn't happen, \
+                    did the test abort?"
+                ),
             }
         }
     }
@@ -90,27 +92,27 @@ impl TestState {
         assert!(
             self.step < next_step,
             "console-test error: cannot advance to previous or current step! \
-            current step: {current}, next step: {next_step}",
+            current step: {current}, next step: {next_step}. This shouldn't \
+            happen.",
             current = self.step,
         );
 
         match (&self.step, &next_step) {
-            (TestStep::Start, TestStep::ServerStarted) |
-            (TestStep::ServerStarted, TestStep::ClientConnected) |
-            (TestStep::ClientConnected, TestStep::TestFinished) |
-            (TestStep::TestFinished, TestStep::UpdatesRecorded) => {},
+            (TestStep::Start, TestStep::ServerStarted)
+            | (TestStep::ServerStarted, TestStep::ClientConnected)
+            | (TestStep::ClientConnected, TestStep::TestFinished)
+            | (TestStep::TestFinished, TestStep::UpdatesRecorded) => {}
             (current, _) => panic!(
                 "console-test error: test cannot advance more than one step! \
-                current step: {current}, next step: {next_step}"
+                current step: {current}, next step: {next_step}. This \
+                shouldn't happen."
             ),
         }
 
-        self.sender
-            .send(next_step)
-            .expect(
-                "console-test error: failed to send the next test step, \
-                did the test abort?"
-            );
+        self.sender.send(next_step).expect(
+            "console-test error: failed to send the next test step. \
+                This shouldn't happen, did the test abort?",
+        );
     }
 
     fn update_step(&mut self) {
@@ -120,9 +122,10 @@ impl TestState {
                 Err(TryRecvError::Lagged(_)) => {
                     // we don't mind being lagged, we'll just get the latest state
                 }
-                Err(TryRecvError::Closed) => {
-                    panic!("failed to update current step, did the test abort?")
-                }
+                Err(TryRecvError::Closed) => panic!(
+                    "console-test error: failed to update current step, did \
+                    the test abort?"
+                ),
                 Err(TryRecvError::Empty) => break,
             }
         }

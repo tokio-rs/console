@@ -49,13 +49,17 @@ impl fmt::Debug for TaskValidationFailure {
         match &self.actual {
             Some(actual) => write!(
                 f,
-                "Task Validation Failed!\n  Expected Task: {expected:?}\n  Actual Task:   {actual:?}\n  Failure:       {failure}",
+                "Task Validation Failed!\n  Expected Task: {expected:?}\
+                \n  Actual Task:   {actual:?}\
+                \n  Failure:       {failure}",
                 expected = self.expected,
                 failure = self.failure,
             ),
             None => write!(
                 f,
-                "Task Validation Failed!\n  Expected Task: {expected:?}\n  Failure:       {failure}",
+                "Task Validation Failed!\n  Expected Task: {expected:?}\
+                \n  Actual Task:   <not found>\
+                \n  Failure:       {failure}",
                 expected = self.expected,
                 failure = self.failure,
             ),
@@ -136,7 +140,8 @@ impl ExpectedTask {
                     expected: self.clone(),
                     actual: Some(actual_task.clone()),
                     failure: format!(
-                        "{self}: expected `wakes` to be {expected_wakes}, but actual was {actual_wakes}",
+                        "{self}: expected `wakes` to be {expected_wakes}, but \
+                        actual was {actual_wakes}",
                         actual_wakes = actual_task.wakes,
                     ),
                 });
@@ -150,7 +155,9 @@ impl ExpectedTask {
                     expected: self.clone(),
                     actual: Some(actual_task.clone()),
                     failure: format!(
-                        "{self}: expected `self_wakes` to be {expected_self_wakes}, but actual was {actual_self_wakes}",
+                        "{self}: expected `self_wakes` to be \
+                        {expected_self_wakes}, but actual was \
+                        {actual_self_wakes}",
                         actual_self_wakes = actual_task.self_wakes,
                     ),
                 });
@@ -162,7 +169,8 @@ impl ExpectedTask {
                 expected: self.clone(),
                 actual: Some(actual_task.clone()),
                 failure: format!(
-                    "{self}: no expectations set, if you want to just expect that a matching task is present, use `expect_present()`",
+                    "{self}: no expectations set, if you want to just expect \
+                    that a matching task is present, use `expect_present()`",
                 ),
             });
         }

@@ -54,13 +54,14 @@ where
 
     let mut test_state = TestState::new();
     let mut test_state_test = test_state.clone();
-    
+
     let thread_name = {
         // Include the name of the test thread in the spawned subscriber thread,
         // to make it clearer which test it belongs to.
-        let test = thread::current().name().unwrap_or("<unknown test">);
+        let current_thread = thread::current();
+        let test = current_thread.name().unwrap_or("<unknown test>");
         format!("{test}-console::subscriber")
-    }
+    };
     let join_handle = thread::Builder::new()
         .name(thread_name)
         // Run the test's console server and client tasks in a separate thread
@@ -93,7 +94,7 @@ where
                 actual_tasks
             })
         })
-        .expect("console subscriber could not spawn thread");
+        .expect("console-test error: console subscriber could not spawn thread");
 
     tracing::subscriber::with_default(registry, || {
         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -163,7 +164,10 @@ async fn console_server(
         .expect("console-test error: couldn't spawn aggregator");
     Server::builder()
         .add_service(service)
-        .serve_with_incoming(futures::stream::once(Ok::<_, std::io::Error>(server_stream)))
+        // .serve_with_incoming(futures::stream::once(Ok::<_, std::io::Error>(server_stream)))
+        .serve_with_incoming(futures::stream::iter(vec![Ok::<_, std::io::Error>(
+            server_stream,
+        )]))
         .await
         .expect("console-test error: couldn't start instrument server.");
     test_state.advance_to_step(TestStep::ServerStarted);
@@ -199,7 +203,14 @@ async fn console_client(client_stream: DuplexStream, mut test_state: TestState) 
             let client = client_stream.take();
 
             async move {
-                Ok(client.expect("console-test error: client already taken (this shouldn't happen)"))
+                // We need to return a Result from this async block, which is
+                // why we don't unwrap the `client` here.
+                client.ok_or_else(|| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "console-test error: client already taken. This shouldn't happen.",
+                    )
+                })
             }
         }))
         .await
@@ -229,11 +240,16 @@ async fn record_actual_tasks(
         .await
     {
         Ok(stream) => stream.into_inner(),
-        Err(err) => panic!("Client cannot connect to watch updates: {err}"),
+        Err(err) => panic!("console-test error: client cannot connect to watch updates: {err}"),
     };
 
     let mut tasks = HashMap::new();
 
+    // The console-subscriber aggregator is a bit of an unknown entity for us,
+    // especially with respect to its update loops. We can't guarantee that
+    // it will have seen all the tasks in our test N iterations after the test
+    // ends for some known N. For this reason we need to use a signal task to
+    // check for and end the collection of events at that point.
     let signal_task = ExpectedTask::default().match_name(END_SIGNAL_TASK_NAME.into());
     let mut signal_task_read = false;
     while let Some(update) = stream.next().await {
@@ -245,15 +261,15 @@ async fn record_actual_tasks(
                     Some(id) => ActualTask::new(id.id),
                     None => continue,
                 };
-                for field in new_task.fields {
+                for field in &new_task.fields {
                     match field.name.as_ref() {
-                        console_api::field::Name::StrName(name) if name == "task.name" => {
+                        Some(console_api::field::Name::StrName(name)) if name == "task.name" => {
                             actual_task.name = match field.value.as_ref() {
-                                Value::DebugVal(value) => actual_task.name = Some(value),
-                                Value::StrVal(value) => actual_task.name = Some(value),
-                                _ => continue;
-                            }
-                        },
+                                Some(Value::DebugVal(value)) => Some(value.clone()),
+                                Some(Value::StrVal(value)) => Some(value.clone()),
+                                _ => continue,
+                            };
+                        }
                         _ => {}
                     }
                 }
