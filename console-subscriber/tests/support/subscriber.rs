@@ -163,9 +163,7 @@ async fn console_server(
         .expect("console-test error: couldn't spawn aggregator");
     Server::builder()
         .add_service(service)
-        .serve_with_incoming(futures::stream::iter(vec![Ok::<_, std::io::Error>(
-            server_stream,
-        )]))
+        .serve_with_incoming(futures::stream::once(Ok::<_, std::io::Error>(server_stream)))
         .await
         .expect("console-test error: couldn't start instrument server.");
     test_state.advance_to_step(TestStep::ServerStarted);
