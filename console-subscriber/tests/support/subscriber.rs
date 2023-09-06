@@ -54,9 +54,19 @@ where
 
     let mut test_state = TestState::new();
     let mut test_state_test = test_state.clone();
-
+    
+    let thread_name = {
+        // Include the name of the test thread in the spawned subscriber thread,
+        // to make it clearer which test it belongs to.
+        let test = thread::current().name().unwrap_or("<unknown test">);
+        format!("{test}-console::subscriber")
+    }
     let join_handle = thread::Builder::new()
-        .name("console::subscriber".into())
+        .name(thread_name)
+        // Run the test's console server and client tasks in a separate thread
+        // from the main test, ensuring that any `tracing` emitted by the
+        // console worker and the client are not collected by the subscriber
+        // under test.
         .spawn(move || {
             let _subscriber_guard =
                 tracing::subscriber::set_default(tracing_core::subscriber::NoSubscriber::default());

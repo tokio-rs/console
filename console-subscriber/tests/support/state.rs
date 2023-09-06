@@ -89,7 +89,8 @@ impl TestState {
 
         assert!(
             self.step < next_step,
-            "cannot advance to previous or current step! current step: {current}, next step: {next_step}",
+            "console-test error: cannot advance to previous or current step! \
+            current step: {current}, next step: {next_step}",
             current = self.step,
         );
 
@@ -98,12 +99,18 @@ impl TestState {
             (TestStep::ServerStarted, TestStep::ClientConnected) |
             (TestStep::ClientConnected, TestStep::TestFinished) |
             (TestStep::TestFinished, TestStep::UpdatesRecorded) => {},
-            (current, _) => panic!("cannot advance more than one step! current step: {current}, next step: {next_step}"),
+            (current, _) => panic!(
+                "console-test error: test cannot advance more than one step! \
+                current step: {current}, next step: {next_step}"
+            ),
         }
 
         self.sender
             .send(next_step)
-            .expect("failed to send the next test step, did the test abort?");
+            .expect(
+                "console-test error: failed to send the next test step, \
+                did the test abort?"
+            );
     }
 
     fn update_step(&mut self) {
