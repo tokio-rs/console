@@ -146,6 +146,9 @@ impl TasksState {
         let mut stats_update = update.stats_update;
         let linters = &self.linters;
 
+        // Gathers the tasks that need to be linted again on the next update cycle
+        let mut next_pending_lint = HashSet::new();
+
         self.tasks
             .insert_with(visibility, update.new_tasks, |ids, mut task| {
                 if task.id.is_none() {
@@ -218,37 +221,34 @@ impl TasksState {
                     warnings: Vec::new(),
                     location,
                 };
-                let recheck = task.lint(linters);
-                if recheck {
-                    self.pending_lint.insert(task.id);
+                if matches!(task.lint(linters), TaskLintResult::RequiresRecheck) {
+                    next_pending_lint.insert(task.id);
                 }
                 Some((id, task))
             });
 
-        let mut checked = HashSet::new();
         for (stats, mut task) in self.tasks.updated(stats_update) {
             tracing::trace!(?task, ?stats, "processing stats update for");
             task.stats = stats.into();
-            let recheck = task.lint(linters);
-            if !recheck {
+            if matches!(task.lint(linters), TaskLintResult::RequiresRecheck) {
+                next_pending_lint.insert(task.id);
+            } else {
+                // Avoid linting this task again this cycle
                 self.pending_lint.remove(&task.id);
             }
-            checked.insert(task.id);
         }
 
-        self.pending_lint.retain(|id| {
-            if checked.contains(id) {
-                true
-            } else {
-                let recheck = self
-                    .tasks
-                    .get(*id)
-                    .expect("task pending lint is not in task store")
-                    .borrow_mut()
-                    .lint(linters);
-                recheck
+        for id in &self.pending_lint {
+            if let Some(task) = self.tasks.get(*id) {
+                if matches!(
+                    task.borrow_mut().lint(linters),
+                    TaskLintResult::RequiresRecheck
+                ) {
+                    next_pending_lint.insert(*id);
+                }
             }
-        });
+        }
+        self.pending_lint = next_pending_lint;
 
         self.dropped_events += update.dropped_events;
     }
@@ -453,7 +453,7 @@ impl Task {
         &self.warnings[..]
     }
 
-    fn lint(&mut self, linters: &[Linter<Task>]) -> bool {
+    fn lint(&mut self, linters: &[Linter<Task>]) -> TaskLintResult {
         self.warnings.clear();
         let mut recheck = false;
         for lint in linters {
@@ -467,12 +467,21 @@ impl Task {
                 Lint::Recheck => recheck = true,
             }
         }
-        recheck
+        if recheck {
+            TaskLintResult::RequiresRecheck
+        } else {
+            TaskLintResult::Linted
+        }
     }
 
     pub(crate) fn location(&self) -> &str {
         &self.location
     }
+}
+
+enum TaskLintResult {
+    Linted,
+    RequiresRecheck,
 }
 
 impl From<proto::tasks::Stats> for TaskStats {
