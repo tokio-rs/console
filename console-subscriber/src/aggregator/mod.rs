@@ -30,6 +30,8 @@ use self::shrink::{ShrinkMap, ShrinkVec};
 pub struct Aggregator {
     /// Channel of incoming events emitted by `TaskLayer`s.
     events: mpsc::Receiver<Event>,
+    /// FIXME(hds): remove
+    events_tx: mpsc::Sender<Event>,
 
     /// New incoming RPCs.
     rpcs: mpsc::Receiver<Command>,
@@ -134,7 +136,7 @@ struct AsyncOp {
 
 impl Aggregator {
     pub(crate) fn new(
-        events: mpsc::Receiver<Event>,
+        events: (mpsc::Sender<Event>, mpsc::Receiver<Event>),
         rpcs: mpsc::Receiver<Command>,
         builder: &crate::Builder,
         shared: Arc<crate::Shared>,
@@ -145,7 +147,8 @@ impl Aggregator {
             rpcs,
             publish_interval: builder.publish_interval,
             retention: builder.retention,
-            events,
+            events: events.1,
+            events_tx: events.0,
             watchers: Default::default(),
             details_watchers: Default::default(),
             all_metadata: Default::default(),
@@ -211,6 +214,7 @@ impl Aggregator {
 
             };
 
+            let mut counts = EventCounts::new();
             // drain and aggregate buffered events.
             //
             // Note: we *don't* want to actually await the call to `recv` --- we
@@ -220,9 +224,11 @@ impl Aggregator {
             // to be woken when the flush interval has elapsed, or when the
             // channel is almost full.
             let mut drained = false;
+            let events_queue0 = self.events_tx.max_capacity() - self.events_tx.capacity();
             while let Some(event) = recv_now_or_never(&mut self.events) {
                 match event {
                     Some(event) => {
+                        counts.update(&event);
                         self.update_state(event);
                         drained = true;
                     }
@@ -234,6 +240,18 @@ impl Aggregator {
                     }
                 };
             }
+            let events_queue = self.events_tx.max_capacity() - self.events_tx.capacity();
+            tracing::info!(
+                async_resource_op = counts.async_resource_op,
+                metadata = counts.metadata,
+                poll_op = counts.poll_op,
+                resource = counts.resource,
+                spawn = counts.spawn,
+                total = counts.total(),
+                events_queue0 = events_queue0,
+                events_queue = events_queue,
+                "event channel drain loop",
+            );
 
             // flush data to clients, if there are any currently subscribed
             // watchers and we should send a new update.
@@ -252,12 +270,33 @@ impl Aggregator {
         // been sent off.
         let now = Instant::now();
         let has_watchers = !self.watchers.is_empty();
+        let tasks0 = self.tasks.len();
+        let task_stats0 = self.task_stats.len();
+        let resources0 = self.resources.len();
+        let resource_stats0 = self.resource_stats.len();
+        let async_ops0 = self.async_ops.len();
+        let async_op_stats0 = self.async_op_stats.len();
         self.tasks
             .drop_closed(&mut self.task_stats, now, self.retention, has_watchers);
         self.resources
             .drop_closed(&mut self.resource_stats, now, self.retention, has_watchers);
         self.async_ops
             .drop_closed(&mut self.async_op_stats, now, self.retention, has_watchers);
+        tracing::info!(
+            tasks = self.tasks.len(),
+            d_tasks = tasks0.saturating_sub(self.tasks.len()),
+            task_stats = self.task_stats.len(),
+            d_task_stats = task_stats0.saturating_sub(self.task_stats.len()),
+            resources = self.resources.len(),
+            d_resources = resources0.saturating_sub(self.resources.len()),
+            resource_stats = self.resource_stats.len(),
+            d_resource_stats = resource_stats0.saturating_sub(self.resource_stats.len()),
+            async_ops = self.async_ops.len(),
+            d_async_ops = async_ops0.saturating_sub(self.async_ops.len()),
+            async_op_stats = self.async_op_stats.len(),
+            d_asyc_op_stats = async_op_stats0.saturating_sub(self.async_op_stats.len()),
+            "cleanup_closed",
+        )
     }
 
     /// Add the task subscription to the watchers after sending the first update
@@ -506,6 +545,40 @@ fn recv_now_or_never<T>(receiver: &mut mpsc::Receiver<T>) -> Option<Option<T>> {
     match receiver.poll_recv(&mut cx) {
         std::task::Poll::Ready(opt) => Some(opt),
         std::task::Poll::Pending => None,
+    }
+}
+
+struct EventCounts {
+    async_resource_op: usize,
+    metadata: usize,
+    poll_op: usize,
+    resource: usize,
+    spawn: usize,
+}
+
+impl EventCounts {
+    fn new() -> Self {
+        Self {
+            async_resource_op: 0,
+            metadata: 0,
+            poll_op: 0,
+            resource: 0,
+            spawn: 0,
+        }
+    }
+
+    fn update(&mut self, event: &Event) {
+        match event {
+            Event::AsyncResourceOp { .. } => self.async_resource_op += 1,
+            Event::Metadata(_) => self.metadata += 1,
+            Event::PollOp { .. } => self.poll_op += 1,
+            Event::Resource { .. } => self.resource += 1,
+            Event::Spawn { .. } => self.spawn += 1,
+        }
+    }
+
+    fn total(&self) -> usize {
+        self.async_resource_op + self.metadata + self.poll_op + self.resource + self.spawn
     }
 }
 

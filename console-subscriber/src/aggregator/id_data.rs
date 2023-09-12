@@ -24,6 +24,10 @@ impl<T> Default for IdData<T> {
 }
 
 impl<T: Unsent> IdData<T> {
+    pub(crate) fn len(&self) -> usize {
+        self.data.len()
+    }
+
     pub(crate) fn insert(&mut self, id: Id, data: T) {
         self.data.insert(id, data);
     }

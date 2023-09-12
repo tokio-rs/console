@@ -289,7 +289,13 @@ impl ConsoleLayer {
         let (tx, events) = mpsc::channel(config.event_buffer_capacity);
         let (subscribe, rpcs) = mpsc::channel(256);
         let shared = Arc::new(Shared::default());
-        let aggregator = Aggregator::new(events, rpcs, &config, shared.clone(), base_time.clone());
+        let aggregator = Aggregator::new(
+            (tx.clone(), events),
+            rpcs,
+            &config,
+            shared.clone(),
+            base_time.clone(),
+        );
         // Conservatively, start to trigger a flush when half the channel is full.
         // This tries to reduce the chance of losing events to a full channel.
         let flush_under_capacity = config.event_buffer_capacity / 2;
@@ -470,6 +476,11 @@ impl ConsoleLayer {
         };
 
         let capacity = self.tx.capacity();
+        // let max_capacity = self.tx.max_capacity();
+        // println!(
+        //     "Events channel count: {count}",
+        //     count = max_capacity - capacity
+        // );
         if capacity <= self.flush_under_capacity {
             self.shared.flush.trigger();
         }
