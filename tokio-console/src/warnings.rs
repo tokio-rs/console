@@ -77,7 +77,7 @@ impl<T> Linter<T> {
 
     pub(crate) fn format(&self, val: &T) -> String {
         debug_assert!(
-            matches!(self.0.check(val), Warning::Ok),
+            matches!(self.0.check(val), Warning::Warn),
             "tried to format a warning for a {} that did not have that warning!",
             std::any::type_name::<T>()
         );
