@@ -50,6 +50,19 @@ pub trait Warn<T>: Debug {
     fn summary(&self) -> &str;
 }
 
+/// A result for a warning check
+pub enum Warning {
+    /// No warning for this entity.
+    Ok,
+
+    /// A warning has been detected for this entity.
+    Warn,
+
+    /// The warning should be rechecked as the conditions to allow for checking
+    /// are not satisfied yet
+    Recheck,
+}
+
 #[derive(Debug)]
 pub(crate) struct Linter<T>(Rc<dyn Warn<T>>);
 
@@ -101,19 +114,6 @@ pub(crate) enum Lint<T> {
 
     /// The lint should be rechecked as the conditions to allow for checking are
     /// not satisfied yet
-    Recheck,
-}
-
-/// A result for a warning check
-pub enum Warning {
-    /// No warning for this entity.
-    Ok,
-
-    /// A warning has been detected for this entity.
-    Warn,
-
-    /// The warning should be rechecked as the conditions to allow for checking
-    /// are not satisfied yet
     Recheck,
 }
 
