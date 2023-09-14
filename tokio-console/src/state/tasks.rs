@@ -240,10 +240,7 @@ impl TasksState {
 
         for id in &self.pending_lint {
             if let Some(task) = self.tasks.get(*id) {
-                if matches!(
-                    task.borrow_mut().lint(linters),
-                    TaskLintResult::RequiresRecheck
-                ) {
+                if let TaskLintResult::RequiresRecheck = task.borrow_mut().lint(linters) {
                     next_pending_lint.insert(*id);
                 }
             }
