@@ -230,11 +230,10 @@ impl TasksState {
         for (stats, mut task) in self.tasks.updated(stats_update) {
             tracing::trace!(?task, ?stats, "processing stats update for");
             task.stats = stats.into();
-            if matches!(task.lint(linters), TaskLintResult::RequiresRecheck) {
-                next_pending_lint.insert(task.id);
-            } else {
+            match task.lint(linters) {
+                TaskLintResult::RequiresRecheck => next_pending_lint.insert(task.id),
                 // Avoid linting this task again this cycle
-                self.pending_lint.remove(&task.id);
+                _ => self.pending_lint.remove(&task.id),
             }
         }
 
