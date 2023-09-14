@@ -7,7 +7,6 @@ use console_api as proto;
 use proto::resources::resource;
 use tokio::sync::{mpsc, Notify};
 
-use futures::FutureExt;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering::*},
@@ -221,7 +220,7 @@ impl Aggregator {
             // to be woken when the flush interval has elapsed, or when the
             // channel is almost full.
             let mut drained = false;
-            while let Some(event) = self.events.recv().now_or_never() {
+            while let Some(event) = recv_now_or_never(&mut self.events) {
                 match event {
                     Some(event) => {
                         self.update_state(event);
@@ -497,6 +496,16 @@ impl Aggregator {
                 self.async_op_stats.insert(id, stats);
             }
         }
+    }
+}
+
+fn recv_now_or_never<T>(receiver: &mut mpsc::Receiver<T>) -> Option<Option<T>> {
+    let waker = futures_task::noop_waker();
+    let mut cx = std::task::Context::from_waker(&waker);
+
+    match receiver.poll_recv(&mut cx) {
+        std::task::Poll::Ready(opt) => Some(opt),
+        std::task::Poll::Pending => None,
     }
 }
 

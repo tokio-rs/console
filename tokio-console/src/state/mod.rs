@@ -93,7 +93,7 @@ impl State {
         mut self,
         linters: impl IntoIterator<Item = Linter<Task>>,
     ) -> Self {
-        self.tasks_state.linters.extend(linters.into_iter());
+        self.tasks_state.linters.extend(linters);
         self
     }
 
@@ -505,7 +505,7 @@ fn truncate_registry_path(s: String) -> String {
 
     static REGEX: OnceCell<Regex> = OnceCell::new();
     let regex = REGEX.get_or_init(|| {
-        Regex::new(r#".*/\.cargo(/registry/src/[^/]*/|/git/checkouts/)"#)
+        Regex::new(r".*/\.cargo(/registry/src/[^/]*/|/git/checkouts/)")
             .expect("failed to compile regex")
     });
 
