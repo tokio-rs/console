@@ -1,5 +1,9 @@
-use crate::state::tasks::Task;
-use std::{fmt::Debug, rc::Rc};
+use crate::state::tasks::{Task, TaskState};
+use std::{
+    fmt::Debug,
+    rc::Rc,
+    time::{Duration, SystemTime},
+};
 
 /// A warning for a particular type of monitored entity (e.g. task or resource).
 ///
@@ -7,8 +11,8 @@ use std::{fmt::Debug, rc::Rc};
 /// generating a warning message describing it. The [`Linter`] type wraps an
 /// instance of this trait to track active instances of the warning.
 pub trait Warn<T>: Debug {
-    /// Returns `true` if the warning applies to `val`.
-    fn check(&self, val: &T) -> bool;
+    /// Returns if the warning applies to `val`.
+    fn check(&self, val: &T) -> Warning;
 
     /// Formats a description of the warning detected for a *specific* `val`.
     ///
@@ -46,6 +50,19 @@ pub trait Warn<T>: Debug {
     fn summary(&self) -> &str;
 }
 
+/// A result for a warning check
+pub enum Warning {
+    /// No warning for this entity.
+    Ok,
+
+    /// A warning has been detected for this entity.
+    Warn,
+
+    /// The warning should be rechecked as the conditions to allow for checking
+    /// are not satisfied yet
+    Recheck,
+}
+
 #[derive(Debug)]
 pub(crate) struct Linter<T>(Rc<dyn Warn<T>>);
 
@@ -57,17 +74,12 @@ impl<T> Linter<T> {
         Self(Rc::new(warning))
     }
 
-    /// Checks if the warning applies to a particular entity, returning a clone
-    /// of `Self` if it does.
-    ///
-    /// The cloned instance of `Self` should be held by the entity that
-    /// generated the warning, so that it can be formatted. Holding the clone of
-    /// `Self` will increment the warning count for that entity.
-    pub(crate) fn check(&self, val: &T) -> Option<Self> {
-        if self.0.check(val) {
-            Some(Self(self.0.clone()))
-        } else {
-            None
+    /// Checks if the warning applies to a particular entity
+    pub(crate) fn check(&self, val: &T) -> Lint<T> {
+        match self.0.check(val) {
+            Warning::Ok => Lint::Ok,
+            Warning::Warn => Lint::Warning(Self(self.0.clone())),
+            Warning::Recheck => Lint::Recheck,
         }
     }
 
@@ -78,7 +90,7 @@ impl<T> Linter<T> {
 
     pub(crate) fn format(&self, val: &T) -> String {
         debug_assert!(
-            self.0.check(val),
+            matches!(self.0.check(val), Warning::Warn),
             "tried to format a warning for a {} that did not have that warning!",
             std::any::type_name::<T>()
         );
@@ -88,6 +100,21 @@ impl<T> Linter<T> {
     pub(crate) fn summary(&self) -> &str {
         self.0.summary()
     }
+}
+
+/// A result for a linter check
+pub(crate) enum Lint<T> {
+    /// No warning applies to the entity
+    Ok,
+
+    /// The cloned instance of `Self` should be held by the entity that
+    /// generated the warning, so that it can be formatted. Holding the clone of
+    /// `Self` will increment the warning count for that entity.
+    Warning(Linter<T>),
+
+    /// The lint should be rechecked as the conditions to allow for checking are
+    /// not satisfied yet
+    Recheck,
 }
 
 #[derive(Clone, Debug)]
@@ -120,9 +147,13 @@ impl Warn<Task> for SelfWakePercent {
         self.description.as_str()
     }
 
-    fn check(&self, task: &Task) -> bool {
+    fn check(&self, task: &Task) -> Warning {
         let self_wakes = task.self_wake_percent();
-        self_wakes > self.min_percent
+        if self_wakes > self.min_percent {
+            Warning::Warn
+        } else {
+            Warning::Ok
+        }
     }
 
     fn format(&self, task: &Task) -> String {
@@ -142,11 +173,76 @@ impl Warn<Task> for LostWaker {
         "tasks have lost their waker"
     }
 
-    fn check(&self, task: &Task) -> bool {
-        !task.is_completed() && task.waker_count() == 0 && !task.is_running() && !task.is_awakened()
+    fn check(&self, task: &Task) -> Warning {
+        if !task.is_completed()
+            && task.waker_count() == 0
+            && !task.is_running()
+            && !task.is_awakened()
+        {
+            Warning::Warn
+        } else {
+            Warning::Ok
+        }
     }
 
     fn format(&self, _: &Task) -> String {
         "This task has lost its waker, and will never be woken again.".into()
+    }
+}
+
+/// Warning for if a task has never yielded
+#[derive(Clone, Debug)]
+pub(crate) struct NeverYielded {
+    min_duration: Duration,
+    description: String,
+}
+
+impl NeverYielded {
+    pub(crate) const DEFAULT_DURATION: Duration = Duration::from_secs(1);
+    pub(crate) fn new(min_duration: Duration) -> Self {
+        Self {
+            min_duration,
+            description: format!(
+                "tasks have never yielded (threshold {}ms)",
+                min_duration.as_millis()
+            ),
+        }
+    }
+}
+
+impl Default for NeverYielded {
+    fn default() -> Self {
+        Self::new(Self::DEFAULT_DURATION)
+    }
+}
+
+impl Warn<Task> for NeverYielded {
+    fn summary(&self) -> &str {
+        self.description.as_str()
+    }
+
+    fn check(&self, task: &Task) -> Warning {
+        // Don't fire warning for tasks that are waiting to run
+        if task.state() != TaskState::Running {
+            return Warning::Ok;
+        }
+
+        if task.total_polls() > 1 {
+            return Warning::Ok;
+        }
+
+        // Avoid short-lived task false positives
+        if task.busy(SystemTime::now()) >= self.min_duration {
+            Warning::Warn
+        } else {
+            Warning::Recheck
+        }
+    }
+
+    fn format(&self, task: &Task) -> String {
+        format!(
+            "This task has never yielded ({:?})",
+            task.busy(SystemTime::now()),
+        )
     }
 }
