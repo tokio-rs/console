@@ -234,7 +234,7 @@ impl TasksState {
                 TaskLintResult::RequiresRecheck => next_pending_lint.insert(task.id),
                 // Avoid linting this task again this cycle
                 _ => self.pending_lint.remove(&task.id),
-            }
+            };
         }
 
         for id in &self.pending_lint {
