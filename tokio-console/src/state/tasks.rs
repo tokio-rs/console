@@ -221,7 +221,7 @@ impl TasksState {
                     warnings: Vec::new(),
                     location,
                 };
-                if matches!(task.lint(linters), TaskLintResult::RequiresRecheck) {
+                if let TaskLintResult::RequiresRecheck = task.lint(linters) {
                     next_pending_lint.insert(task.id);
                 }
                 Some((id, task))
