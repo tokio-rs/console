@@ -59,7 +59,7 @@ pub struct Resource {
     pub parent_resource_id: ::core::option::Option<super::common::Id>,
     /// Is the resource an internal component of another resource?
     ///
-    /// For example, a `tokio::time::Interval` resource might contain a 
+    /// For example, a `tokio::time::Interval` resource might contain a
     /// `tokio::time::Sleep` resource internally.
     #[prost(bool, tag = "7")]
     pub is_internal: bool,
