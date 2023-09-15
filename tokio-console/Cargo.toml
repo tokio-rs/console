@@ -31,14 +31,14 @@ atty = "0.2"
 console-api = { version = "0.5.0", path = "../console-api", features = ["transport"] }
 clap = { version = "3", features = ["cargo", "derive", "env"] }
 tokio = { version = "1", features = ["full", "rt-multi-thread"] }
-tonic = { version = "0.9", features = ["transport"] }
+tonic = { version = "0.10", features = ["transport"] }
 futures = "0.3"
 ratatui = { version = "0.20.1", default-features = false, features = ["crossterm"] }
 tower = "0.4.12"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.0", features = ["env-filter"] }
 tracing-journald = { version = "0.2", optional = true }
-prost-types = "0.11"
+prost-types = "0.12"
 crossterm = { version = "0.26.1", features = ["event-stream"] }
 color-eyre = { version = "0.6", features = ["issue-url"] }
 hdrhistogram = { version = "7.3.0", default-features = false, features = ["serialization"] }
