@@ -1,4 +1,4 @@
-/// An `AsyncOp` state update. 
+/// An `AsyncOp` state update.
 ///
 /// This includes a list of any new async ops, and updates to the associated statistics
 /// for any async ops that have changed since the last update.

@@ -178,9 +178,9 @@ pub mod trace_client {
             &mut self,
             request: impl tonic::IntoRequest<super::WatchRequest>,
         ) -> std::result::Result<
-                tonic::Response<tonic::codec::Streaming<super::TraceEvent>>,
-                tonic::Status,
-            > {
+            tonic::Response<tonic::codec::Streaming<super::TraceEvent>>,
+            tonic::Status,
+        > {
             self.inner
                 .ready()
                 .await
@@ -209,7 +209,7 @@ pub mod trace_server {
     #[async_trait]
     pub trait Trace: Send + Sync + 'static {
         /// Server streaming response type for the Watch method.
-        type WatchStream: futures_core::Stream<
+        type WatchStream: tonic::codegen::tokio_stream::Stream<
                 Item = std::result::Result<super::TraceEvent, tonic::Status>,
             >
             + Send
@@ -318,7 +318,9 @@ pub mod trace_server {
                             request: tonic::Request<super::WatchRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move { (*inner).watch(request).await };
+                            let fut = async move {
+                                <T as Trace>::watch(&inner, request).await
+                            };
                             Box::pin(fut)
                         }
                     }
