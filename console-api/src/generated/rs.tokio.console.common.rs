@@ -48,7 +48,7 @@ pub struct Field {
     pub metadata_id: ::core::option::Option<MetaId>,
     /// The key of the key-value pair.
     ///
-    /// This is either represented as a string, or as an index into a `Metadata`'s 
+    /// This is either represented as a string, or as an index into a `Metadata`'s
     /// array of field name strings.
     #[prost(oneof = "field::Name", tags = "1, 2")]
     pub name: ::core::option::Option<field::Name>,
@@ -60,7 +60,7 @@ pub struct Field {
 pub mod field {
     /// The key of the key-value pair.
     ///
-    /// This is either represented as a string, or as an index into a `Metadata`'s 
+    /// This is either represented as a string, or as an index into a `Metadata`'s
     /// array of field name strings.
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Oneof)]
