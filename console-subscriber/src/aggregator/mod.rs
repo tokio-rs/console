@@ -172,7 +172,11 @@ impl Aggregator {
     /// this future can be aborted.
     pub async fn run(mut self) {
         let mut publish = tokio::time::interval(self.publish_interval);
+        let mut update_idx = 0_usize;
+        let mut recv_events = Vec::new();
         loop {
+            update_idx += 1;
+
             let should_send = tokio::select! {
                 // if the flush interval elapses, flush data to the client
                 _ = publish.tick() => {
@@ -205,6 +209,9 @@ impl Aggregator {
                         }
                         None => {
                             tracing::debug!("rpc channel closed, terminating");
+                            for (update_idx, event) in recv_events {
+                                tracing::debug!(update_idx, ?event);
+                            }
                             return;
                         }
                     };
@@ -229,6 +236,7 @@ impl Aggregator {
                 match event {
                     Some(event) => {
                         counts.update(&event);
+                        recv_events.push((update_idx, event.clone()));
                         self.update_state(event);
                         drained = true;
                     }

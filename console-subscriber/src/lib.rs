@@ -191,7 +191,7 @@ struct WatchRequest<T> {
     buffer: usize,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum Event {
     Metadata(&'static Metadata<'static>),
     Spawn {

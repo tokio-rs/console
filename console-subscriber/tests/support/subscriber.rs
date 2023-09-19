@@ -48,20 +48,23 @@ where
 {
     use tracing_subscriber::prelude::*;
 
-    let (thread_name, filename) = {
+    let (thread_name, fmt_filename, recording_filename) = {
         // Include the name of the test thread in the spawned subscriber thread,
         // to make it clearer which test it belongs to.
         let current_thread = thread::current();
         let test = current_thread.name().unwrap_or("<unknown test>");
         (
             format!("{test}-console::subscriber"),
-            format!("test_output-{test}.log"),
+            format!("test_output-{test}-main.log"),
+            format!("test_output-{test}-record.log"),
         )
     };
 
     let (client_stream, server_stream) = tokio::io::duplex(1024);
-    let (console_layer, server) = console_subscriber::ConsoleLayer::builder().build();
-    let log_file = std::fs::File::create(filename).unwrap();
+    let (console_layer, server) = console_subscriber::ConsoleLayer::builder()
+        .recording_path(recording_filename)
+        .build();
+    let log_file = std::fs::File::create(fmt_filename).unwrap();
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL)
         .with_writer(log_file);
@@ -72,6 +75,10 @@ where
     let mut test_state = TestState::new();
     let mut test_state_test = test_state.clone();
 
+    let test_name = thread::current()
+        .name()
+        .unwrap_or("<unknown test>")
+        .to_string();
     let join_handle = thread::Builder::new()
         .name(thread_name)
         // Run the test's console server and client tasks in a separate thread
@@ -79,8 +86,17 @@ where
         // console worker and the client are not collected by the subscriber
         // under test.
         .spawn(move || {
-            let _subscriber_guard =
-                tracing::subscriber::set_default(tracing_core::subscriber::NoSubscriber::default());
+            let log_file =
+                std::fs::File::create(format!("test_output-{test_name}-sub.log")).unwrap();
+            let fmt_layer = tracing_subscriber::fmt::layer()
+                .with_span_events(tracing_subscriber::fmt::format::FmtSpan::NONE)
+                .with_writer(log_file)
+                .with_filter(tracing_subscriber::EnvFilter::new(
+                    "console_subscriber=debug",
+                ));
+            let registry = tracing_subscriber::registry().with(fmt_layer);
+
+            let _subscriber_guard = tracing::subscriber::set_default(registry);
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_io()
                 .enable_time()
@@ -260,7 +276,6 @@ async fn record_actual_tasks(
     // ends for some known N. For this reason we need to use a signal task to
     // check for and end the collection of events at that point.
     let signal_task = ExpectedTask::default().match_name(END_SIGNAL_TASK_NAME.into());
-    let mut signal_count = 0;
     let mut signal_task_read = false;
     while let Some(update) = stream.next().await {
         let update = update.expect("console-test error: update stream error");
@@ -303,12 +318,8 @@ async fn record_actual_tasks(
         }
 
         if test_state.is_step(TestStep::TestFinished) && signal_task_read {
-            signal_count += 1;
-            if signal_count >= 2 {
-                break;
-            }
             // Once the test finishes running and we've read the signal task, the test ends.
-            // break;
+            break;
         }
     }
 

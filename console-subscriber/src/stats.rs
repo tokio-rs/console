@@ -121,12 +121,21 @@ struct PollTimestamps<H> {
     scheduled_histogram: H,
 }
 
-#[derive(Debug)]
 struct Histogram {
     histogram: hdrhistogram::Histogram<u64>,
     max: u64,
     outliers: u64,
     max_outlier: Option<u64>,
+}
+
+impl std::fmt::Debug for Histogram {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Histogram")
+            .field("max", &self.max)
+            .field("outliers", &self.outliers)
+            .field("max_outlier", &self.max_outlier)
+            .finish()
+    }
 }
 
 trait RecordDuration {
