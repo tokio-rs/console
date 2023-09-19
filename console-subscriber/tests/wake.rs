@@ -1,8 +1,9 @@
-mod support;
 use std::time::Duration;
 
-use support::{assert_task, ExpectedTask};
 use tokio::{task, time::sleep};
+
+mod support;
+use support::{assert_task, ExpectedTask};
 
 #[test]
 fn sleep_wakes() {

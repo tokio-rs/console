@@ -13,6 +13,7 @@ pub(super) struct ActualTask {
     pub(super) name: Option<String>,
     pub(super) wakes: u64,
     pub(super) self_wakes: u64,
+    pub(super) polls: u64,
 }
 
 impl ActualTask {
@@ -22,6 +23,7 @@ impl ActualTask {
             name: None,
             wakes: 0,
             self_wakes: 0,
+            polls: 0,
         }
     }
 }
@@ -78,6 +80,7 @@ pub(crate) struct ExpectedTask {
     expect_present: Option<bool>,
     expect_wakes: Option<u64>,
     expect_self_wakes: Option<u64>,
+    expect_polls: Option<u64>,
 }
 
 impl Default for ExpectedTask {
@@ -87,6 +90,7 @@ impl Default for ExpectedTask {
             expect_present: None,
             expect_wakes: None,
             expect_self_wakes: None,
+            expect_polls: None,
         }
     }
 }
@@ -164,6 +168,21 @@ impl ExpectedTask {
             }
         }
 
+        if let Some(expected_polls) = self.expect_polls {
+            no_expectations = false;
+            if expected_polls != actual_task.polls {
+                return Err(TaskValidationFailure {
+                    expected: self.clone(),
+                    actual: Some(actual_task.clone()),
+                    failure: format!(
+                        "{self}: expected `polls` to be {expected_polls}, but \
+                        actual was {actual_polls}",
+                        actual_polls = actual_task.polls,
+                    ),
+                });
+            }
+        }
+
         if no_expectations {
             return Err(TaskValidationFailure {
                 expected: self.clone(),
@@ -227,6 +246,16 @@ impl ExpectedTask {
     #[allow(dead_code)]
     pub(crate) fn expect_self_wakes(mut self, self_wakes: u64) -> Self {
         self.expect_self_wakes = Some(self_wakes);
+        self
+    }
+
+    /// Expects taht a task has a specific value for `polls`.
+    ///
+    /// To validate, the actual task must have a count of polls (on
+    /// `PollStats`) equal to `polls`.
+    #[allow(dead_code)]
+    pub(crate) fn expect_polls(mut self, polls: u64) -> Self {
+        self.expect_polls = Some(polls);
         self
     }
 }

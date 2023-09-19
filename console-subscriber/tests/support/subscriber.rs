@@ -48,20 +48,30 @@ where
 {
     use tracing_subscriber::prelude::*;
 
-    let (client_stream, server_stream) = tokio::io::duplex(1024);
-    let (console_layer, server) = console_subscriber::ConsoleLayer::builder().build();
-    let registry = tracing_subscriber::registry().with(console_layer);
-
-    let mut test_state = TestState::new();
-    let mut test_state_test = test_state.clone();
-
-    let thread_name = {
+    let (thread_name, filename) = {
         // Include the name of the test thread in the spawned subscriber thread,
         // to make it clearer which test it belongs to.
         let current_thread = thread::current();
         let test = current_thread.name().unwrap_or("<unknown test>");
-        format!("{test}-console::subscriber")
+        (
+            format!("{test}-console::subscriber"),
+            format!("test_output-{test}.log"),
+        )
     };
+
+    let (client_stream, server_stream) = tokio::io::duplex(1024);
+    let (console_layer, server) = console_subscriber::ConsoleLayer::builder().build();
+    let log_file = std::fs::File::create(filename).unwrap();
+    let fmt_layer = tracing_subscriber::fmt::layer()
+        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL)
+        .with_writer(log_file);
+    let registry = tracing_subscriber::registry()
+        .with(fmt_layer)
+        .with(console_layer);
+
+    let mut test_state = TestState::new();
+    let mut test_state_test = test_state.clone();
+
     let join_handle = thread::Builder::new()
         .name(thread_name)
         // Run the test's console server and client tasks in a separate thread
@@ -164,7 +174,6 @@ async fn console_server(
         .expect("console-test error: couldn't spawn aggregator");
     Server::builder()
         .add_service(service)
-        // .serve_with_incoming(futures::stream::once(Ok::<_, std::io::Error>(server_stream)))
         .serve_with_incoming(futures::stream::iter(vec![Ok::<_, std::io::Error>(
             server_stream,
         )]))
@@ -251,6 +260,7 @@ async fn record_actual_tasks(
     // ends for some known N. For this reason we need to use a signal task to
     // check for and end the collection of events at that point.
     let signal_task = ExpectedTask::default().match_name(END_SIGNAL_TASK_NAME.into());
+    let mut signal_count = 0;
     let mut signal_task_read = false;
     while let Some(update) = stream.next().await {
         let update = update.expect("console-test error: update stream error");
@@ -285,13 +295,20 @@ async fn record_actual_tasks(
                 if let Some(task) = tasks.get_mut(id) {
                     task.wakes = stats.wakes;
                     task.self_wakes = stats.self_wakes;
+                    if let Some(poll_stats) = &stats.poll_stats {
+                        task.polls = poll_stats.polls;
+                    }
                 }
             }
         }
 
         if test_state.is_step(TestStep::TestFinished) && signal_task_read {
+            signal_count += 1;
+            if signal_count >= 2 {
+                break;
+            }
             // Once the test finishes running and we've read the signal task, the test ends.
-            break;
+            // break;
         }
     }
 
