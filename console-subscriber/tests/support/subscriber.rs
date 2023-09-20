@@ -31,6 +31,18 @@ impl fmt::Display for TestFailure {
     }
 }
 
+fn console_filter(meta: &tracing::Metadata<'_>) -> bool {
+    // events will have *targets* beginning with "runtime"
+    if meta.is_event() {
+        return meta.target().starts_with("runtime") || meta.target().starts_with("tokio");
+    }
+
+    // spans will have *names* beginning with "runtime". for backwards
+    // compatibility with older Tokio versions, enable anything with the `tokio`
+    // target as well.
+    meta.name().starts_with("runtime.") || meta.target().starts_with("tokio")
+}
+
 /// Runs the test
 ///
 /// This function runs the whole test. It sets up a `console-subscriber` layer
@@ -55,8 +67,8 @@ where
         let test = current_thread.name().unwrap_or("<unknown test>");
         (
             format!("{test}-console::subscriber"),
-            format!("test_output-{test}-main.log"),
-            format!("test_output-{test}-record.log"),
+            format!("test-passed/test_output-{test}-main.log"),
+            format!("test-passed/test_output-{test}-record.log"),
         )
     };
 
@@ -70,7 +82,11 @@ where
         .with_writer(log_file);
     let registry = tracing_subscriber::registry()
         .with(fmt_layer)
-        .with(console_layer);
+        .with(
+            console_layer.with_filter(tracing_subscriber::filter::FilterFn::new(
+                console_filter as for<'r, 's> fn(&'r tracing::Metadata<'s>) -> bool,
+            )),
+        );
 
     let mut test_state = TestState::new();
     let mut test_state_test = test_state.clone();
@@ -87,7 +103,8 @@ where
         // under test.
         .spawn(move || {
             let log_file =
-                std::fs::File::create(format!("test_output-{test_name}-sub.log")).unwrap();
+                std::fs::File::create(format!("test-passed/test_output-{test_name}-sub.log"))
+                    .unwrap();
             let fmt_layer = tracing_subscriber::fmt::layer()
                 .with_span_events(tracing_subscriber::fmt::format::FmtSpan::NONE)
                 .with_writer(log_file)
