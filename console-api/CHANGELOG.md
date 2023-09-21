@@ -3,9 +3,26 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## console-api-v0.6.0 - (2023-09-21)
+
+[21bc85d](https://github.com/tokio-rs/console/commit/21bc85db0f7a041013ca03fd9b5942c23153b79e)...[5a80b98](https://github.com/tokio-rs/console/commit/5a80b98c0488018015b025b895bde0c715f1601e)
+
+### <a id = "console-api-v0.6.0-breaking"></a>Breaking Changes
+- **Update `tonic` to v0.10 and increase MSRV to 1.64 ([#464](https://github.com/tokio-rs/console/issues/464))** ([5a80b98](https://github.com/tokio-rs/console/commit/5a80b98c0488018015b025b895bde0c715f1601e))<br />This is a breaking change for users of `console-api` and `console-subscriber`,
+as it changes the public `tonic` dependency to a semver-incompatible version.
+This breaks compatibility with `tonic` 0.9. and `prost` 0.11.
+
+### Added
+
+- [**breaking**](#console-api-v0.6.0-breaking) Update `tonic` to v0.10 and increase MSRV to 1.64 ([#464](https://github.com/tokio-rs/console/issues/464)) ([5a80b98](https://github.com/tokio-rs/console/commit/5a80b98c0488018015b025b895bde0c715f1601e))
+
+### Fixed
+
+- Add explicit `futures-core` dep to fix broken builds ([#453](https://github.com/tokio-rs/console/issues/453)) ([88638f9](https://github.com/tokio-rs/console/commit/88638f992c3ada6c97ca1921c66a3a4bbf5b23c1))
+
 ## console-api-v0.5.0 - (2023-05-09)
 
-[2cb6ee5](https://github.com/tokio-rs/console/commit/2cb6ee5b813837324f5f9934a929ac928cfbb03f)...[e3c5656](https://github.com/tokio-rs/console/commit/e3c56561a062be123be460dd477f512a6a9ec3cd)
+[2cb6ee5](https://github.com/tokio-rs/console/commit/2cb6ee5b813837324f5f9934a929ac928cfbb03f)...[21bc85d](https://github.com/tokio-rs/console/commit/21bc85db0f7a041013ca03fd9b5942c23153b79e)
 
 ### <a id = "console-api-v0.5.0-breaking"></a>Breaking Changes
 - **Update `tonic` to v0.9 ([#420](https://github.com/tokio-rs/console/issues/420))** ([b70c1d8](https://github.com/tokio-rs/console/commit/b70c1d886d64fc43de6715f07ae49313f778e92b))<br />This is a breaking change for users of `console-api`, as it changes the
