@@ -5,8 +5,12 @@ USAGE:
     $(basename "$0") [FLAGS] <CRATE_PATH> <TAG>
 
 FLAGS:
-    -h, --help      Show this help text and exit.
-    -v, --verbose   Enable verbose output."
+    -h, --help       Show this help text and exit.
+    -v, --verbose    Enable verbose output.
+    -u, --unreleased Only add unreleased changes to changelog
+    --changelog-path <FILE_PATH>
+                     Write the changelog to this path.
+                     default: <CRATE_PATH>/CHANGELOG.md"
 
 set -euo pipefail
 
@@ -19,9 +23,13 @@ rootdir=$( cd "$bindir"/.. && pwd )
 cd "$rootdir"
 
 verbose=''
+unreleased=''
+changelog_path=''
 
-for arg in "$@"
+while [[ $# -gt 0 ]]
 do
+    arg=$1
+    shift
     case "$arg" in
     -h|--help)
         echo "$usage"
@@ -29,6 +37,13 @@ do
         ;;
     -v|--verbose)
         verbose="--verbose"
+        ;;
+    -u|--unreleased)
+        unreleased="--unreleased"
+        ;;
+    --changelog-path)
+        changelog_path="$1"
+        shift
         ;;
     -*)
         err "unknown flag $arg"
@@ -74,7 +89,9 @@ if ! [[ -x "$(command -v git-cliff)" ]]; then
     fi
 fi
 
-changelog_path="${path}/CHANGELOG.md"
+if [[ -z "$changelog_path" ]]; then
+    changelog_path="${path}/CHANGELOG.md"
+fi
 
 status "Updating" "$changelog_path for tag $tag"
 
@@ -87,6 +104,9 @@ git_cliff=(
 )
 if [[ "$verbose" ]]; then
     git_cliff+=("$verbose")
+fi
+if [[ "$unreleased" ]]; then
+    git_cliff+=("$unreleased")
 fi
 
 export GIT_CLIFF__GIT__TAG_PATTERN="${path}-v[0-9]*"

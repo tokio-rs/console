@@ -68,6 +68,17 @@ filter_unconventional = true
 split_commits = false
 # regex for preprocessing the commit messages
 commit_preprocessors = [
+  # Fixes for specific commit messages that we wish we'd committed differently
+  { pattern = """^bump tonic\\/prost dependencies and MSRV to 1.64 \\(#464\\)\\s+
+(.+\\s+.+)""", replace = """feat(api): update `tonic` to v0.10 and increase MSRV to 1.64 (#464)
+
+BREAKING CHANGE:
+This is a breaking change for users of `console-api` and `console-subscriber`,
+as it changes the public `tonic` dependency to a semver-incompatible version.
+This breaks compatibility with `tonic` 0.9. and `prost` 0.11.""" },
+
+  # General fixes and replacements
+  { pattern = '^(feat|fix|doc|perf)\((api|subscriber|console)\) ', replace = '${1}(${2}): '}, # fix missing colon after commit type
   { pattern = '\((\w+\s)?#([0-9]+)\)', replace = "([#${2}](https://github.com/tokio-rs/console/issues/${2}))"}, # replace issue numbers
 ]
 # regex for parsing and grouping commits
