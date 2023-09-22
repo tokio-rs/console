@@ -5,12 +5,11 @@ USAGE:
     $(basename "$0") [FLAGS] <CRATE_PATH> <TAG>
 
 FLAGS:
-    -h, --help       Show this help text and exit.
-    -v, --verbose    Enable verbose output.
-    -u, --unreleased Only add unreleased changes to changelog
-    --changelog-path <FILE_PATH>
-                     Write the changelog to this path.
-                     default: <CRATE_PATH>/CHANGELOG.md"
+    -h, --help                      Show this help text and exit.
+    -v, --verbose                   Enable verbose output.
+    -u, --unreleased                Only add unreleased changes to changelog
+    --changelog-path <FILE_PATH>    Write the changelog to this path.
+                                    default: <CRATE_PATH>/CHANGELOG.md"
 
 set -euo pipefail
 
