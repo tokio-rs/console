@@ -117,7 +117,7 @@ commit() {
     fi
 
     # Prepare a commit message including the changelog from just this release.
-    tmp_dir=$(mktemp -d 2>/dev/null || mktemp -d -t 'mytmpdir')
+    tmp_dir=$(mktemp -d 2>/dev/null || mktemp -d -t 'tokio-console-release')
     tmp_changelog_path="$tmp_dir/tmp-changelog"
     tmp_commit_msg_path="$tmp_dir/tmp-commit-msg"
     "$bindir/update-changelog.sh" --unreleased --changelog-path "$tmp_changelog_path" "$crate" "$crate-v$version"
