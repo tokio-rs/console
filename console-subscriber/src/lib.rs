@@ -67,9 +67,9 @@ pub struct ConsoleLayer {
     current_spans: ThreadLocal<RefCell<SpanStack>>,
     tx: mpsc::Sender<Event>,
     shared: Arc<Shared>,
-    /// When the channel capacity goes under this number, a flush in the aggregator
+    /// When the channel length goes under this number, a flush in the aggregator
     /// will be triggered.
-    flush_under_capacity: usize,
+    flush_under_len: usize,
 
     /// Set of callsites for spans representing spawned tasks.
     ///
@@ -162,6 +162,18 @@ struct Shared {
     /// Used to notify the aggregator task when the event buffer should be
     /// flushed.
     flush: aggregator::Flush,
+
+    /// Used to represent percentage of the target fill level the channel is
+    /// currently at.
+    ///
+    /// This is not a total fill level, given complete buffer capacity - this
+    /// value is scaled by `event_buffer_target_fill` value.
+    ///
+    /// As fill percentage gets higher, the aggregator task gets woken more
+    /// often, to avoid filling up to the flush point. While `flush` notifies
+    /// the aggregator task to flush immediately, this value is used as a soft
+    /// pressure to avoid hard flushes.
+    fill_percentage: AtomicUsize,
 
     /// A counter of how many task events were dropped because the event buffer
     /// was at capacity.
@@ -290,9 +302,12 @@ impl ConsoleLayer {
         let (subscribe, rpcs) = mpsc::channel(256);
         let shared = Arc::new(Shared::default());
         let aggregator = Aggregator::new(events, rpcs, &config, shared.clone(), base_time.clone());
-        // Conservatively, start to trigger a flush when half the channel is full.
         // This tries to reduce the chance of losing events to a full channel.
-        let flush_under_capacity = config.event_buffer_capacity / 2;
+        // Note that `event_buffer_target_fill` is guaranteed to be in `0..=1`
+        // range, therefore the output valeus should be sane.
+        let flush_under_len = (config.event_buffer_capacity as f64
+            * config.event_buffer_target_fill)
+            .trunc() as usize;
         let recorder = config
             .recording_path
             .as_ref()
@@ -307,7 +322,7 @@ impl ConsoleLayer {
             current_spans: ThreadLocal::new(),
             tx,
             shared,
-            flush_under_capacity,
+            flush_under_len,
             spawn_callsites: Callsites::default(),
             waker_callsites: Callsites::default(),
             resource_callsites: Callsites::default(),
@@ -334,7 +349,13 @@ impl ConsoleLayer {
     /// events being dropped more frequently.
     ///
     /// See also [`Builder::event_buffer_capacity`].
-    pub const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 1024 * 100;
+    pub const DEFAULT_EVENT_BUFFER_CAPACITY: usize = 1024 * 10;
+    /// Default fraction for the acceptable fill capacity of the events sent
+    /// from [`ConsoleLayer`] to a [`Server`].
+    ///
+    /// When `fraction` of the buffer capacity is exhausted, the aggregator
+    /// task will be woken up more frequently to bring the capacity down.
+    pub const DEFAULT_EVENT_BUFFER_TARGET_FILL: f64 = 0.1;
     /// Default maximum capacity for th echannel of events sent from a
     /// [`Server`] to each subscribed client.
     ///
@@ -469,10 +490,15 @@ impl ConsoleLayer {
             }
         };
 
-        let capacity = self.tx.capacity();
-        if capacity <= self.flush_under_capacity {
+        let length = self.tx.max_capacity() - self.tx.capacity();
+        if length >= self.flush_under_len {
             self.shared.flush.trigger();
         }
+
+        let fill_percentage = core::cmp::min(length * 100 / self.flush_under_len, 100);
+        self.shared
+            .fill_percentage
+            .store(fill_percentage, Ordering::Relaxed);
 
         sent
     }
