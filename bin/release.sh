@@ -190,7 +190,7 @@ push() {
 
 update_changelog() {
     # shellcheck source=update-changelog
-    . "$bindir"/update-changelog.sh
+    . "$bindir"/update-changelog.sh --prepend --unreleased
     changelog_status="$?"
 
     if [[ $changelog_status -ne 0 ]]; then

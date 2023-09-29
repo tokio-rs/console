@@ -9,7 +9,9 @@ FLAGS:
     -v, --verbose                   Enable verbose output.
     -u, --unreleased                Only add unreleased changes to changelog
     --changelog-path <FILE_PATH>    Write the changelog to this path.
-                                    default: <CRATE_PATH>/CHANGELOG.md"
+                                    default: <CRATE_PATH>/CHANGELOG.md
+    -p, --prepend                   Prepend the changelog to the existing file.
+                                    default: regenerate the entire file."
 
 set -euo pipefail
 
@@ -24,6 +26,7 @@ cd "$rootdir"
 verbose=''
 unreleased=''
 changelog_path=''
+prepend=''
 
 while [[ $# -gt 0 ]]
 do
@@ -39,6 +42,9 @@ do
         ;;
     -u|--unreleased)
         unreleased="--unreleased"
+        ;;
+    -p|--prepend)
+        prepend="--prepend"
         ;;
     --changelog-path)
         changelog_path="$1"
@@ -97,16 +103,24 @@ status "Updating" "$changelog_path for tag $tag"
 git_cliff=(
     git-cliff
     --include-path "${path}/**"
-    --output "$changelog_path"
     --config cliff.toml
     --tag "$tag"
 )
 if [[ "$verbose" ]]; then
     git_cliff+=("$verbose")
 fi
+
 if [[ "$unreleased" ]]; then
     git_cliff+=("$unreleased")
 fi
+
+if [[ "$prepend" ]]; then
+    git_cliff+=("--prepend")
+else
+    git_cliff+=("--output")
+fi
+
+git_cliff+=("$changelog_path")
 
 export GIT_CLIFF__GIT__TAG_PATTERN="${path}-v[0-9]*"
 "${git_cliff[@]}"
