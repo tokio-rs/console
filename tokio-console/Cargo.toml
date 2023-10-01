@@ -29,7 +29,8 @@ keywords = [
 [dependencies]
 atty = "0.2"
 console-api = { version = "0.6.0", path = "../console-api", features = ["transport"] }
-clap = { version = "4.1.14", features = [
+# Use 1.64.0 compatible version of `clap@4.1.14`.
+clap = { version = "=4.1.14", features = [
     # these are all enabled by default
     "std", "color", "help", "usage", "error-context", "suggestions",
     # auto-wrap help text to fit the terminal width
@@ -41,7 +42,7 @@ clap = { version = "4.1.14", features = [
     # parse values from env vars
     "env"
 ] }
-clap_complete = "4.1.6"
+clap_complete = "=4.1.6"
 tokio = { version = "1", features = ["full", "rt-multi-thread"] }
 tonic = { version = "0.10", features = ["transport"] }
 futures = "0.3"
