@@ -547,11 +547,11 @@ impl Default for ViewOptions {
 }
 
 fn true_color_parser() -> impl TypedValueParser<Value = bool> {
-    PossibleValuesParser::new(&["24bit", "truecolor"]).map(parse_true_color)
+    PossibleValuesParser::new(["24bit", "truecolor"]).map(parse_true_color)
 }
 
 fn palette_parser() -> impl TypedValueParser<Value = Palette> {
-    PossibleValuesParser::new(&["8", "16", "256", "all", "off"]).map(|s| {
+    PossibleValuesParser::new(["8", "16", "256", "all", "off"]).map(|s| {
         s.parse::<Palette>()
             .expect("possible values must have validated that this is a valid `Palette`")
     })
