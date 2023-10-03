@@ -3,7 +3,7 @@ use console_api::tasks::TaskDetails;
 use state::State;
 
 use futures::{
-    future::ready,
+    future,
     stream::{StreamExt, TryStreamExt},
 };
 use ratatui::{
@@ -14,7 +14,10 @@ use ratatui::{
 };
 use tokio::sync::{mpsc, watch};
 
-use crate::view::{bold, UpdateKind};
+use crate::{
+    input::{Event, KeyEvent, KeyEventKind},
+    view::{bold, UpdateKind},
+};
 
 mod config;
 mod conn;
@@ -72,10 +75,10 @@ async fn main() -> color_eyre::Result<()> {
         ])
         .with_retain_for(retain_for);
     let mut input = Box::pin(input::EventStream::new().try_filter(|event| {
-        ready(!matches!(
+        future::ready(!matches!(
             event,
-            input::Event::Key(input::KeyEvent {
-                kind: input::KeyEventKind::Release,
+            Event::Key(KeyEvent {
+                kind: KeyEventKind::Release,
                 ..
             })
         ))
