@@ -154,10 +154,6 @@ impl Serialize for RetainFor {
 #[derive(Clap, Debug, Clone)]
 #[clap(group = ArgGroup::new("colors").conflicts_with("no-colors"))]
 pub struct ViewOptions {
-    /// Disable ANSI colors entirely.
-    #[clap(name = "no-colors", long = "no-colors",action = ArgAction::SetTrue)]
-    no_colors: bool,
-
     /// Overrides the terminal's default language.
     #[clap(long = "lang", env = "LANG")]
     lang: Option<String>,
@@ -165,6 +161,10 @@ pub struct ViewOptions {
     /// Explicitly use only ASCII characters.
     #[clap(long = "ascii-only")]
     ascii_only: Option<bool>,
+
+    /// Disable ANSI colors entirely.
+    #[clap(name = "no-colors", long = "no-colors",action = ArgAction::SetTrue)]
+    no_colors: bool,
 
     /// Overrides the value of the `COLORTERM` environment variable.
     ///

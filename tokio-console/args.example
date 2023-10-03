@@ -40,9 +40,6 @@ Options:
           
           [default: /tmp/tokio-console/logs]
 
-      --no-colors
-          Disable ANSI colors entirely
-
       --lang <LANG>
           Overrides the terminal's default language
           
@@ -52,6 +49,9 @@ Options:
           Explicitly use only ASCII characters
           
           [possible values: true, false]
+
+      --no-colors
+          Disable ANSI colors entirely
 
       --colorterm <truecolor>
           Overrides the value of the `COLORTERM` environment variable.
