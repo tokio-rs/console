@@ -1,5 +1,6 @@
 use crate::view::Palette;
-use clap::{ArgGroup, IntoApp, Parser as Clap, Subcommand, ValueHint};
+use clap::builder::{PossibleValuesParser, TypedValueParser};
+use clap::{ArgAction, ArgGroup, CommandFactory, Parser as Clap, Subcommand, ValueHint};
 use clap_complete::Shell;
 use color_eyre::eyre::WrapErr;
 use serde::{Deserialize, Serialize};
@@ -11,6 +12,7 @@ use std::process::Command;
 use std::str::FromStr;
 use std::time::Duration;
 use tonic::transport::Uri;
+use tracing_subscriber::filter;
 
 #[derive(Clap, Debug)]
 #[clap(
@@ -44,7 +46,7 @@ pub struct Config {
     ///
     /// [default: off]
     #[clap(long = "log", env = "RUST_LOG")]
-    pub(crate) env_filter: Option<tracing_subscriber::EnvFilter>,
+    log_filter: Option<LogFilter>,
 
     /// Path to a directory to write the console's internal logs to.
     ///
@@ -117,7 +119,7 @@ pub enum OptionalCmd {
     GenCompletion {
         #[clap(name = "install", long = "install")]
         install: bool,
-        #[clap(arg_enum)]
+        #[clap(value_enum)]
         shell: Shell,
     },
 }
@@ -152,10 +154,6 @@ impl Serialize for RetainFor {
 #[derive(Clap, Debug, Clone)]
 #[clap(group = ArgGroup::new("colors").conflicts_with("no-colors"))]
 pub struct ViewOptions {
-    /// Disable ANSI colors entirely.
-    #[clap(name = "no-colors", long = "no-colors", takes_value = false)]
-    no_colors: bool,
-
     /// Overrides the terminal's default language.
     #[clap(long = "lang", env = "LANG")]
     lang: Option<String>,
@@ -164,6 +162,10 @@ pub struct ViewOptions {
     #[clap(long = "ascii-only")]
     ascii_only: Option<bool>,
 
+    /// Disable ANSI colors entirely.
+    #[clap(name = "no-colors", long = "no-colors",action = ArgAction::SetTrue)]
+    no_colors: bool,
+
     /// Overrides the value of the `COLORTERM` environment variable.
     ///
     /// If this is set to `24bit` or `truecolor`, 24-bit RGB color support will be enabled.
@@ -171,15 +173,14 @@ pub struct ViewOptions {
         long = "colorterm",
         name = "truecolor",
         env = "COLORTERM",
-        parse(from_str = parse_true_color),
-        possible_values = &["24bit", "truecolor"],
+        value_parser = true_color_parser(),
     )]
     truecolor: Option<bool>,
 
     /// Explicitly set which color palette to use.
     #[clap(
         long,
-        possible_values = &["8", "16", "256", "all", "off"],
+        value_parser = palette_parser(),
         group = "colors",
         conflicts_with_all = &["no-colors", "truecolor"]
     )]
@@ -202,6 +203,35 @@ pub struct ColorToggles {
     #[clap(long = "no-terminated-colors", group = "colors")]
     #[serde(rename = "terminated")]
     color_terminated: Option<bool>,
+}
+
+#[derive(Clone, Debug)]
+struct LogFilter(filter::Targets);
+
+// === impl LogFilter ===
+impl fmt::Display for LogFilter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut comma = false;
+        if let Some(default) = self.0.default_level() {
+            write!(f, "{}", default)?;
+            comma = true;
+        }
+
+        for (target, level) in &self.0 {
+            write!(f, "{}{}={}", if comma { "," } else { "" }, target, level)?;
+            comma = true;
+        }
+
+        Ok(())
+    }
+}
+
+impl FromStr for LogFilter {
+    type Err = filter::ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        filter::Targets::from_str(s).map(Self)
+    }
 }
 
 /// A struct used to parse the toml config file
@@ -259,13 +289,13 @@ impl Config {
         toml::to_string_pretty(&config).map_err(Into::into)
     }
 
-    pub fn trace_init(&mut self) -> color_eyre::Result<()> {
+    pub fn trace_init(&self) -> color_eyre::Result<()> {
         use tracing_subscriber::prelude::*;
-        let filter = match self.env_filter.take() {
+        let filter = match self.log_filter.clone() {
             // if logging is totally disabled, don't bother even constructing
             // the subscriber
             None => return Ok(()),
-            Some(filter) => filter,
+            Some(LogFilter(filter)) => filter,
         };
 
         // If we're on a Linux distro with journald, try logging to the system
@@ -284,7 +314,7 @@ impl Config {
         let fmt = if should_fmt {
             let dir = self
                 .log_directory
-                .take()
+                .clone()
                 .unwrap_or_else(default_log_directory);
 
             // first ensure that the log directory exists
@@ -361,7 +391,7 @@ impl Config {
             self, builder =>
                 subcmd,
                 target_addr,
-                env_filter,
+                log_filter,
                 log_directory,
                 retain_for,
                 view_options.no_colors,
@@ -386,7 +416,7 @@ impl Config {
         Self {
             log_directory: other.log_directory.or(self.log_directory),
             target_addr: other.target_addr.or(self.target_addr),
-            env_filter: other.env_filter.or(self.env_filter),
+            log_filter: other.log_filter.or(self.log_filter),
             retain_for: other.retain_for.or(self.retain_for),
             view_options: self.view_options.merge_with(other.view_options),
             subcmd: other.subcmd.or(self.subcmd),
@@ -398,7 +428,9 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             target_addr: Some(default_target_addr()),
-            env_filter: Some(tracing_subscriber::EnvFilter::new("off")),
+            log_filter: Some(LogFilter(
+                filter::Targets::new().with_default(filter::LevelFilter::OFF),
+            )),
             log_directory: Some(default_log_directory()),
             retain_for: Some(RetainFor::default()),
             view_options: ViewOptions::default(),
@@ -514,8 +546,19 @@ impl Default for ViewOptions {
     }
 }
 
-fn parse_true_color(s: &str) -> bool {
-    let s = s.trim();
+fn true_color_parser() -> impl TypedValueParser<Value = bool> {
+    PossibleValuesParser::new(["24bit", "truecolor"]).map(parse_true_color)
+}
+
+fn palette_parser() -> impl TypedValueParser<Value = Palette> {
+    PossibleValuesParser::new(["8", "16", "256", "all", "off"]).map(|s| {
+        s.parse::<Palette>()
+            .expect("possible values must have validated that this is a valid `Palette`")
+    })
+}
+
+fn parse_true_color(s: impl AsRef<str>) -> bool {
+    let s = s.as_ref().trim();
     s.eq_ignore_ascii_case("truecolor") || s.eq_ignore_ascii_case("24bit")
 }
 
@@ -579,7 +622,7 @@ impl ConfigFile {
         Ok(uri)
     }
 
-    fn env_filter(&self) -> color_eyre::Result<Option<tracing_subscriber::EnvFilter>> {
+    fn log_filter(&self) -> color_eyre::Result<Option<LogFilter>> {
         let filter_str = self.log.as_deref();
 
         // If logging is totally disabled, may as well bail completely.
@@ -587,11 +630,11 @@ impl ConfigFile {
             return Ok(None);
         }
 
-        let env_filter = filter_str
-            .map(|directive| directive.parse::<tracing_subscriber::EnvFilter>())
+        let log_filter = filter_str
+            .map(|directive| directive.parse::<filter::Targets>().map(LogFilter))
             .transpose()
             .wrap_err_with(|| format!("failed to parse log filter {:?}", self.log))?;
-        Ok(env_filter)
+        Ok(log_filter)
     }
 
     fn retain_for(&self) -> Option<RetainFor> {
@@ -621,7 +664,7 @@ impl From<Config> for ConfigFile {
     fn from(config: Config) -> Self {
         Self {
             default_target_addr: config.target_addr.map(|addr| addr.to_string()),
-            log: config.env_filter.map(|filter| filter.to_string()),
+            log: config.log_filter.map(|filter| filter.to_string()),
             log_directory: config.log_directory,
             retention: config.retain_for,
             charset: Some(CharsetConfig {
@@ -644,7 +687,7 @@ impl TryFrom<ConfigFile> for Config {
     fn try_from(mut value: ConfigFile) -> Result<Self, Self::Error> {
         Ok(Config {
             target_addr: value.target_addr()?,
-            env_filter: value.env_filter()?,
+            log_filter: value.log_filter()?,
             log_directory: value.log_directory.take(),
             retain_for: value.retain_for(),
             view_options: ViewOptions {
@@ -719,6 +762,12 @@ mod tests {
     use super::*;
 
     #[test]
+    fn verify_cli() {
+        use clap::CommandFactory;
+        Config::command().debug_assert()
+    }
+
+    #[test]
     fn args_example_changed() {
         use clap::CommandFactory;
 
@@ -727,7 +776,13 @@ mod tests {
 
         let path = PathBuf::from(std::env!("CARGO_MANIFEST_DIR")).join("args.example");
 
-        let mut cmd = Config::command();
+        let mut cmd = Config::command()
+            // always use the same terminal width when generating the help text,
+            // so that the text wrapping doesn't change based on the terminal
+            // size that the test was run in.
+            // (72 chars seems to fit reasonably in the default width of
+            // RustDoc's code formatting)
+            .term_width(72);
         let mut helptext = Vec::new();
         // Format the help text to a string.
         cmd.write_long_help(&mut Cursor::new(&mut helptext))
