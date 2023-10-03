@@ -2,7 +2,10 @@ use color_eyre::{eyre::eyre, Help, SectionExt};
 use console_api::tasks::TaskDetails;
 use state::State;
 
-use futures::stream::StreamExt;
+use futures::{
+    future,
+    stream::{StreamExt, TryStreamExt},
+};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::Color,
@@ -11,7 +14,10 @@ use ratatui::{
 };
 use tokio::sync::{mpsc, watch};
 
-use crate::view::{bold, UpdateKind};
+use crate::{
+    input::{Event, KeyEvent, KeyEventKind},
+    view::{bold, UpdateKind},
+};
 
 mod config;
 mod conn;
@@ -68,7 +74,15 @@ async fn main() -> color_eyre::Result<()> {
             warnings::Linter::new(warnings::NeverYielded::default()),
         ])
         .with_retain_for(retain_for);
-    let mut input = input::EventStream::new();
+    let mut input = Box::pin(input::EventStream::new().try_filter(|event| {
+        future::ready(!matches!(
+            event,
+            Event::Key(KeyEvent {
+                kind: KeyEventKind::Release,
+                ..
+            })
+        ))
+    }));
     let mut view = view::View::new(styles);
 
     loop {
