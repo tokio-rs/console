@@ -546,6 +546,84 @@ impl Aggregator {
     }
 }
 
+impl Drop for Aggregator {
+    fn drop(&mut self) {
+        #[allow(dead_code)]
+        #[derive(Debug)]
+        struct DumpTask {
+            span_id: tracing_core::span::Id,
+            is_dirty: bool,
+            name: &'static str,
+            task_name: String,
+        }
+
+        fn dump_tasks<'a>(
+            iter: impl Iterator<Item = (&'a tracing_core::span::Id, &'a Task)>,
+        ) -> (
+            std::collections::HashMap<tracing_core::span::Id, String>,
+            Vec<DumpTask>,
+        ) {
+            let mut name_map = std::collections::HashMap::new();
+            let dump_tasks = iter
+                .map(|(id, task)| {
+                    let mut task_name: Option<String> = None;
+                    for field in &task.fields {
+                        match field.name.as_ref() {
+                            Some(console_api::field::Name::StrName(name))
+                                if name == "task.name" =>
+                            {
+                                task_name = match field.value.as_ref() {
+                                    Some(console_api::field::Value::DebugVal(value)) => {
+                                        Some(value.clone())
+                                    }
+                                    Some(console_api::field::Value::StrVal(value)) => {
+                                        Some(value.clone())
+                                    }
+                                    _ => continue,
+                                };
+                                name_map.insert(id.clone(), task_name.clone().unwrap().clone());
+                            }
+                            _ => {}
+                        }
+                    }
+                    DumpTask {
+                        span_id: id.clone(),
+                        is_dirty: task.is_dirty.load(Acquire),
+                        name: task.metadata.name(),
+                        task_name: task_name.unwrap_or_else(|| "<unknown>".into()),
+                    }
+                })
+                .collect();
+
+            (name_map, dump_tasks)
+        }
+
+        #[derive(Debug)]
+        struct DumpTaskStats {}
+        tracing::info!("######## Dumping Aggregator State ########");
+        tracing::info!(
+            "UNSENT TASKS: {:#?}",
+            dump_tasks(self.tasks.since_last_update().map(|(i, t)| (i, &*t))).1
+        );
+        let (name_map, all_tasks) = dump_tasks(self.tasks.all());
+        tracing::info!("ALL TASKS: {:#?}", all_tasks);
+        tracing::info!(
+            "UNSENT TASK STATS: {:?}",
+            self.task_stats
+                .since_last_update()
+                .map(|(id, stats)| (id, name_map.get(id), stats))
+                .collect::<Vec<_>>()
+        );
+        tracing::info!(
+            "ALL TASK STATS: {:#?}",
+            self.task_stats
+                .all()
+                .map(|(id, stats)| (id, name_map.get(id), stats))
+                .collect::<Vec<_>>()
+        );
+    }
+}
+
 fn recv_now_or_never<T>(receiver: &mut mpsc::Receiver<T>) -> Option<Option<T>> {
     let waker = futures_task::noop_waker();
     let mut cx = std::task::Context::from_waker(&waker);

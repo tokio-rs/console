@@ -1,8 +1,8 @@
 [workspace]
-members = [
-    "tokio-console",
-    "console-subscriber",
-    "console-api",
-    "xtask"
-]
+members = ["tokio-console", "console-subscriber", "console-api", "xtask"]
 resolver = "2"
+
+[patch.crates-io]
+tracing = { path = "/home/stainsby/code/tracing/tracing" }
+tracing-core = { path = "/home/stainsby/code/tracing/tracing-core" }
+tracing-subscriber = { path = "/home/stainsby/code/tracing/tracing-subscriber" }

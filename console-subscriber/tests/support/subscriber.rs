@@ -67,8 +67,8 @@ where
         let test = current_thread.name().unwrap_or("<unknown test>");
         (
             format!("{test}-console::subscriber"),
-            format!("test-passed/test_output-{test}-main.log"),
-            format!("test-passed/test_output-{test}-record.log"),
+            format!("test-check/test_output-{test}-main.log"),
+            format!("test-check/test_output-{test}-record.log"),
         )
     };
 
@@ -103,7 +103,7 @@ where
         // under test.
         .spawn(move || {
             let log_file =
-                std::fs::File::create(format!("test-passed/test_output-{test_name}-sub.log"))
+                std::fs::File::create(format!("test-check/test_output-{test_name}-sub.log"))
                     .unwrap();
             let fmt_layer = tracing_subscriber::fmt::layer()
                 .with_span_events(tracing_subscriber::fmt::format::FmtSpan::NONE)
