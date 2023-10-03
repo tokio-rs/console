@@ -29,14 +29,16 @@ keywords = [
 [dependencies]
 atty = "0.2"
 console-api = { version = "0.6.0", path = "../console-api", features = ["transport"] }
-clap = { version = "3", features = ["cargo", "derive", "env"] }
+# Use 1.64.0 compatible version of `clap@4.1.14`.
+clap = { version = "~4.1.14", features = ["wrap_help", "cargo", "derive", "env"] }
+clap_complete = "~4.1.6"
 tokio = { version = "1", features = ["full", "rt-multi-thread"] }
 tonic = { version = "0.10", features = ["transport"] }
 futures = "0.3"
 ratatui = { version = "0.20.1", default-features = false, features = ["crossterm"] }
 tower = "0.4.12"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3.0", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3" }
 tracing-journald = { version = "0.2", optional = true }
 prost-types = "0.12"
 crossterm = { version = "0.26.1", features = ["event-stream"] }
@@ -49,4 +51,3 @@ humantime = "2.1.0"
 serde = { version = "1", features = ["derive"] }
 toml = "0.5"
 dirs = "4"
-clap_complete = "3"
