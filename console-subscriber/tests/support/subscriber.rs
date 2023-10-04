@@ -75,6 +75,7 @@ where
     let (client_stream, server_stream) = tokio::io::duplex(1024);
     let (console_layer, server) = console_subscriber::ConsoleLayer::builder()
         .recording_path(recording_filename)
+        .enable_self_trace(false)
         .build();
     let log_file = std::fs::File::create(fmt_filename).unwrap();
     let fmt_layer = tracing_subscriber::fmt::layer()
@@ -156,16 +157,19 @@ where
                 .spawn(future)
                 .expect("console-test error: couldn't spawn test task")
                 .await;
+            tracing::debug!("test future complete");
             _ = task::Builder::new()
                 .name(END_SIGNAL_TASK_NAME)
                 .spawn(futures::future::ready(()))
                 .expect("console-test error: couldn't spawn end signal task")
                 .await;
+            tracing::debug!("signal future complete");
             test_state_test.advance_to_step(TestStep::TestFinished);
 
             test_state_test
                 .wait_for_step(TestStep::UpdatesRecorded)
                 .await;
+            tracing::debug!("reached updates-recorded");
         });
     });
 

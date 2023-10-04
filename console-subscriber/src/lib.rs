@@ -7,7 +7,7 @@ use std::{
     fmt,
     net::{IpAddr, Ipv4Addr},
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicU32, AtomicUsize, Ordering},
         Arc,
     },
     time::{Duration, Instant},
@@ -539,6 +539,14 @@ impl ConsoleLayer {
     }
 }
 
+static TOTAL_EVENTS: AtomicU32 = AtomicU32::new(0);
+static UNKNOWN_EVENTS: AtomicU32 = AtomicU32::new(0);
+static TOTAL_WAKE_POSSIBLE: AtomicU32 = AtomicU32::new(0);
+static TOTAL_WAKES: AtomicU32 = AtomicU32::new(0);
+static NO_ID_OP: AtomicU32 = AtomicU32::new(0);
+static NO_SPAN_CTX: AtomicU32 = AtomicU32::new(0);
+static NO_TASK_STATS: AtomicU32 = AtomicU32::new(0);
+
 impl<S> Layer<S> for ConsoleLayer
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
@@ -695,8 +703,11 @@ where
     }
 
     fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
+        TOTAL_EVENTS.fetch_add(1, Ordering::AcqRel);
         let metadata = event.metadata();
         if self.waker_callsites.contains(metadata) {
+            TOTAL_WAKE_POSSIBLE.fetch_add(1, Ordering::AcqRel);
+
             let at = Instant::now();
             let mut visitor = WakerVisitor::default();
             event.record(&mut visitor);
@@ -723,8 +734,15 @@ where
                             at: self.base_time.to_system_time(at),
                             op,
                         });
+                        TOTAL_WAKES.fetch_add(1, Ordering::AcqRel);
+                    } else {
+                        NO_TASK_STATS.fetch_add(1, Ordering::AcqRel);
                     }
+                } else {
+                    NO_SPAN_CTX.fetch_add(1, Ordering::AcqRel);
                 }
+            } else {
+                NO_ID_OP.fetch_add(1, Ordering::AcqRel);
             }
             return;
         }
@@ -799,7 +817,11 @@ where
                     Some(&async_op.stats)
                 });
             }
+
+            return;
         }
+
+        UNKNOWN_EVENTS.fetch_add(1, Ordering::AcqRel);
     }
 
     fn on_enter(&self, id: &span::Id, cx: Context<'_, S>) {
@@ -887,7 +909,31 @@ impl fmt::Debug for ConsoleLayer {
             .field("shared", &self.shared)
             .field("spawn_callsites", &self.spawn_callsites)
             .field("waker_callsites", &self.waker_callsites)
+            .field("no_id_ops", &NO_ID_OP.load(Ordering::Acquire))
+            .field("no_span_ctx", &NO_SPAN_CTX.load(Ordering::Acquire))
+            .field("no_task_stats", &NO_TASK_STATS.load(Ordering::Acquire))
+            .field("total_wakes", &TOTAL_WAKES.load(Ordering::Acquire))
+            .field(
+                "total_wake_possible",
+                &TOTAL_WAKE_POSSIBLE.load(Ordering::Acquire),
+            )
+            .field("total_events", &TOTAL_EVENTS.load(Ordering::Acquire))
+            .field("unknown_events", &UNKNOWN_EVENTS.load(Ordering::Acquire))
             .finish()
+    }
+}
+
+impl Drop for ConsoleLayer {
+    fn drop(&mut self) {
+        use std::io::Write;
+        let output_file = {
+            let current_thread = std::thread::current();
+            let test = current_thread.name().unwrap_or("<unknown test>");
+            format!("test-check/test_output-{test}-layer.log")
+        };
+        let mut file = std::fs::File::create(output_file).unwrap();
+
+        _ = write!(file, "{:#?}", self);
     }
 }
 
