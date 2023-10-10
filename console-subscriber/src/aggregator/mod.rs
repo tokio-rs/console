@@ -237,11 +237,11 @@ impl Aggregator {
                 };
             }
             tracing::debug!(
-                async_resource_op = counts.async_resource_op,
-                metadata = counts.metadata,
-                poll_op = counts.poll_op,
-                resource = counts.resource,
-                spawn = counts.spawn,
+                async_resource_ops = counts.async_resource_op,
+                metadatas = counts.metadata,
+                poll_ops = counts.poll_op,
+                resources = counts.resource,
+                spawns = counts.spawn,
                 total = counts.total(),
                 "event channel drain loop",
             );
