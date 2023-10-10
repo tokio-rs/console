@@ -220,9 +220,11 @@ impl Aggregator {
             // to be woken when the flush interval has elapsed, or when the
             // channel is almost full.
             let mut drained = false;
+            let mut counts = EventCounts::new();
             while let Some(event) = recv_now_or_never(&mut self.events) {
                 match event {
                     Some(event) => {
+                        counts.update(&event);
                         self.update_state(event);
                         drained = true;
                     }
@@ -234,6 +236,15 @@ impl Aggregator {
                     }
                 };
             }
+            tracing::debug!(
+                async_resource_ops = counts.async_resource_op,
+                metadatas = counts.metadata,
+                poll_ops = counts.poll_op,
+                resources = counts.resource,
+                spawns = counts.spawn,
+                total = counts.total(),
+                "event channel drain loop",
+            );
 
             // flush data to clients, if there are any currently subscribed
             // watchers and we should send a new update.
@@ -506,6 +517,43 @@ fn recv_now_or_never<T>(receiver: &mut mpsc::Receiver<T>) -> Option<Option<T>> {
     match receiver.poll_recv(&mut cx) {
         std::task::Poll::Ready(opt) => Some(opt),
         std::task::Poll::Pending => None,
+    }
+}
+
+/// Count of events received in each aggregator drain cycle.
+struct EventCounts {
+    async_resource_op: usize,
+    metadata: usize,
+    poll_op: usize,
+    resource: usize,
+    spawn: usize,
+}
+
+impl EventCounts {
+    fn new() -> Self {
+        Self {
+            async_resource_op: 0,
+            metadata: 0,
+            poll_op: 0,
+            resource: 0,
+            spawn: 0,
+        }
+    }
+
+    /// Count the event based on its variant.
+    fn update(&mut self, event: &Event) {
+        match event {
+            Event::AsyncResourceOp { .. } => self.async_resource_op += 1,
+            Event::Metadata(_) => self.metadata += 1,
+            Event::PollOp { .. } => self.poll_op += 1,
+            Event::Resource { .. } => self.resource += 1,
+            Event::Spawn { .. } => self.spawn += 1,
+        }
+    }
+
+    /// Total number of events recorded.
+    fn total(&self) -> usize {
+        self.async_resource_op + self.metadata + self.poll_op + self.resource + self.spawn
     }
 }
 
