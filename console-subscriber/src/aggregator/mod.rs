@@ -342,7 +342,7 @@ impl Aggregator {
             {
                 self.details_watchers
                     .entry(id.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(subscription);
             }
         }
