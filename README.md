@@ -168,113 +168,123 @@ its behavior. The `help` command will print a list of supported command-line
 flags and arguments:
 
 ```text
-USAGE:
-    tokio-console [OPTIONS] [TARGET_ADDR] [SUBCOMMAND]
+Commands:
+  gen-config
+          Generate a `console.toml` config file with the default
+          configuration values, overridden by any provided command-line
+          arguments
+  gen-completion
+          Generate shell completions
+  help
+          Print this message or the help of the given subcommand(s)
 
-ARGS:
-    <TARGET_ADDR>
-            The address of a console-enabled process to connect to.
+Arguments:
+  [TARGET_ADDR]
+          The address of a console-enabled process to connect to.
 
-            This may be an IP address and port, or a DNS name.
+          This may be an IP address and port, or a DNS name.
 
-            On Unix platforms, this may also be a URI with the `file` scheme that specifies the path
-            to a Unix domain socket, as in `file://localhost/path/to/socket`.
+          On Unix platforms, this may also be a URI with the `file`
+          scheme that specifies the path to a Unix domain socket, as in
+          `file://localhost/path/to/socket`.
 
-            [default: http://127.0.0.1:6669]
+          [default: http://127.0.0.1:6669]
 
-OPTIONS:
-        --ascii-only <ASCII_ONLY>
-            Explicitly use only ASCII characters
+Options:
+      --log <LOG_FILTER>
+          Log level filter for the console's internal diagnostics.
 
-        --colorterm <truecolor>
-            Overrides the value of the `COLORTERM` environment variable.
+          Logs are written to a new file at the path given by the
+          `--log-dir` argument (or its default value), or to the system
+          journal if `systemd-journald` support is enabled.
 
-            If this is set to `24bit` or `truecolor`, 24-bit RGB color support will be enabled.
+          If this is set to 'off' or is not set, no logs will be
+          written.
 
-            [env: COLORTERM=truecolor]
-            [possible values: 24bit, truecolor]
+          [default: off]
 
-    -h, --help
-            Print help information
+          [env: RUST_LOG=]
 
-        --lang <LANG>
-            Overrides the terminal's default language
+      --log-dir <LOG_DIRECTORY>
+          Path to a directory to write the console's internal logs to.
 
-            [env: LANG=]
+          [default: /tmp/tokio-console/logs]
 
-        --log <ENV_FILTER>
-            Log level filter for the console's internal diagnostics.
+      --lang <LANG>
+          Overrides the terminal's default language
 
-            Logs are written to a new file at the path given by the `--log-dir` argument (or its
-            default value), or to the system journal if `systemd-journald` support is enabled.
+          [env: LANG=en_US.UTF-8]
 
-            If this is set to 'off' or is not set, no logs will be written.
+      --ascii-only <ASCII_ONLY>
+          Explicitly use only ASCII characters
 
-            [default: off]
+          [possible values: true, false]
 
-            [env: RUST_LOG=]
+      --no-colors
+          Disable ANSI colors entirely
 
-        --log-dir <LOG_DIRECTORY>
-            Path to a directory to write the console's internal logs to.
+      --colorterm <truecolor>
+          Overrides the value of the `COLORTERM` environment variable.
 
-            [default: /tmp/tokio-console/logs]
+          If this is set to `24bit` or `truecolor`, 24-bit RGB color
+          support will be enabled.
 
-        --no-colors
-            Disable ANSI colors entirely
+          [env: COLORTERM=truecolor]
+          [possible values: 24bit, truecolor]
 
-        --no-duration-colors <COLOR_DURATIONS>
-            Disable color-coding for duration units
+      --palette <PALETTE>
+          Explicitly set which color palette to use
 
-        --no-terminated-colors <COLOR_TERMINATED>
-            Disable color-coding for terminated tasks
+          [possible values: 8, 16, 256, all, off]
 
-        --palette <PALETTE>
-            Explicitly set which color palette to use
+      --no-duration-colors <COLOR_DURATIONS>
+          Disable color-coding for duration units
 
-            [possible values: 8, 16, 256, all, off]
+          [possible values: true, false]
 
-        --retain-for <RETAIN_FOR>
-            How long to continue displaying completed tasks and dropped resources after they have
-            been closed.
+      --no-terminated-colors <COLOR_TERMINATED>
+          Disable color-coding for terminated tasks
 
-            This accepts either a duration, parsed as a combination of time spans (such as `5days
-            2min 2s`), or `none` to disable removing completed tasks and dropped resources.
+          [possible values: true, false]
 
-            Each time span is an integer number followed by a suffix. Supported suffixes are:
+      --retain-for <RETAIN_FOR>
+          How long to continue displaying completed tasks and dropped
+          resources after they have been closed.
 
-            * `nsec`, `ns` -- nanoseconds
+          This accepts either a duration, parsed as a combination of
+          time spans (such as `5days 2min 2s`), or `none` to disable
+          removing completed tasks and dropped resources.
 
-            * `usec`, `us` -- microseconds
+          Each time span is an integer number followed by a suffix.
+          Supported suffixes are:
 
-            * `msec`, `ms` -- milliseconds
+          * `nsec`, `ns` -- nanoseconds
 
-            * `seconds`, `second`, `sec`, `s`
+          * `usec`, `us` -- microseconds
 
-            * `minutes`, `minute`, `min`, `m`
+          * `msec`, `ms` -- milliseconds
 
-            * `hours`, `hour`, `hr`, `h`
+          * `seconds`, `second`, `sec`, `s`
 
-            * `days`, `day`, `d`
+          * `minutes`, `minute`, `min`, `m`
 
-            * `weeks`, `week`, `w`
+          * `hours`, `hour`, `hr`, `h`
 
-            * `months`, `month`, `M` -- defined as 30.44 days
+          * `days`, `day`, `d`
 
-            * `years`, `year`, `y` -- defined as 365.25 days
+          * `weeks`, `week`, `w`
 
-            [default: 6s]
+          * `months`, `month`, `M` -- defined as 30.44 days
 
-    -V, --version
-            Print version information
+          * `years`, `year`, `y` -- defined as 365.25 days
 
-SUBCOMMANDS:
-    gen-completion
-            Generate shell completions
-    gen-config
-            Generate a `console.toml` config file with the default configuration values, overridden
-            by any provided command-line arguments
-    help
-            Print this message or the help of the given subcommand(s)
+          [default: 6s]
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
 ```
 
 ## for development
