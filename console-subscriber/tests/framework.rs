@@ -182,3 +182,24 @@ fn fail_1_of_2_expected_tasks() {
 
     assert_tasks(expected_tasks, future);
 }
+
+#[test]
+fn polls() {
+    let expected_task = ExpectedTask::default().match_default_name().expect_polls(2);
+
+    let future = async { task::yield_now().await };
+
+    assert_task(expected_task, future);
+}
+
+#[test]
+#[should_panic(expected = "Test failed: Task validation failed:
+ - Task { name=console-test::main }: expected `polls` to be 2, but actual was 1
+")]
+fn fail_polls() {
+    let expected_task = ExpectedTask::default().match_default_name().expect_polls(2);
+
+    let future = async {};
+
+    assert_task(expected_task, future);
+}
