@@ -100,7 +100,7 @@ fn test_spawned_task() {
     let future = async {
         task::Builder::new()
             .name("another-name")
-            .spawn(async { task::yield_now().await })
+            .spawn(async { sleep(Duration::ZERO).await })
     };
 
     assert_task(expected_task, future);
@@ -113,7 +113,7 @@ fn test_spawned_task() {
 fn fail_wrong_task_name() {
     let expected_task = ExpectedTask::default().match_name("wrong-name".into());
 
-    let future = async { task::yield_now().await };
+    let future = async { sleep(Duration::ZERO).await };
 
     assert_task(expected_task, future);
 }
@@ -132,11 +132,11 @@ fn multiple_tasks() {
     let future = async {
         let task1 = task::Builder::new()
             .name("task-1")
-            .spawn(async { task::yield_now().await })
+            .spawn(async { sleep(Duration::ZERO).await })
             .unwrap();
         let task2 = task::Builder::new()
             .name("task-2")
-            .spawn(async { task::yield_now().await })
+            .spawn(async { sleep(Duration::ZERO).await })
             .unwrap();
 
         tokio::try_join! {
@@ -166,11 +166,11 @@ fn fail_1_of_2_expected_tasks() {
     let future = async {
         let task1 = task::Builder::new()
             .name("task-1")
-            .spawn(async { task::yield_now().await })
+            .spawn(async { sleep(Duration::ZERO).await })
             .unwrap();
         let task2 = task::Builder::new()
             .name("task-2")
-            .spawn(async { task::yield_now().await })
+            .spawn(async { sleep(Duration::ZERO).await })
             .unwrap();
 
         tokio::try_join! {
