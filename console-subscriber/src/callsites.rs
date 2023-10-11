@@ -46,8 +46,13 @@ impl<const MAX_CALLSITES: usize> Callsites<MAX_CALLSITES> {
         let mut len = self.len.load(Ordering::Acquire);
         loop {
             for cs in &self.ptrs[start..len] {
-                if ptr::eq(cs.load(Ordering::Acquire), callsite) {
+                let recorded = cs.load(Ordering::Acquire);
+                if ptr::eq(recorded, callsite) {
                     return true;
+                } else if ptr::eq(recorded, ptr::null_mut()) {
+                    // We have read a recorded callsite before it has been
+                    // written. We need to check again.
+                    continue;
                 }
             }
 
