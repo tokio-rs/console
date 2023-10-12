@@ -51,3 +51,6 @@ humantime = "2.1.0"
 serde = { version = "1", features = ["derive"] }
 toml = "0.5"
 dirs = "4"
+
+[dev-dependencies]
+trycmd = "0.14.19"
