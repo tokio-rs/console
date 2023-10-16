@@ -26,7 +26,7 @@ impl TableList<12> for TasksTable {
     type Context = ();
 
     const HEADER: &'static [&'static str; 12] = &[
-        "Warn", "ID", "State", "Name", "Total", "Busy", "Sched", "Idle", "Polls", "Target",
+        "Warn", "ID", "State", "Name", "Total", "Busy", "Sched", "Idle", "Polls", "Kind",
         "Location", "Fields",
     ];
 
@@ -78,7 +78,7 @@ impl TableList<12> for TasksTable {
         let mut id_width = view::Width::new(Self::WIDTHS[1] as u16);
         let mut name_width = view::Width::new(Self::WIDTHS[3] as u16);
         let mut polls_width = view::Width::new(Self::WIDTHS[7] as u16);
-        let mut target_width = view::Width::new(Self::WIDTHS[8] as u16);
+        let mut kind_width = view::Width::new(Self::WIDTHS[8] as u16);
         let mut location_width = view::Width::new(Self::WIDTHS[9] as u16);
 
         let mut num_idle = 0;
@@ -86,7 +86,7 @@ impl TableList<12> for TasksTable {
 
         let rows = {
             let id_width = &mut id_width;
-            let target_width = &mut target_width;
+            let kind_width = &mut kind_width;
             let location_width = &mut location_width;
             let name_width = &mut name_width;
             let polls_width = &mut polls_width;
@@ -134,7 +134,7 @@ impl TableList<12> for TasksTable {
                         dur_cell(task.scheduled(now)),
                         dur_cell(task.idle(now)),
                         Cell::from(polls_width.update_str(task.total_polls().to_string())),
-                        Cell::from(target_width.update_str(task.target()).to_owned()),
+                        Cell::from(kind_width.update_str(task.kind()).to_owned()),
                         Cell::from(location_width.update_str(task.location()).to_owned()),
                         Cell::from(Spans::from(
                             task.formatted_fields()
@@ -186,7 +186,7 @@ impl TableList<12> for TasksTable {
             Span::from(format!(" Idle ({})", num_idle)),
         ]);
 
-        /* TODO: use this to adjust the max size of name and target columns...
+        /* TODO: use this to adjust the max size of name and kind columns...
         // How many characters wide are the fixed-length non-field columns?
         let fixed_col_width = id_width.chars()
             + STATE_LEN
@@ -195,7 +195,7 @@ impl TableList<12> for TasksTable {
             + DUR_LEN as u16
             + DUR_LEN as u16
             + POLLS_LEN as u16
-            + target_width.chars();
+            + kind_width.chars();
         */
         let warnings = state
             .tasks_state()
@@ -257,7 +257,7 @@ impl TableList<12> for TasksTable {
             layout::Constraint::Length(DUR_LEN as u16),
             layout::Constraint::Length(DUR_LEN as u16),
             polls_width.constraint(),
-            target_width.constraint(),
+            kind_width.constraint(),
             location_width.constraint(),
             fields_width,
         ];
