@@ -1,10 +1,20 @@
+//! Local tasks
+//!
+//! This example shows the instrumentation on local tasks. Tasks spawned onto a
+//! `LocalSet` with `spawn_local` have the kind `local` in `tokio-console`.
+//!
+//! Additionally, because the `console-subscriber` is initialized before the
+//! tokio runtime is created, we will also see the `block_on` kind task.
 use std::time::Duration;
-use tokio::{runtime::Runtime, task};
+use tokio::{runtime, task};
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     console_subscriber::init();
 
-    let rt = Runtime::new().unwrap();
+    let rt = runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
     let local = task::LocalSet::new();
     local.block_on(&rt, async {
         loop {
