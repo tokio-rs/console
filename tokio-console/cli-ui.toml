@@ -1,0 +1,3 @@
+bin.name = "tokio-console"
+args = ["--help"]
+stdin= ""
