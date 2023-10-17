@@ -274,8 +274,14 @@ impl Metadata {
 
 impl Field {
     const SPAWN_LOCATION: &'static str = "spawn.location";
+    const KIND: &'static str = "kind";
     const NAME: &'static str = "task.name";
     const TASK_ID: &'static str = "task.id";
+
+    /// Creates a new Field with a pre-interned `name` and a `FieldValue`.
+    fn new(name: InternedStr, value: FieldValue) -> Self {
+        Field { name, value }
+    }
 
     /// Converts a wire-format `Field` into an internal `Field` representation,
     /// using the provided `Metadata` for the task span that the field came
