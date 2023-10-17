@@ -21,20 +21,17 @@ pub(crate) struct Strings {
 pub(crate) struct InternedStr(Rc<String>);
 
 impl Strings {
-    // NOTE(elzia): currently, we never need to use this, but we can always
-    // uncomment it if we do...
+    pub(crate) fn string_ref<Q>(&mut self, string: &Q) -> InternedStr
+    where
+        InternedStr: Borrow<Q>,
+        Q: Hash + Eq + ToOwned<Owned = String> + ?Sized,
+    {
+        if let Some(s) = self.strings.get(string) {
+            return s.clone();
+        }
 
-    // pub(crate) fn string_ref<Q>(&mut self, string: &Q) -> InternedStr
-    // where
-    //     InternedStr: Borrow<Q>,
-    //     Q: Hash + Eq + ToOwned<Owned = String>,
-    // {
-    //     if let Some(s) = self.strings.get(string) {
-    //         return s.clone();
-    //     }
-
-    //     self.insert(string.to_owned())
-    // }
+        self.insert(string.to_owned())
+    }
 
     pub(crate) fn string(&mut self, string: String) -> InternedStr {
         if let Some(s) = self.strings.get(&string) {
