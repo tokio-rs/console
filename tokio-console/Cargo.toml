@@ -8,7 +8,7 @@ rust-version = "1.64.0"
 authors = ["Eliza Weisman <eliza@buoyant.io>", "Tokio Contributors <team@tokio.rs>",]
 readme = "README.md"
 default-run = "tokio-console"
-homepage = "https://github.com/tokio-rs/console/tree/main/tokio-console" 
+homepage = "https://github.com/tokio-rs/console/tree/main/tokio-console"
 description = """
 The Tokio console: a debugger for async Rust.
 """
@@ -51,3 +51,7 @@ humantime = "2.1.0"
 serde = { version = "1", features = ["derive"] }
 toml = "0.5"
 dirs = "4"
+
+[dev-dependencies]
+# Use 1.64.0 compatible version of `trycmd@0.13.4`.
+trycmd = "=0.13.4"
