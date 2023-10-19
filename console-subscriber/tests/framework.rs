@@ -7,6 +7,7 @@
 
 use std::time::Duration;
 
+use futures::future;
 use tokio::{task, time::sleep};
 
 mod support;
@@ -18,9 +19,7 @@ fn expect_present() {
         .match_default_name()
         .expect_present();
 
-    let future = async {
-        sleep(Duration::ZERO).await;
-    };
+    let future = future::ready(());
 
     assert_task(expected_task, future);
 }
@@ -32,9 +31,7 @@ fn expect_present() {
 fn fail_no_expectations() {
     let expected_task = ExpectedTask::default().match_default_name();
 
-    let future = async {
-        sleep(Duration::ZERO).await;
-    };
+    let future = future::ready(());
 
     assert_task(expected_task, future);
 }
@@ -43,9 +40,7 @@ fn fail_no_expectations() {
 fn wakes() {
     let expected_task = ExpectedTask::default().match_default_name().expect_wakes(1);
 
-    let future = async {
-        sleep(Duration::ZERO).await;
-    };
+    let future = async { yield_to_runtime().await };
 
     assert_task(expected_task, future);
 }
@@ -57,9 +52,7 @@ fn wakes() {
 fn fail_wakes() {
     let expected_task = ExpectedTask::default().match_default_name().expect_wakes(5);
 
-    let future = async {
-        sleep(Duration::ZERO).await;
-    };
+    let future = async { yield_to_runtime().await };
 
     assert_task(expected_task, future);
 }
@@ -85,6 +78,7 @@ fn fail_self_wake() {
         .expect_self_wakes(1);
 
     let future = async {
+        // `sleep` doesn't result in a self wake
         sleep(Duration::ZERO).await;
     };
 
@@ -100,7 +94,7 @@ fn test_spawned_task() {
     let future = async {
         task::Builder::new()
             .name("another-name")
-            .spawn(async { sleep(Duration::ZERO).await })
+            .spawn(async { yield_to_runtime().await })
     };
 
     assert_task(expected_task, future);
@@ -113,7 +107,7 @@ fn test_spawned_task() {
 fn fail_wrong_task_name() {
     let expected_task = ExpectedTask::default().match_name("wrong-name".into());
 
-    let future = async { sleep(Duration::ZERO).await };
+    let future = async { yield_to_runtime().await };
 
     assert_task(expected_task, future);
 }
@@ -132,11 +126,11 @@ fn multiple_tasks() {
     let future = async {
         let task1 = task::Builder::new()
             .name("task-1")
-            .spawn(async { sleep(Duration::ZERO).await })
+            .spawn(async { yield_to_runtime().await })
             .unwrap();
         let task2 = task::Builder::new()
             .name("task-2")
-            .spawn(async { sleep(Duration::ZERO).await })
+            .spawn(async { yield_to_runtime().await })
             .unwrap();
 
         tokio::try_join! {
@@ -166,11 +160,11 @@ fn fail_1_of_2_expected_tasks() {
     let future = async {
         let task1 = task::Builder::new()
             .name("task-1")
-            .spawn(async { sleep(Duration::ZERO).await })
+            .spawn(async { yield_to_runtime().await })
             .unwrap();
         let task2 = task::Builder::new()
             .name("task-2")
-            .spawn(async { sleep(Duration::ZERO).await })
+            .spawn(async { yield_to_runtime().await })
             .unwrap();
 
         tokio::try_join! {
@@ -181,4 +175,12 @@ fn fail_1_of_2_expected_tasks() {
     };
 
     assert_tasks(expected_tasks, future);
+}
+
+async fn yield_to_runtime() {
+    // There is a race condition that can occur when tests are run in parallel,
+    // caused by tokio-rs/tracing#2743. It tends to cause test failures only
+    // when the test relies on a wake coming from `tokio::task::yield_now()`.
+    // For this reason, we prefer a zero-duration sleep.
+    sleep(Duration::ZERO).await;
 }
