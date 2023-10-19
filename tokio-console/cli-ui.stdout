@@ -1,3 +1,7 @@
+The Tokio console: a debugger for async Rust.
+
+Usage: tokio-console [OPTIONS] [TARGET_ADDR] [COMMAND]
+
 Commands:
   gen-config
           Generate a `console.toml` config file with the default

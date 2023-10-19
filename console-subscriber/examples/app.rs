@@ -45,6 +45,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                     .spawn(no_yield(20))
                     .unwrap();
             }
+            "blocking" => {
+                tokio::task::Builder::new()
+                    .name("spawns_blocking")
+                    .spawn(spawn_blocking(5))
+                    .unwrap();
+            }
             "help" | "-h" => {
                 eprintln!("{}", HELP);
                 return Ok(());
@@ -133,5 +139,16 @@ async fn no_yield(seconds: u64) {
             .expect("Couldn't spawn greedy task");
 
         _ = handle.await;
+    }
+}
+
+#[tracing::instrument]
+async fn spawn_blocking(seconds: u64) {
+    loop {
+        let seconds = seconds;
+        _ = tokio::task::spawn_blocking(move || {
+            std::thread::sleep(Duration::from_secs(seconds));
+        })
+        .await;
     }
 }

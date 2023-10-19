@@ -754,7 +754,7 @@ mod tests {
     use std::{
         env,
         fs::File,
-        io::{BufWriter, Cursor, Write},
+        io::Write,
         path::{Path, PathBuf},
         process,
     };
@@ -768,50 +768,15 @@ mod tests {
     }
 
     #[test]
-    fn args_example_changed() {
-        use clap::CommandFactory;
-
-        // Override env vars that may effect the defaults.
-        clobber_env_vars();
-
-        let path = PathBuf::from(std::env!("CARGO_MANIFEST_DIR")).join("args.example");
-
-        let mut cmd = Config::command()
-            // always use the same terminal width when generating the help text,
-            // so that the text wrapping doesn't change based on the terminal
-            // size that the test was run in.
-            // (72 chars seems to fit reasonably in the default width of
-            // RustDoc's code formatting)
-            .term_width(72);
-        let mut helptext = Vec::new();
-        // Format the help text to a string.
-        cmd.write_long_help(&mut Cursor::new(&mut helptext))
-            .expect("generating help should succeed");
-        let helptext = String::from_utf8(helptext).expect("help text is UTF-8");
-
-        let mut file = {
-            let file = File::create(&path).expect("failed to open file");
-            BufWriter::new(file)
-        };
-        // Drop the first four lines of the help text, as they include the
-        // version number, and it seems like a pain to have to re-generate the
-        // file every time the version changes...
-        for line in helptext.lines().skip(4) {
-            writeln!(file, "{}", line).expect("writing to file succeeds");
-        }
-
-        file.flush().expect("flushing should succeed");
-        drop(file);
-
-        if let Err(diff) = git_diff(&path) {
-            panic!(
-                "\n/!\\ command line arguments have changed!\n\
-                you should commit the new version of `{}`\n\n\
-                git diff output:\n\n{}\n",
-                path.display(),
-                diff
-            );
-        }
+    // You can use `TRYCMD=overwrite` to overwrite the expected output.
+    fn cli_tests() {
+        // 72 chars seems to fit reasonably in the default width of
+        // RustDoc's code formatting
+        // Set the env var COLUMNS to override this.
+        env::set_var("COLUMNS", "72");
+        trycmd::TestCases::new()
+            .case("cli-ui.toml")
+            .case("../README.md");
     }
 
     #[test]

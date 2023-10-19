@@ -88,14 +88,22 @@ pub(crate) struct Task {
     span_id: SpanId,
     /// A cached string representation of the Id for display purposes.
     id_str: String,
+    /// A precomputed short description string used in the async ops table
     short_desc: InternedStr,
+    /// Fields that don't have their own column, pre-formatted
     formatted_fields: Vec<Vec<Span<'static>>>,
+    /// The task statistics that are updated over the lifetime of the task
     stats: TaskStats,
+    /// The target of the span representing the task
     target: InternedStr,
+    /// The name of the task (when `tokio::task::Builder` is used)
     name: Option<InternedStr>,
     /// Currently active warnings for this task.
     warnings: Vec<Linter<Task>>,
+    /// The source file and line number the task was spawned from
     location: String,
+    /// The kind of task, currently one of task, blocking, block_on, local
+    kind: InternedStr,
 }
 
 #[derive(Debug)]
@@ -171,25 +179,38 @@ impl TasksState {
                 };
                 let mut name = None;
                 let mut task_id = None;
+                let mut kind = strings.string(String::new());
+                let target_field = Field::new(
+                    strings.string_ref("target"),
+                    FieldValue::Str(meta.target.to_string()),
+                );
                 let mut fields = task
                     .fields
                     .drain(..)
                     .filter_map(|pb| {
                         let field = Field::from_proto(pb, meta, strings)?;
                         // the `task.name` field gets its own column, if it's present.
-                        if &*field.name == Field::NAME {
-                            name = Some(strings.string(field.value.to_string()));
-                            return None;
+                        match &*field.name {
+                            Field::NAME => {
+                                name = Some(strings.string(field.value.to_string()));
+                                None
+                            }
+                            Field::TASK_ID => {
+                                task_id = match field.value {
+                                    FieldValue::U64(id) => Some(id as TaskId),
+                                    _ => None,
+                                };
+                                None
+                            }
+                            Field::KIND => {
+                                kind = strings.string(field.value.to_string());
+                                None
+                            }
+                            _ => Some(field),
                         }
-                        if &*field.name == Field::TASK_ID {
-                            task_id = match field.value {
-                                FieldValue::U64(id) => Some(id as TaskId),
-                                _ => None,
-                            };
-                            return None;
-                        }
-                        Some(field)
                     })
+                    // We wish to include the target in the fields as we won't give it a dedicated column.
+                    .chain([target_field])
                     .collect::<Vec<_>>();
 
                 let formatted_fields = Field::make_formatted(styles, &mut fields);
@@ -220,6 +241,7 @@ impl TasksState {
                     target: meta.target.clone(),
                     warnings: Vec::new(),
                     location,
+                    kind,
                 };
                 if let TaskLintResult::RequiresRecheck = task.lint(linters) {
                     next_pending_lint.insert(task.id);
@@ -305,6 +327,10 @@ impl Task {
 
     pub(crate) fn target(&self) -> &str {
         &self.target
+    }
+
+    pub(crate) fn kind(&self) -> &str {
+        &self.kind
     }
 
     pub(crate) fn short_desc(&self) -> &str {
