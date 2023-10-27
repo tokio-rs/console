@@ -128,7 +128,7 @@ async fn main() -> color_eyre::Result<()> {
                 }
             },
             instrument_update = conn.next_update() => {
-                state.update(&view.styles,view.current_view(), instrument_update);
+                state.update(&view.styles, view.current_view(), instrument_update);
             }
             details_update = details_rx.recv() => {
                 if let Some(details_update) = details_update {
