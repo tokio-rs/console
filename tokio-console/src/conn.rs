@@ -4,7 +4,7 @@ use console_api::instrument::{
 };
 use console_api::tasks::TaskDetails;
 use futures::stream::StreamExt;
-use std::{error::Error, pin::Pin, time::Duration};
+use std::{error::Error, time::Duration};
 #[cfg(unix)]
 use tokio::net::UnixStream;
 use tonic::{
@@ -129,7 +129,7 @@ impl Connection {
     pub async fn next_update(&mut self) -> Update {
         loop {
             match self.state {
-                State::Connected { ref mut stream, .. } => match Pin::new(stream).next().await {
+                State::Connected { ref mut stream, .. } => match stream.next().await {
                     Some(Ok(update)) => return update,
                     Some(Err(status)) => {
                         tracing::warn!(%status, "error from stream");
