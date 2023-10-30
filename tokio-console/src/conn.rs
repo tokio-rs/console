@@ -86,12 +86,12 @@ impl Connection {
                 let channel = match self.target.scheme_str() {
                     #[cfg(unix)]
                     Some("file") => {
-                        // Dummy endpoint is ignored by the connector.
-                        let endpoint = Endpoint::from_static("http://localhost");
                         if !matches!(self.target.host(), None | Some("localhost")) {
                             return Err("cannot connect to non-localhost unix domain socket".into());
                         }
                         let path = self.target.path().to_owned();
+                        // Dummy endpoint is ignored by the connector.
+                        let endpoint = Endpoint::from_static("http://localhost");
                         endpoint
                             .connect_with_connector(tower::service_fn(move |_| {
                                 UnixStream::connect(path.clone())
