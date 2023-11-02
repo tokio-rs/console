@@ -363,11 +363,22 @@ impl Config {
         self.retain_for.unwrap_or_default().0
     }
 
-    pub(crate) fn target_addr(&self) -> Uri {
-        self.target_addr
+    pub(crate) fn target_addr(&self) -> color_eyre::Result<Uri> {
+        let target_addr = self
+            .target_addr
             .as_ref()
             .unwrap_or(&default_target_addr())
-            .clone()
+            .clone();
+        match target_addr.scheme_str() {
+            Some("file" | "http" | "https") => {}
+            _ => {
+                return Err(color_eyre::eyre::eyre!(
+                "invalid scheme for target address {:?}, must be one of 'file', 'http', or 'https'",
+                target_addr
+            ))
+            }
+        }
+        Ok(target_addr)
     }
 
     pub(crate) fn add_issue_metadata(
