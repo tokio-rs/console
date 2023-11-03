@@ -53,7 +53,7 @@ async fn main() -> color_eyre::Result<()> {
         None => {}
     }
 
-    let target = args.target_addr();
+    let target = args.target_addr()?;
     tracing::info!(?target, "using target addr");
 
     let retain_for = args.retain_for();
