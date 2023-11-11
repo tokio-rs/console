@@ -1,34 +1,14 @@
 name: Upload Binaries
 
 on:
-  push:
-    tags:
-      - console-subscriber-v[0-9]+.*
-      - console-api-v[0-9]+.*
-      - tokio-console-v[0-9]+.*
+  release:
+    types: [created]
 
 jobs:
-  create-release:
-    name: Create GitHub release
-    # only publish from the origin repository
-    if: github.repository_owner == 'tokio-rs'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: taiki-e/create-gh-release-action@v1.3.0
-        with:
-          prefix: "(console-subscriber)|(console-api)|(tokio-console)"
-          changelog: "$prefix/CHANGELOG.md"
-          title: "$prefix $version"
-          draft: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   upload-bins:
     name: "Upload release binaries"
     # only upload binaries if the tag is a`tokio-console` release
     if: contains(github.ref, 'tokio-console')
-    needs: create-release
     strategy:
       matrix:
         include:
