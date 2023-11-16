@@ -259,7 +259,7 @@ impl ExpectedTask {
         self
     }
 
-    /// Expects taht a task has a specific value for `polls`.
+    /// Expects that a task has a specific value for `polls`.
     ///
     /// To validate, the actual task must have a count of polls (on
     /// `PollStats`) equal to `polls`.
