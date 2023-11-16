@@ -283,8 +283,7 @@ async fn record_actual_tasks(
 
             for (id, stats) in &task_update.stats_update {
                 if let Some(task) = tasks.get_mut(id) {
-                    task.wakes = stats.wakes;
-                    task.self_wakes = stats.self_wakes;
+                    task.update_from_stats(stats);
                 }
             }
         }
