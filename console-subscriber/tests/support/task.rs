@@ -135,7 +135,7 @@ impl ExpectedTask {
     /// No check that the actual task matches is performed. That must have been
     /// done prior.
     ///
-    /// If all expections are met, this method returns `Ok(())`. If any
+    /// If all expectations are met, this method returns `Ok(())`. If any
     /// expectations are not met, then the first incorrect expectation will
     /// be returned as an `Err`.
     pub(super) fn validate_actual_task(
