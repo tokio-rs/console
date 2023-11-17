@@ -11,7 +11,7 @@ use futures::future;
 use tokio::{task, time::sleep};
 
 mod support;
-use support::{assert_task, assert_tasks, ExpectedTask};
+use support::{assert_task, assert_tasks, ExpectedTask, TaskState};
 
 #[test]
 fn expect_present() {
@@ -194,6 +194,54 @@ fn fail_polls() {
     let expected_task = ExpectedTask::default().match_default_name().expect_polls(2);
 
     let future = async {};
+
+    assert_task(expected_task, future);
+}
+
+#[test]
+fn main_task_completes() {
+    let expected_task = ExpectedTask::default()
+        .match_default_name()
+        .expect_state(TaskState::Completed);
+
+    let future = async {};
+
+    assert_task(expected_task, future);
+}
+
+#[test]
+#[should_panic(expected = "Test failed: Task validation failed:
+ - Task { name=task }: expected `state` to be Idle, but actual was Completed")]
+fn fail_completed_task_is_idle() {
+    let expected_task = ExpectedTask::default()
+        .match_name("task".into())
+        .expect_state(TaskState::Idle);
+
+    let future = async {
+        _ = task::Builder::new()
+            .name("task")
+            .spawn(futures::future::ready(()))
+            .unwrap()
+            .await;
+    };
+
+    assert_task(expected_task, future);
+}
+
+#[test]
+#[should_panic(expected = "Test failed: Task validation failed:
+ - Task { name=task }: expected `state` to be Completed, but actual was Idle")]
+fn fail_idle_task_is_completed() {
+    let expected_task = ExpectedTask::default()
+        .match_name("task".into())
+        .expect_state(TaskState::Completed);
+
+    let future = async {
+        _ = task::Builder::new()
+            .name("task")
+            .spawn(futures::future::pending::<()>())
+            .unwrap();
+    };
 
     assert_task(expected_task, future);
 }

@@ -1,6 +1,7 @@
-use std::{error, fmt};
+use std::{error, fmt, time::SystemTime};
 
 use console_api::tasks;
+use prost_types::Timestamp;
 
 use super::MAIN_TASK_NAME;
 
@@ -13,6 +14,7 @@ use super::MAIN_TASK_NAME;
 pub(super) struct ActualTask {
     pub(super) id: u64,
     pub(super) name: Option<String>,
+    pub(super) state: Option<TaskState>,
     pub(super) wakes: u64,
     pub(super) self_wakes: u64,
     pub(super) polls: u64,
@@ -23,6 +25,7 @@ impl ActualTask {
         Self {
             id,
             name: None,
+            state: None,
             wakes: 0,
             self_wakes: 0,
             polls: 0,
@@ -35,6 +38,59 @@ impl ActualTask {
         if let Some(poll_stats) = &stats.poll_stats {
             self.polls = poll_stats.polls;
         }
+
+        self.state = calculate_task_state(stats);
+    }
+}
+
+/// The state of a task.
+///
+/// The task state is an amalgamation of a various fields. It is presented in
+/// this way to make testing more straight forward.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum TaskState {
+    /// Task has completed.
+    ///
+    /// Indicates that [`dropped_at`] has some value.
+    ///
+    /// [`dropped_at`]: fn@tasks::Stats::dropped_at
+    Completed,
+    /// Task is being polled.
+    ///
+    /// Indicates that the task is not [`Completed`] and the
+    /// [`last_poll_started`] time is later than [`last_poll_ended`] (or
+    /// [`last_poll_ended`] has not been set).
+    Running,
+    /// Task has been scheduled.
+    ///
+    /// Indicates that the task is not [`Completed`] and the [`last_wake`] time
+    /// is later than [`last_poll_started`].
+    Scheduled,
+    /// Task is idle.
+    ///
+    /// Indicates that the task is between polls.
+    Idle,
+}
+
+fn calculate_task_state(stats: &tasks::Stats) -> Option<TaskState> {
+    if stats.dropped_at.is_some() {
+        return Some(TaskState::Completed);
+    }
+
+    fn convert(ts: &Option<Timestamp>) -> Option<SystemTime> {
+        ts.as_ref().map(|v| v.clone().try_into().unwrap())
+    }
+    let poll_stats = stats.poll_stats.as_ref()?;
+    let last_poll_started = convert(&poll_stats.last_poll_started);
+    let last_poll_ended = convert(&poll_stats.last_poll_ended);
+    let last_wake = convert(&stats.last_wake);
+
+    if last_poll_started > last_poll_ended {
+        Some(TaskState::Running)
+    } else if last_wake > last_poll_started {
+        Some(TaskState::Scheduled)
+    } else {
+        Some(TaskState::Idle)
     }
 }
 
@@ -88,6 +144,7 @@ impl fmt::Debug for TaskValidationFailure {
 pub(crate) struct ExpectedTask {
     match_name: Option<String>,
     expect_present: Option<bool>,
+    expect_state: Option<TaskState>,
     expect_wakes: Option<u64>,
     expect_self_wakes: Option<u64>,
     expect_polls: Option<u64>,
@@ -98,6 +155,7 @@ impl Default for ExpectedTask {
         Self {
             match_name: None,
             expect_present: None,
+            expect_state: None,
             expect_wakes: None,
             expect_self_wakes: None,
             expect_polls: None,
@@ -145,6 +203,28 @@ impl ExpectedTask {
         let mut no_expectations = true;
         if let Some(_expected) = self.expect_present {
             no_expectations = false;
+        }
+
+        if let Some(expected_state) = &self.expect_state {
+            no_expectations = false;
+            if let Some(actual_state) = &actual_task.state {
+                if expected_state != actual_state {
+                    return Err(TaskValidationFailure {
+                        expected: self.clone(),
+                        actual: Some(actual_task.clone()),
+                        failure: format!(
+                            "{self}: expected `state` to be \
+                            {expected_state:?}, but actual was \
+                            {actual_state}",
+                            actual_state = actual_task
+                                .state
+                                .as_ref()
+                                .map(|s| format!("{:?}", s))
+                                .unwrap_or("None".into()),
+                        ),
+                    });
+                }
+            }
         }
 
         if let Some(expected_wakes) = self.expect_wakes {
@@ -236,6 +316,16 @@ impl ExpectedTask {
     #[allow(dead_code)]
     pub(crate) fn expect_present(mut self) -> Self {
         self.expect_present = Some(true);
+        self
+    }
+
+    /// Expects that a task has a specific [`TaskState`].
+    ///
+    /// To validate, the actual task must be in this state at the time
+    /// the test ends and the validation is performed.
+    #[allow(dead_code)]
+    pub(crate) fn expect_state(mut self, state: TaskState) -> Self {
+        self.expect_state = Some(state);
         self
     }
 
