@@ -6,3 +6,6 @@ members = [
     "xtask"
 ]
 resolver = "2"
+
+[patch.crates-io]
+tokio = { git = "https://github.com/tokio-rs/tokio.git", branch = "hds/task-span-explicit-root" }
