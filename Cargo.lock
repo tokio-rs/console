@@ -1710,7 +1710,7 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 [[package]]
 name = "tokio"
 version = "1.34.0"
-source = "git+https://github.com/tokio-rs/tokio.git?branch=hds/task-span-explicit-root#571d01cb73c22e6b7bc645b4e59f0b06d85f7d0f"
+source = "git+https://github.com/tokio-rs/tokio.git?branch=master#7a30504fd423aa782239ead92f3afa3474f8037c"
 dependencies = [
  "backtrace",
  "bytes",
@@ -1769,7 +1769,7 @@ dependencies = [
 [[package]]
 name = "tokio-macros"
 version = "2.2.0"
-source = "git+https://github.com/tokio-rs/tokio.git?branch=hds/task-span-explicit-root#571d01cb73c22e6b7bc645b4e59f0b06d85f7d0f"
+source = "git+https://github.com/tokio-rs/tokio.git?branch=master#7a30504fd423aa782239ead92f3afa3474f8037c"
 dependencies = [
  "proc-macro2",
  "quote",
