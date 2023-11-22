@@ -29,11 +29,15 @@ pub(crate) enum TypeVisibility {
 #[derive(Debug, Copy, Clone)]
 #[repr(usize)]
 pub(crate) enum SortBy {
-    Rid = 0,
-    Kind = 1,
-    ConcreteType = 2,
-    Target = 3,
-    Total = 4,
+    Id = 0,
+    ParentId = 1,
+    Kind = 2,
+    Total = 3,
+    Target = 4,
+    ConcreteType = 5,
+    Visibility = 6,
+    Location = 7,
+    Attributes = 8,
 }
 
 #[derive(Debug)]
@@ -71,27 +75,48 @@ struct ResourceStats {
 
 impl Default for SortBy {
     fn default() -> Self {
-        Self::Rid
+        Self::Id
     }
 }
 
 impl SortBy {
     pub fn sort(&self, now: SystemTime, resources: &mut [ResourceRef]) {
         match self {
-            Self::Rid => {
+            Self::Id => {
                 resources.sort_unstable_by_key(|resource| resource.upgrade().map(|r| r.borrow().id))
             }
+            Self::ParentId => resources.sort_unstable_by_key(|resource| {
+                resource.upgrade().map(|r| r.borrow().parent_id.clone())
+            }),
             Self::Kind => resources.sort_unstable_by_key(|resource| {
                 resource.upgrade().map(|r| r.borrow().kind.clone())
+            }),
+            Self::Total => resources
+                .sort_unstable_by_key(|resource| resource.upgrade().map(|r| r.borrow().total(now))),
+            Self::Target => resources.sort_unstable_by_key(|resource| {
+                resource.upgrade().map(|r| r.borrow().target.clone())
             }),
             Self::ConcreteType => resources.sort_unstable_by_key(|resource| {
                 resource.upgrade().map(|r| r.borrow().concrete_type.clone())
             }),
-            Self::Target => resources.sort_unstable_by_key(|resource| {
-                resource.upgrade().map(|r| r.borrow().target.clone())
+            Self::Visibility => resources
+                .sort_unstable_by_key(|resource| resource.upgrade().map(|r| r.borrow().visibility)),
+            Self::Location => resources.sort_unstable_by_key(|resource| {
+                resource.upgrade().map(|r| r.borrow().location.clone())
             }),
-            Self::Total => resources
-                .sort_unstable_by_key(|resource| resource.upgrade().map(|r| r.borrow().total(now))),
+            Self::Attributes => resources.sort_unstable_by_key(|resource| {
+                resource.upgrade().and_then(|r| {
+                    // FIXME - we are taking only the key of the first attribute as sorting key here.
+                    // Instead, attributes should probably be parsed and sorted according to their actual values.
+                    //
+                    // See https://github.com/tokio-rs/console/issues/496
+                    r.borrow()
+                        .formatted_attributes()
+                        .first()
+                        .and_then(|a| a.first())
+                        .map(|key| key.content.clone())
+                })
+            }),
         }
     }
 }
@@ -100,11 +125,15 @@ impl TryFrom<usize> for SortBy {
     type Error = ();
     fn try_from(idx: usize) -> Result<Self, Self::Error> {
         match idx {
-            idx if idx == Self::Rid as usize => Ok(Self::Rid),
+            idx if idx == Self::Id as usize => Ok(Self::Id),
+            idx if idx == Self::ParentId as usize => Ok(Self::ParentId),
             idx if idx == Self::Kind as usize => Ok(Self::Kind),
-            idx if idx == Self::ConcreteType as usize => Ok(Self::ConcreteType),
-            idx if idx == Self::Target as usize => Ok(Self::Target),
             idx if idx == Self::Total as usize => Ok(Self::Total),
+            idx if idx == Self::Target as usize => Ok(Self::Target),
+            idx if idx == Self::ConcreteType as usize => Ok(Self::ConcreteType),
+            idx if idx == Self::Visibility as usize => Ok(Self::Visibility),
+            idx if idx == Self::Location as usize => Ok(Self::Location),
+            idx if idx == Self::Attributes as usize => Ok(Self::Attributes),
             _ => Err(()),
         }
     }
