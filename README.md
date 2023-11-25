@@ -210,6 +210,27 @@ Options:
           
           [env: RUST_LOG=]
 
+      --linters <LINTERS>
+          Enable or disable specific linters.
+          
+          This is a comma-separated list of linters to enable or
+          disable.
+          
+          Each linter is specified by its name, which is one of:
+          
+          * `self-wake-percent` -- Warns when a task wakes itself more
+          than a certain percentage of its total wakeups.
+          
+          * `lost-waker` -- Warns when a task is dropped without being
+          woken.
+          
+          * `never-yielded` -- Warns when a task has never yielded.
+          
+          [default: self-wake-percent, lost-waker, never-yielded]
+          
+          [possible values: self-wake-percent, lost-waker,
+          never-yielded]
+
       --log-dir <LOG_DIRECTORY>
           Path to a directory to write the console's internal logs to.
           

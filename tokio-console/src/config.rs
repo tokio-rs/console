@@ -55,9 +55,11 @@ pub struct Config {
     /// This is a comma-separated list of linters to enable or disable.
     ///
     /// Each linter is specified by its name, which is one of:
-    /// * `self-wake-percent` -- Warns when a task wakes itself more than a
-    ///  certain percentage of its total wakeups.
+    ///
+    /// * `self-wake-percent` -- Warns when a task wakes itself more than a certain percentage of its total wakeups.
+    ///
     /// * `lost-waker` -- Warns when a task is dropped without being woken.
+    ///
     /// * `never-yielded` -- Warns when a task has never yielded.
     ///
     /// [default: self-wake-percent, lost-waker, never-yielded]
