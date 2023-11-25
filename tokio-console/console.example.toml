@@ -1,5 +1,10 @@
 default_target_addr = 'http://127.0.0.1:6669/'
 log = 'off'
+linters = [
+    'SelfWakePercent',
+    'LostWaker',
+    'NeverYielded',
+]
 log_directory = '/tmp/tokio-console/logs'
 retention = '6s'
 

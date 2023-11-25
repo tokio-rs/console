@@ -66,13 +66,7 @@ async fn main() -> color_eyre::Result<()> {
     let (details_tx, mut details_rx) = mpsc::channel::<TaskDetails>(2);
 
     let mut state = State::default()
-        // TODO(eliza): allow configuring the list of linters via the
-        // CLI/possibly a config file?
-        .with_task_linters(vec![
-            warnings::Linter::new(warnings::SelfWakePercent::default()),
-            warnings::Linter::new(warnings::LostWaker),
-            warnings::Linter::new(warnings::NeverYielded::default()),
-        ])
+        .with_task_linters(args.linters.iter().map(|lint| lint.into()))
         .with_retain_for(retain_for);
     let mut input = Box::pin(input::EventStream::new().try_filter(|event| {
         future::ready(!matches!(
