@@ -780,14 +780,16 @@ mod tests {
 
     #[test]
     // You can use `TRYCMD=overwrite` to overwrite the expected output.
+    // Make sure run `cargo build` first to get the latest version of the binary.
     fn cli_tests() {
         // 72 chars seems to fit reasonably in the default width of
         // RustDoc's code formatting
         // Set the env var COLUMNS to override this.
         env::set_var("COLUMNS", "72");
-        trycmd::TestCases::new()
-            .case("cli-ui.toml")
-            .case("../README.md");
+        let t = trycmd::TestCases::new();
+        let console = trycmd::cargo::cargo_bin("tokio-console");
+        t.register_bin("tokio-console", console);
+        t.case("cli-ui.toml").case("../README.md");
     }
 
     #[test]
