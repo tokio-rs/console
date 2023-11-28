@@ -19,5 +19,5 @@ fn cli_tests() {
         .parent()
         .expect("README.md exists in the root of the repo")
         .join("README.md");
-    t.case("tests/ui/cli-ui.toml").case(readme_path);
+    t.case("tests/cli-ui.toml").case(readme_path);
 }

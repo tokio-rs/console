@@ -12,7 +12,7 @@
 /// `tokio-console`:
 ///
 /// ```text
-#[doc = include_str!("../tests/ui/cli-ui.stdout")]
+#[doc = include_str!("../tests/cli-ui.stdout")]
 /// ```
 ///
 /// This text can also be displayed by running `tokio-console help`.
