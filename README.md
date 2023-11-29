@@ -210,13 +210,12 @@ Options:
           
           [env: RUST_LOG=]
 
-      --linters <LINTERS>...
-          Enable or disable specific linters.
+  -W, --warn <WARNS>...
+          Enable lint warnings.
           
-          This is a comma-separated list of linters to enable or
-          disable.
+          This is a comma-separated list of warnings to enable.
           
-          Each linter is specified by its name, which is one of:
+          Each warning is specified by its name, which is one of:
           
           * `self-wakes` -- Warns when a task wakes itself more than a
           certain percentage of its total wakeups.

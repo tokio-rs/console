@@ -66,7 +66,7 @@ async fn main() -> color_eyre::Result<()> {
     let (details_tx, mut details_rx) = mpsc::channel::<TaskDetails>(2);
 
     let mut state = State::default()
-        .with_task_linters(args.linters.iter().map(|lint| lint.into()))
+        .with_task_linters(args.warns.iter().map(|lint| lint.into()))
         .with_retain_for(retain_for);
     let mut input = Box::pin(input::EventStream::new().try_filter(|event| {
         future::ready(!matches!(

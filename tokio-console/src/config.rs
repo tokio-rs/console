@@ -50,11 +50,11 @@ pub struct Config {
     #[clap(long = "log", env = "RUST_LOG")]
     log_filter: Option<LogFilter>,
 
-    /// Enable or disable specific linters.
+    /// Enable lint warnings.
     ///
-    /// This is a comma-separated list of linters to enable or disable.
+    /// This is a comma-separated list of warnings to enable.
     ///
-    /// Each linter is specified by its name, which is one of:
+    /// Each warning is specified by its name, which is one of:
     ///
     /// * `self-wakes` -- Warns when a task wakes itself more than a certain percentage of its total wakeups.
     ///
@@ -62,13 +62,13 @@ pub struct Config {
     ///
     /// * `never-yielded` -- Warns when a task has never yielded.
     ///
-    #[clap(long = "linters", value_delimiter = ',', num_args = 1..)]
+    #[clap(long = "warn", short = 'W', value_delimiter = ',', num_args = 1..)]
     #[clap(default_values_t = vec![
         KnownWarnings::SelfWakes,
         KnownWarnings::LostWaker,
         KnownWarnings::NeverYielded
     ])]
-    pub(crate) linters: Vec<KnownWarnings>,
+    pub(crate) warns: Vec<KnownWarnings>,
 
     /// Path to a directory to write the console's internal logs to.
     ///
@@ -291,7 +291,7 @@ impl FromStr for LogFilter {
 struct ConfigFile {
     default_target_addr: Option<String>,
     log: Option<String>,
-    linters: Vec<KnownWarnings>,
+    warns: Vec<KnownWarnings>,
     log_directory: Option<PathBuf>,
     retention: Option<RetainFor>,
     charset: Option<CharsetConfig>,
@@ -480,12 +480,12 @@ impl Config {
             log_directory: other.log_directory.or(self.log_directory),
             target_addr: other.target_addr.or(self.target_addr),
             log_filter: other.log_filter.or(self.log_filter),
-            linters: {
-                let mut linters = other.linters;
-                linters.extend(self.linters);
-                linters.sort_unstable();
-                linters.dedup();
-                linters
+            warns: {
+                let mut warns: Vec<KnownWarnings> = other.warns;
+                warns.extend(self.warns);
+                warns.sort_unstable();
+                warns.dedup();
+                warns
             },
             retain_for: other.retain_for.or(self.retain_for),
             view_options: self.view_options.merge_with(other.view_options),
@@ -501,7 +501,7 @@ impl Default for Config {
             log_filter: Some(LogFilter(
                 filter::Targets::new().with_default(filter::LevelFilter::OFF),
             )),
-            linters: vec![
+            warns: vec![
                 KnownWarnings::SelfWakes,
                 KnownWarnings::LostWaker,
                 KnownWarnings::NeverYielded,
@@ -741,7 +741,7 @@ impl From<Config> for ConfigFile {
             default_target_addr: config.target_addr.map(|addr| addr.to_string()),
             log: config.log_filter.map(|filter| filter.to_string()),
             log_directory: config.log_directory,
-            linters: config.linters,
+            warns: config.warns,
             retention: config.retain_for,
             charset: Some(CharsetConfig {
                 lang: config.view_options.lang,
@@ -764,7 +764,7 @@ impl TryFrom<ConfigFile> for Config {
         Ok(Config {
             target_addr: value.target_addr()?,
             log_filter: value.log_filter()?,
-            linters: value.linters.clone(),
+            warns: value.warns.clone(),
             log_directory: value.log_directory.take(),
             retain_for: value.retain_for(),
             view_options: ViewOptions {
