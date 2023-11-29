@@ -779,18 +779,6 @@ mod tests {
     }
 
     #[test]
-    // You can use `TRYCMD=overwrite` to overwrite the expected output.
-    fn cli_tests() {
-        // 72 chars seems to fit reasonably in the default width of
-        // RustDoc's code formatting
-        // Set the env var COLUMNS to override this.
-        env::set_var("COLUMNS", "72");
-        trycmd::TestCases::new()
-            .case("cli-ui.toml")
-            .case("../README.md");
-    }
-
-    #[test]
     // The example output includes paths, so skip this test on windows. :/
     #[cfg_attr(windows, ignore)]
     fn toml_example_changed() {

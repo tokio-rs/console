@@ -171,7 +171,7 @@ flags and arguments:
 $ tokio-console --help
 The Tokio console: a debugger for async Rust.
 
-Usage: tokio-console [OPTIONS] [TARGET_ADDR] [COMMAND]
+Usage: tokio-console[EXE] [OPTIONS] [TARGET_ADDR] [COMMAND]
 
 Commands:
   gen-config
