@@ -56,7 +56,7 @@ pub struct Config {
     ///
     /// Each linter is specified by its name, which is one of:
     ///
-    /// * `self-wake-percent` -- Warns when a task wakes itself more than a certain percentage of its total wakeups.
+    /// * `self-wakes` -- Warns when a task wakes itself more than a certain percentage of its total wakeups.
     ///
     /// * `lost-waker` -- Warns when a task is dropped without being woken.
     ///
@@ -64,7 +64,7 @@ pub struct Config {
     ///
     #[clap(long = "linters", value_delimiter = ',', num_args = 1..)]
     #[clap(default_values_t = vec![
-        KnownWarnings::SelfWakePercent,
+        KnownWarnings::SelfWakes,
         KnownWarnings::LostWaker,
         KnownWarnings::NeverYielded
     ])]
@@ -124,7 +124,7 @@ pub struct Config {
 #[derive(clap::ValueEnum, Clone, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum KnownWarnings {
-    SelfWakePercent,
+    SelfWakes,
     LostWaker,
     NeverYielded,
 }
@@ -132,9 +132,7 @@ pub(crate) enum KnownWarnings {
 impl From<&KnownWarnings> for warnings::Linter<Task> {
     fn from(warning: &KnownWarnings) -> Self {
         match warning {
-            KnownWarnings::SelfWakePercent => {
-                warnings::Linter::new(warnings::SelfWakePercent::default())
-            }
+            KnownWarnings::SelfWakes => warnings::Linter::new(warnings::SelfWakePercent::default()),
             KnownWarnings::LostWaker => warnings::Linter::new(warnings::LostWaker),
             KnownWarnings::NeverYielded => warnings::Linter::new(warnings::NeverYielded::default()),
         }
@@ -144,7 +142,7 @@ impl From<&KnownWarnings> for warnings::Linter<Task> {
 impl fmt::Display for KnownWarnings {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            KnownWarnings::SelfWakePercent => write!(f, "self-wake-percent"),
+            KnownWarnings::SelfWakes => write!(f, "self-wakes"),
             KnownWarnings::LostWaker => write!(f, "lost-waker"),
             KnownWarnings::NeverYielded => write!(f, "never-yielded"),
         }
@@ -504,7 +502,7 @@ impl Default for Config {
                 filter::Targets::new().with_default(filter::LevelFilter::OFF),
             )),
             linters: vec![
-                KnownWarnings::SelfWakePercent,
+                KnownWarnings::SelfWakes,
                 KnownWarnings::LostWaker,
                 KnownWarnings::NeverYielded,
             ],
