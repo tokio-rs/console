@@ -62,8 +62,12 @@ pub struct Config {
     ///
     /// * `never-yielded` -- Warns when a task has never yielded.
     ///
-    /// [default: self-wake-percent, lost-waker, never-yielded]
     #[clap(long = "linters")]
+    #[clap(default_values_t = vec![
+        KnownWarnings::SelfWakePercent,
+        KnownWarnings::LostWaker,
+        KnownWarnings::NeverYielded
+    ])]
     pub(crate) linters: Vec<KnownWarnings>,
 
     /// Path to a directory to write the console's internal logs to.
@@ -117,7 +121,8 @@ pub struct Config {
 }
 
 /// Known warnings that can be enabled or disabled.
-#[derive(clap::ValueEnum, Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(clap::ValueEnum, Clone, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "kebab-case")]
 pub(crate) enum KnownWarnings {
     SelfWakePercent,
     LostWaker,
@@ -132,6 +137,16 @@ impl From<&KnownWarnings> for warnings::Linter<Task> {
             }
             KnownWarnings::LostWaker => warnings::Linter::new(warnings::LostWaker),
             KnownWarnings::NeverYielded => warnings::Linter::new(warnings::NeverYielded::default()),
+        }
+    }
+}
+
+impl fmt::Display for KnownWarnings {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            KnownWarnings::SelfWakePercent => write!(f, "self-wake-percent"),
+            KnownWarnings::LostWaker => write!(f, "lost-waker"),
+            KnownWarnings::NeverYielded => write!(f, "never-yielded"),
         }
     }
 }
@@ -470,6 +485,7 @@ impl Config {
             linters: {
                 let mut linters = other.linters;
                 linters.extend(self.linters);
+                linters.sort_unstable();
                 linters.dedup();
                 linters
             },

@@ -226,8 +226,7 @@ Options:
           
           * `never-yielded` -- Warns when a task has never yielded.
           
-          [default: self-wake-percent, lost-waker, never-yielded]
-          
+          [default: self-wake-percent lost-waker never-yielded]
           [possible values: self-wake-percent, lost-waker,
           never-yielded]
 
