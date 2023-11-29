@@ -62,7 +62,7 @@ pub struct Config {
     ///
     /// * `never-yielded` -- Warns when a task has never yielded.
     ///
-    #[clap(long = "linters")]
+    #[clap(long = "linters", value_delimiter = ',', num_args = 1..)]
     #[clap(default_values_t = vec![
         KnownWarnings::SelfWakePercent,
         KnownWarnings::LostWaker,

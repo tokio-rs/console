@@ -210,7 +210,7 @@ Options:
           
           [env: RUST_LOG=]
 
-      --linters <LINTERS>
+      --linters <LINTERS>...
           Enable or disable specific linters.
           
           This is a comma-separated list of linters to enable or
