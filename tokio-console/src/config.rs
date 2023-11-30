@@ -57,6 +57,7 @@ pub struct Config {
     /// Each warning is specified by its name, which is one of:
     ///
     /// * `self-wakes` -- Warns when a task wakes itself more than a certain percentage of its total wakeups.
+    ///                   Default percentage is 50%.
     ///
     /// * `lost-waker` -- Warns when a task is dropped without being woken.
     ///
