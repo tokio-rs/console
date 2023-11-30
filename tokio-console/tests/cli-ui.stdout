@@ -39,7 +39,7 @@ Options:
           
           [env: RUST_LOG=]
 
-  -W, --warn <WARNS>...
+  -W, --warn <WARNINGS>...
           Enable lint warnings.
           
           This is a comma-separated list of warnings to enable.

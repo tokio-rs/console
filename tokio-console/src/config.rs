@@ -68,7 +68,7 @@ pub struct Config {
         KnownWarnings::LostWaker,
         KnownWarnings::NeverYielded
     ])]
-    pub(crate) warns: Vec<KnownWarnings>,
+    pub(crate) warnings: Vec<KnownWarnings>,
 
     /// Path to a directory to write the console's internal logs to.
     ///
@@ -291,7 +291,7 @@ impl FromStr for LogFilter {
 struct ConfigFile {
     default_target_addr: Option<String>,
     log: Option<String>,
-    warns: Vec<KnownWarnings>,
+    warnings: Vec<KnownWarnings>,
     log_directory: Option<PathBuf>,
     retention: Option<RetainFor>,
     charset: Option<CharsetConfig>,
@@ -480,9 +480,9 @@ impl Config {
             log_directory: other.log_directory.or(self.log_directory),
             target_addr: other.target_addr.or(self.target_addr),
             log_filter: other.log_filter.or(self.log_filter),
-            warns: {
-                let mut warns: Vec<KnownWarnings> = other.warns;
-                warns.extend(self.warns);
+            warnings: {
+                let mut warns: Vec<KnownWarnings> = other.warnings;
+                warns.extend(self.warnings);
                 warns.sort_unstable();
                 warns.dedup();
                 warns
@@ -501,7 +501,7 @@ impl Default for Config {
             log_filter: Some(LogFilter(
                 filter::Targets::new().with_default(filter::LevelFilter::OFF),
             )),
-            warns: vec![
+            warnings: vec![
                 KnownWarnings::SelfWakes,
                 KnownWarnings::LostWaker,
                 KnownWarnings::NeverYielded,
@@ -741,7 +741,7 @@ impl From<Config> for ConfigFile {
             default_target_addr: config.target_addr.map(|addr| addr.to_string()),
             log: config.log_filter.map(|filter| filter.to_string()),
             log_directory: config.log_directory,
-            warns: config.warns,
+            warnings: config.warnings,
             retention: config.retain_for,
             charset: Some(CharsetConfig {
                 lang: config.view_options.lang,
@@ -764,7 +764,7 @@ impl TryFrom<ConfigFile> for Config {
         Ok(Config {
             target_addr: value.target_addr()?,
             log_filter: value.log_filter()?,
-            warns: value.warns.clone(),
+            warnings: value.warnings.clone(),
             log_directory: value.log_directory.take(),
             retain_for: value.retain_for(),
             view_options: ViewOptions {
