@@ -28,6 +28,7 @@ keywords = [
 default = ["env-filter"]
 parking_lot = ["parking_lot_crate", "tracing-subscriber/parking_lot"]
 env-filter = ["tracing-subscriber/env-filter"]
+grpc-web = ["tonic-web"]
 
 [dependencies]
 
@@ -54,6 +55,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 crossbeam-channel = "0.5"
 
+# Only for the web feature:
+tonic-web = { version = "0.10.2", optional = true }
+
 [dev-dependencies]
 tokio = { version = "^1.21", features = ["full", "rt-multi-thread"] }
 tower = { version = "0.4", default-features = false }
@@ -62,3 +66,7 @@ futures = "0.3"
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[[example]]
+name = "grpc_web"
+required-features = ["grpc-web"]

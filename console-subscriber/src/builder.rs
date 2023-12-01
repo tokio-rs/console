@@ -56,6 +56,10 @@ pub struct Builder {
     /// Any scheduled times exceeding this duration will be clamped to this
     /// value. Higher values will result in more memory usage.
     pub(super) scheduled_duration_max: Duration,
+
+    #[cfg(feature = "grpc-web")]
+    /// Whether to enable gRPC web support.
+    enable_grpc_web: bool,
 }
 
 impl Default for Builder {
@@ -71,6 +75,8 @@ impl Default for Builder {
             recording_path: None,
             filter_env_var: "RUST_LOG".to_string(),
             self_trace: false,
+            #[cfg(feature = "grpc-web")]
+            enable_grpc_web: false,
         }
     }
 }
@@ -266,6 +272,17 @@ impl Builder {
     /// not exported to clients.
     pub fn enable_self_trace(self, self_trace: bool) -> Self {
         Self { self_trace, ..self }
+    }
+
+    #[cfg(feature = "grpc-web")]
+    /// Sets whether to enable gRPC web support.
+    ///
+    /// By default, gRPC web support is disabled.
+    pub fn enable_grpc_web(self, enable_grpc_web: bool) -> Self {
+        Self {
+            enable_grpc_web,
+            ..self
+        }
     }
 
     /// Completes the builder, returning a [`ConsoleLayer`] and [`Server`] task.
@@ -481,6 +498,8 @@ impl Builder {
         }
 
         let self_trace = self.self_trace;
+        #[cfg(feature = "grpc-web")]
+        let enable_grpc_web = self.enable_grpc_web;
 
         let (layer, server) = self.build();
         let filter =
@@ -501,8 +520,21 @@ impl Builder {
                     .enable_time()
                     .build()
                     .expect("console subscriber runtime initialization failed");
-
                 runtime.block_on(async move {
+                    #[cfg(feature = "grpc-web")]
+                    if enable_grpc_web {
+                        server
+                            .serve_with_grpc_web()
+                            .await
+                            .expect("console subscriber server failed")
+                    } else {
+                        server
+                            .serve()
+                            .await
+                            .expect("console subscriber server failed")
+                    }
+
+                    #[cfg(not(feature = "grpc-web"))]
                     server
                         .serve()
                         .await
