@@ -65,6 +65,7 @@ macro_rules! with_client {
 
 impl Connection {
     const BACKOFF: Duration = Duration::from_millis(500);
+    const MAX_DECODING_MESSAGE_SIZE: usize = 16 * 1024 * 1024;
     pub fn new(target: Uri) -> Self {
         Self {
             target,
@@ -108,6 +109,7 @@ impl Connection {
                     }
                 };
                 let mut client = InstrumentClient::new(channel);
+                client = client.max_decoding_message_size(Self::MAX_DECODING_MESSAGE_SIZE);
                 let request = tonic::Request::new(InstrumentRequest {});
                 let stream = Box::new(client.watch_updates(request).await?.into_inner());
                 Ok::<State, Box<dyn Error + Send + Sync>>(State::Connected { client, stream })
