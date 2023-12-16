@@ -270,7 +270,7 @@ impl Aggregator {
             .drop_closed(&mut self.resource_stats, now, self.retention, has_watchers);
         self.async_ops
             .drop_closed(&mut self.async_op_stats, now, self.retention, has_watchers);
-        if !has_watchers && !self.poll_ops.is_empty() {
+        if !has_watchers {
             self.poll_ops.clear();
         }
     }
@@ -472,6 +472,7 @@ impl Aggregator {
                 task_id,
                 is_ready,
             } => {
+                // CLI doesn't show historical poll ops, so don't save them if no-one is watching
                 if self.watchers.is_empty() {
                     return;
                 }
