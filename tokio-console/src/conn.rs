@@ -103,7 +103,7 @@ impl Connection {
                         return Err("unix domain sockets are not supported on this platform".into());
                     }
                     _ => {
-                        let endpoint = Endpoint::try_from(self.target.clone())?;
+                        let endpoint = Endpoint::from(self.target.clone());
                         endpoint.connect().await?
                     }
                 };
