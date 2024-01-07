@@ -14,8 +14,8 @@ jobs:
     if: github.repository_owner == 'tokio-rs'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: taiki-e/create-gh-release-action@v1.3.0
+      - uses: actions/checkout@v4
+      - uses: taiki-e/create-gh-release-action@v1
         with:
           prefix: "(console-subscriber)|(console-api)|(tokio-console)"
           changelog: "$prefix/CHANGELOG.md"
@@ -44,10 +44,10 @@ jobs:
             os: macos-latest
           - target: aarch64-pc-windows-msvc
             os: windows-latest
-            
+
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
           bin: tokio-console
