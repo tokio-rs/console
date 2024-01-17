@@ -53,5 +53,5 @@ toml = "0.5"
 dirs = "5"
 
 [dev-dependencies]
-# Use 1.64.0 compatible version of `trycmd@0.13.4`.
-trycmd = "=0.13.4"
+# Use 1.64.0 compatible version of `trycmd@0.13.6`.
+trycmd = "=0.13.6"
