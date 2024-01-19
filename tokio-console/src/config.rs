@@ -64,11 +64,7 @@ pub struct Config {
     /// * `never-yielded` -- Warns when a task has never yielded.
     ///
     #[clap(long = "warn", short = 'W', value_delimiter = ',', num_args = 1..)]
-    #[clap(default_values_t = vec![
-        KnownWarnings::SelfWakes,
-        KnownWarnings::LostWaker,
-        KnownWarnings::NeverYielded
-    ])]
+    #[clap(default_values_t = KnownWarnings::default_enabled_warnings())]
     pub(crate) warnings: Vec<KnownWarnings>,
 
     /// Path to a directory to write the console's internal logs to.
@@ -147,6 +143,16 @@ impl fmt::Display for KnownWarnings {
             KnownWarnings::LostWaker => write!(f, "lost-waker"),
             KnownWarnings::NeverYielded => write!(f, "never-yielded"),
         }
+    }
+}
+
+impl KnownWarnings {
+    fn default_enabled_warnings() -> Vec<Self> {
+        vec![
+            KnownWarnings::SelfWakes,
+            KnownWarnings::LostWaker,
+            KnownWarnings::NeverYielded,
+        ]
     }
 }
 
@@ -502,11 +508,7 @@ impl Default for Config {
             log_filter: Some(LogFilter(
                 filter::Targets::new().with_default(filter::LevelFilter::OFF),
             )),
-            warnings: vec![
-                KnownWarnings::SelfWakes,
-                KnownWarnings::LostWaker,
-                KnownWarnings::NeverYielded,
-            ],
+            warnings: KnownWarnings::default_enabled_warnings(),
             log_directory: Some(default_log_directory()),
             retain_for: Some(RetainFor::default()),
             view_options: ViewOptions::default(),
