@@ -1,4 +1,6 @@
+use crate::state::tasks::Task;
 use crate::view::Palette;
+use crate::warnings;
 use clap::builder::{PossibleValuesParser, TypedValueParser};
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser as Clap, Subcommand, ValueHint};
 use clap_complete::Shell;
@@ -48,6 +50,23 @@ pub struct Config {
     #[clap(long = "log", env = "RUST_LOG")]
     log_filter: Option<LogFilter>,
 
+    /// Enable lint warnings.
+    ///
+    /// This is a comma-separated list of warnings to enable.
+    ///
+    /// Each warning is specified by its name, which is one of:
+    ///
+    /// * `self-wakes` -- Warns when a task wakes itself more than a certain percentage of its total wakeups.
+    ///                   Default percentage is 50%.
+    ///
+    /// * `lost-waker` -- Warns when a task is dropped without being woken.
+    ///
+    /// * `never-yielded` -- Warns when a task has never yielded.
+    ///
+    #[clap(long = "warn", short = 'W', value_delimiter = ',', num_args = 1..)]
+    #[clap(default_values_t = KnownWarnings::default_enabled_warnings())]
+    pub(crate) warnings: Vec<KnownWarnings>,
+
     /// Path to a directory to write the console's internal logs to.
     ///
     /// [default: /tmp/tokio-console/logs]
@@ -96,6 +115,45 @@ pub struct Config {
     /// attempting to connect to a remote server.
     #[clap(subcommand)]
     pub subcmd: Option<OptionalCmd>,
+}
+
+/// Known warnings that can be enabled or disabled.
+#[derive(clap::ValueEnum, Clone, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum KnownWarnings {
+    SelfWakes,
+    LostWaker,
+    NeverYielded,
+}
+
+impl From<&KnownWarnings> for warnings::Linter<Task> {
+    fn from(warning: &KnownWarnings) -> Self {
+        match warning {
+            KnownWarnings::SelfWakes => warnings::Linter::new(warnings::SelfWakePercent::default()),
+            KnownWarnings::LostWaker => warnings::Linter::new(warnings::LostWaker),
+            KnownWarnings::NeverYielded => warnings::Linter::new(warnings::NeverYielded::default()),
+        }
+    }
+}
+
+impl fmt::Display for KnownWarnings {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            KnownWarnings::SelfWakes => write!(f, "self-wakes"),
+            KnownWarnings::LostWaker => write!(f, "lost-waker"),
+            KnownWarnings::NeverYielded => write!(f, "never-yielded"),
+        }
+    }
+}
+
+impl KnownWarnings {
+    fn default_enabled_warnings() -> Vec<Self> {
+        vec![
+            KnownWarnings::SelfWakes,
+            KnownWarnings::LostWaker,
+            KnownWarnings::NeverYielded,
+        ]
+    }
 }
 
 #[derive(Debug, Subcommand, PartialEq, Eq)]
@@ -240,6 +298,7 @@ impl FromStr for LogFilter {
 struct ConfigFile {
     default_target_addr: Option<String>,
     log: Option<String>,
+    warnings: Vec<KnownWarnings>,
     log_directory: Option<PathBuf>,
     retention: Option<RetainFor>,
     charset: Option<CharsetConfig>,
@@ -428,6 +487,13 @@ impl Config {
             log_directory: other.log_directory.or(self.log_directory),
             target_addr: other.target_addr.or(self.target_addr),
             log_filter: other.log_filter.or(self.log_filter),
+            warnings: {
+                let mut warns: Vec<KnownWarnings> = other.warnings;
+                warns.extend(self.warnings);
+                warns.sort_unstable();
+                warns.dedup();
+                warns
+            },
             retain_for: other.retain_for.or(self.retain_for),
             view_options: self.view_options.merge_with(other.view_options),
             subcmd: other.subcmd.or(self.subcmd),
@@ -442,6 +508,7 @@ impl Default for Config {
             log_filter: Some(LogFilter(
                 filter::Targets::new().with_default(filter::LevelFilter::OFF),
             )),
+            warnings: KnownWarnings::default_enabled_warnings(),
             log_directory: Some(default_log_directory()),
             retain_for: Some(RetainFor::default()),
             view_options: ViewOptions::default(),
@@ -677,6 +744,7 @@ impl From<Config> for ConfigFile {
             default_target_addr: config.target_addr.map(|addr| addr.to_string()),
             log: config.log_filter.map(|filter| filter.to_string()),
             log_directory: config.log_directory,
+            warnings: config.warnings,
             retention: config.retain_for,
             charset: Some(CharsetConfig {
                 lang: config.view_options.lang,
@@ -699,6 +767,7 @@ impl TryFrom<ConfigFile> for Config {
         Ok(Config {
             target_addr: value.target_addr()?,
             log_filter: value.log_filter()?,
+            warnings: value.warnings.clone(),
             log_directory: value.log_directory.take(),
             retain_for: value.retain_for(),
             view_options: ViewOptions {
