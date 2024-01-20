@@ -330,6 +330,14 @@ Options:
 
 ```
 
+#### running the console on windows
+
+For best results on windows use a utf-8 enabled Terminal such as the new Windows [Terminal]([http://example.com](https://learn.microsoft.com/en-us/windows/terminal/install).
+In order to get graph output and other visual features to work, make sure to explicitly call tokio-console with the utf-8 language flag set.
+```
+tokio-console --lang en_US.UTF-8
+```
+
 ## for development
 
 the `console-subscriber/examples` directory contains **some potentially useful
