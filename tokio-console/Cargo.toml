@@ -44,6 +44,9 @@ prost-types = "0.12"
 crossterm = { version = "0.26.1", features = ["event-stream"] }
 color-eyre = { version = "0.6", features = ["issue-url"] }
 hdrhistogram = { version = "7.3.0", default-features = false, features = ["serialization"] }
+# Keep this in sync with the version from `tonic`.
+# Because we inspect the error from tonic, we need to make sure that the
+# version of h2 we use is compatible with the version of tonic we use.
 h2 = "0.3"
 regex = "1.5"
 once_cell = "1.8"
