@@ -7,6 +7,8 @@
 use std::time::Duration;
 
 use console_subscriber::ConsoleLayer;
+use http::header::HeaderName;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 static HELP: &str = r#"
 Example console-instrumented app
@@ -22,11 +24,35 @@ OPTIONS:
     noyield     Includes a (misbehaving) task that spawns tasks that never yield
 "#;
 
+const DEFAULT_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
+const DEFAULT_EXPOSED_HEADERS: [&str; 3] =
+    ["grpc-status", "grpc-message", "grpc-status-details-bin"];
+const DEFAULT_ALLOW_HEADERS: [&str; 4] =
+    ["x-grpc-web", "content-type", "x-user-agent", "grpc-timeout"];
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let cors = CorsLayer::new()
+        .allow_origin(AllowOrigin::mirror_request())
+        .allow_credentials(true)
+        .max_age(DEFAULT_MAX_AGE)
+        .expose_headers(
+            DEFAULT_EXPOSED_HEADERS
+                .iter()
+                .cloned()
+                .map(HeaderName::from_static)
+                .collect::<Vec<HeaderName>>(),
+        )
+        .allow_headers(
+            DEFAULT_ALLOW_HEADERS
+                .iter()
+                .cloned()
+                .map(HeaderName::from_static)
+                .collect::<Vec<HeaderName>>(),
+        );
     ConsoleLayer::builder()
         .with_default_env()
-        .enable_grpc_web(true)
+        .with_cors(cors)
         .init();
     // spawn optional extras from CLI args
     // skip first which is command name

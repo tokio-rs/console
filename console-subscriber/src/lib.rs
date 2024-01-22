@@ -930,6 +930,7 @@ impl Server {
     /// support.
     pub async fn serve_with_grpc_web(
         self,
+        cors: tower_http::cors::CorsLayer,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         let builder = tonic::transport::Server::builder();
         let addr = self.addr.clone();
@@ -940,7 +941,9 @@ impl Server {
         let aggregate = spawn_named(aggregator.run(), "console::aggregate");
         let router = builder
             .accept_http1(true)
-            .add_service(tonic_web::enable(instrument_server));
+            .layer(cors)
+            .layer(tonic_web::GrpcWebLayer::new())
+            .add_service(instrument_server);
         let res = match addr {
             ServerAddr::Tcp(addr) => {
                 let serve = router.serve(addr);
