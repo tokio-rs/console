@@ -21,6 +21,7 @@ use tokio::{
 };
 #[cfg(unix)]
 use tokio_stream::wrappers::UnixListenerStream;
+
 use tracing_core::{
     span::{self, Id},
     subscriber::{self, Subscriber},
@@ -908,6 +909,7 @@ impl Server {
     /// [environment variable]: `Builder::with_default_env`
     pub const DEFAULT_PORT: u16 = 6669;
 
+    #[cfg(not(feature = "grpc-web"))]
     /// Starts the gRPC service with the default gRPC settings.
     ///
     /// To configure gRPC server settings before starting the server, use
@@ -932,32 +934,11 @@ impl Server {
         self,
         cors: tower_http::cors::CorsLayer,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let builder = tonic::transport::Server::builder();
-        let addr = self.addr.clone();
-        let ServerParts {
-            instrument_server,
-            aggregator,
-        } = self.into_parts();
-        let aggregate = spawn_named(aggregator.run(), "console::aggregate");
-        let router = builder
+        let builder = tonic::transport::Server::builder()
             .accept_http1(true)
             .layer(cors)
-            .layer(tonic_web::GrpcWebLayer::new())
-            .add_service(instrument_server);
-        let res = match addr {
-            ServerAddr::Tcp(addr) => {
-                let serve = router.serve(addr);
-                spawn_named(serve, "console::serve").await
-            }
-            #[cfg(unix)]
-            ServerAddr::Unix(path) => {
-                let incoming = UnixListener::bind(path)?;
-                let serve = router.serve_with_incoming(UnixListenerStream::new(incoming));
-                spawn_named(serve, "console::serve").await
-            }
-        };
-        aggregate.abort();
-        res?.map_err(Into::into)
+            .layer(tonic_web::GrpcWebLayer::new());
+        self.serve_with(builder).await
     }
 
     /// Starts the gRPC service with the given [`tonic`] gRPC transport server
@@ -972,7 +953,16 @@ impl Server {
     /// [`tonic`]: https://docs.rs/tonic/
     pub async fn serve_with(
         self,
-        mut builder: tonic::transport::Server,
+        #[cfg(not(feature = "grpc-web"))] mut builder: tonic::transport::Server,
+        #[cfg(feature = "grpc-web")] mut builder: tonic::transport::Server<
+            tower::layer::util::Stack<
+                tonic_web::GrpcWebLayer,
+                tower::layer::util::Stack<
+                    tower_http::cors::CorsLayer,
+                    tower::layer::util::Identity,
+                >,
+            >,
+        >,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         let addr = self.addr.clone();
         let ServerParts {
