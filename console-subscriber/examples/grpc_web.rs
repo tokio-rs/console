@@ -11,7 +11,7 @@ use http::header::HeaderName;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 static HELP: &str = r#"
-Example console-instrumented app
+Example console-instrumented app with gRPC-Web support.
 
 USAGE:
     app [OPTIONS]
