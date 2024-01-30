@@ -521,17 +521,15 @@ impl Builder {
                     #[cfg(feature = "grpc-web")]
                     if cors_layer.is_some() {
                         server
-                            .serve_with_grpc_web(cors_layer.unwrap())
+                            .serve_with_grpc_web(
+                                tonic::transport::Server::builder(),
+                                cors_layer.unwrap(),
+                            )
                             .await
-                            .expect("console subscriber server failed")
-                    } else {
-                        server
-                            .serve()
-                            .await
-                            .expect("console subscriber server failed")
+                            .expect("console subscriber server failed");
+                        return;
                     }
 
-                    #[cfg(not(feature = "grpc-web"))]
                     server
                         .serve()
                         .await

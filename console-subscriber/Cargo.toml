@@ -28,10 +28,9 @@ keywords = [
 default = ["env-filter"]
 parking_lot = ["parking_lot_crate", "tracing-subscriber/parking_lot"]
 env-filter = ["tracing-subscriber/env-filter"]
-grpc-web = ["tonic-web", "tower-http", "tower"]
+grpc-web = ["tonic-web", "tower-http"]
 
 [dependencies]
-
 crossbeam-utils = "0.8.7"
 tokio = { version = "^1.21", features = ["sync", "time", "macros", "tracing"] }
 tokio-stream = { version = "0.1", features = ["net"] }
@@ -58,7 +57,6 @@ crossbeam-channel = "0.5"
 # Only for the web feature:
 tonic-web = { version = "0.10.2", optional = true }
 tower-http = { version = "0.4", features = ["cors"], optional = true }
-tower = { version = "0.4", default-features = false, optional = true}
 
 [dev-dependencies]
 tokio = { version = "^1.21", features = ["full", "rt-multi-thread"] }
