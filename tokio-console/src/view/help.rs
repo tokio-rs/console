@@ -21,10 +21,10 @@ impl<'a> HelpView<'a> {
         }
     }
 
-    pub(crate) fn render<B: ratatui::backend::Backend>(
+    pub(crate) fn render(
         &mut self,
         styles: &view::Styles,
-        frame: &mut ratatui::terminal::Frame<B>,
+        frame: &mut ratatui::terminal::Frame,
         _area: layout::Rect,
         _state: &mut State,
     ) {

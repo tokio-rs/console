@@ -23,10 +23,10 @@ pub(crate) trait TableList<const N: usize> {
     const HEADER: &'static [&'static str; N];
     const WIDTHS: &'static [usize; N];
 
-    fn render<B: ratatui::backend::Backend>(
+    fn render(
         state: &mut TableListState<Self, N>,
         styles: &view::Styles,
-        frame: &mut ratatui::terminal::Frame<B>,
+        frame: &mut ratatui::terminal::Frame,
         area: layout::Rect,
         state: &mut state::State,
         cx: Self::Context,
@@ -168,10 +168,10 @@ impl<T: TableList<N>, const N: usize> TableListState<T, N> {
             .unwrap_or_default()
     }
 
-    pub(in crate::view) fn render<B: ratatui::backend::Backend>(
+    pub(in crate::view) fn render(
         &mut self,
         styles: &view::Styles,
-        frame: &mut ratatui::terminal::Frame<B>,
+        frame: &mut ratatui::terminal::Frame,
         area: layout::Rect,
         state: &mut state::State,
         ctx: T::Context,

@@ -217,9 +217,9 @@ impl View {
         input::is_help_toggle(event) || (self.show_help_modal && input::is_esc(event))
     }
 
-    pub(crate) fn render<B: ratatui::backend::Backend>(
+    pub(crate) fn render(
         &mut self,
-        frame: &mut ratatui::terminal::Frame<B>,
+        frame: &mut ratatui::terminal::Frame,
         area: layout::Rect,
         state: &mut State,
     ) {

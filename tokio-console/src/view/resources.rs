@@ -14,7 +14,7 @@ use crate::{
 use ratatui::{
     layout,
     style::{self, Color, Style},
-    text::Spans,
+    text::Line,
     widgets::{Cell, Row, Table},
 };
 
@@ -50,10 +50,10 @@ impl TableList<9> for ResourcesTable {
         Self::HEADER[8].len() + 1,
     ];
 
-    fn render<B: ratatui::backend::Backend>(
+    fn render(
         table_list_state: &mut TableListState<Self, 9>,
         styles: &view::Styles,
-        frame: &mut ratatui::terminal::Frame<B>,
+        frame: &mut ratatui::terminal::Frame,
         area: layout::Rect,
         state: &mut State,
         _: Self::Context,
@@ -114,14 +114,14 @@ impl TableList<9> for ResourcesTable {
                         Cell::from(type_width.update_str(resource.concrete_type()).to_owned()),
                         Cell::from(resource.type_visibility().render(styles)),
                         Cell::from(location_width.update_str(resource.location()).to_owned()),
-                        Cell::from(Spans::from(
+                        Cell::from(
                             resource
                                 .formatted_attributes()
                                 .iter()
                                 .flatten()
                                 .cloned()
-                                .collect::<Vec<_>>(),
-                        )),
+                                .collect::<Line>(),
+                        ),
                     ]);
 
                     if resource.dropped() {
@@ -154,9 +154,9 @@ impl TableList<9> for ResourcesTable {
         .style(header_style);
 
         let table = if table_list_state.sort_descending {
-            Table::new(rows)
+            Table::default().rows(rows)
         } else {
-            Table::new(rows.rev())
+            Table::default().rows(rows.rev())
         };
 
         let block = styles.border_block().title(vec![bold(format!(
