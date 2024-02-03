@@ -183,10 +183,10 @@ impl Connection {
         }
     }
 
-    pub fn render(&self, styles: &crate::view::Styles) -> ratatui::text::Spans {
+    pub fn render(&self, styles: &crate::view::Styles) -> ratatui::text::Line {
         use ratatui::{
             style::{Color, Modifier},
-            text::{Span, Spans},
+            text::{Line, Span},
         };
         let state = match self.state {
             State::Connected { .. } => Span::styled(
@@ -202,7 +202,7 @@ impl Connection {
                 styles.fg(Color::Yellow).add_modifier(Modifier::BOLD),
             ),
         };
-        Spans::from(vec![
+        Line::from(vec![
             Span::raw("connection: "),
             Span::raw(self.target.to_string()),
             Span::raw(" "),

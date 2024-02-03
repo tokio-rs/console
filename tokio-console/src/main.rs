@@ -9,7 +9,7 @@ use futures::{
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::Color,
-    text::{Span, Spans},
+    text::{Line, Span},
     widgets::{Paragraph, Wrap},
 };
 use tokio::sync::{mpsc, watch};
@@ -157,7 +157,7 @@ async fn main() -> color_eyre::Result<()> {
             let mut header_text = conn.render(&view.styles);
             if state.is_paused() {
                 header_text
-                    .0
+                    .spans
                     .push(Span::styled(" PAUSED", view.styles.fg(Color::Red)));
             }
             let dropped_async_ops_state = state.async_ops_state().dropped_events();
@@ -174,13 +174,13 @@ async fn main() -> color_eyre::Result<()> {
                 if dropped_resources_state > 0 {
                     dropped_texts.push(format!("{} resources", dropped_resources_state))
                 }
-                header_text.0.push(Span::styled(
+                header_text.spans.push(Span::styled(
                     format!(" dropped: {}", dropped_texts.join(", ")),
                     view.styles.fg(Color::Red),
                 ));
             }
             let header = Paragraph::new(header_text).wrap(Wrap { trim: true });
-            let view_controls = Paragraph::new(Spans::from(vec![
+            let view_controls = Paragraph::new(Line::from(vec![
                 Span::raw("views: "),
                 bold("t"),
                 Span::raw(" = tasks, "),
