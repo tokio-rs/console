@@ -58,8 +58,8 @@ pub struct Builder {
     pub(super) scheduled_duration_max: Duration,
 
     #[cfg(feature = "grpc-web")]
-    /// Cors layer for grpc-web.
-    cors_layer: Option<tower_http::cors::CorsLayer>,
+    /// Whether to enable the grpc-web support.
+    enable_grpc_web: bool,
 }
 
 impl Default for Builder {
@@ -76,7 +76,7 @@ impl Default for Builder {
             filter_env_var: "RUST_LOG".to_string(),
             self_trace: false,
             #[cfg(feature = "grpc-web")]
-            cors_layer: None,
+            enable_grpc_web: false,
         }
     }
 }
@@ -275,9 +275,9 @@ impl Builder {
     }
 
     #[cfg(feature = "grpc-web")]
-    pub fn with_cors(self, cors: tower_http::cors::CorsLayer) -> Self {
+    pub fn enable_grpc_web(self, enable_grpc_web: bool) -> Self {
         Self {
-            cors_layer: Some(cors),
+            enable_grpc_web,
             ..self
         }
     }
@@ -496,7 +496,7 @@ impl Builder {
 
         let self_trace = self.self_trace;
         #[cfg(feature = "grpc-web")]
-        let cors_layer = self.cors_layer.clone();
+        let enable_grpc_web = self.enable_grpc_web;
 
         let (layer, server) = self.build();
         let filter =
@@ -519,12 +519,9 @@ impl Builder {
                     .expect("console subscriber runtime initialization failed");
                 runtime.block_on(async move {
                     #[cfg(feature = "grpc-web")]
-                    if cors_layer.is_some() {
+                    if enable_grpc_web {
                         server
-                            .serve_with_grpc_web(
-                                tonic::transport::Server::builder(),
-                                cors_layer.unwrap(),
-                            )
+                            .serve_with_grpc_web(tonic::transport::Server::builder())
                             .await
                             .expect("console subscriber server failed");
                         return;

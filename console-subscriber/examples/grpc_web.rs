@@ -4,101 +4,80 @@
 //! ```sh
 //! cargo run --example grpc_web --features grpc-web
 //! ```
-use std::time::Duration;
+use std::{thread, time::Duration};
 
-use console_subscriber::ConsoleLayer;
+use console_subscriber::{ConsoleLayer, ServerParts};
 use http::header::HeaderName;
+use tonic_web::GrpcWebLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
-
-static HELP: &str = r#"
-Example console-instrumented app with gRPC-Web support.
-
-USAGE:
-    app [OPTIONS]
-
-OPTIONS:
-    -h, help    prints this message
-    blocks      Includes a (misbehaving) blocking task
-    burn        Includes a (misbehaving) task that spins CPU with self-wakes
-    coma        Includes a (misbehaving) task that forgets to register a waker
-    noyield     Includes a (misbehaving) task that spawns tasks that never yield
-"#;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 const DEFAULT_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 const DEFAULT_EXPOSED_HEADERS: [&str; 3] =
     ["grpc-status", "grpc-message", "grpc-status-details-bin"];
-const DEFAULT_ALLOW_HEADERS: [&str; 4] =
-    ["x-grpc-web", "content-type", "x-user-agent", "grpc-timeout"];
+const DEFAULT_ALLOW_HEADERS: [&str; 5] = [
+    "x-grpc-web",
+    "content-type",
+    "x-user-agent",
+    "grpc-timeout",
+    "user-agent",
+];
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let cors = CorsLayer::new()
-        .allow_origin(AllowOrigin::mirror_request())
-        .allow_credentials(true)
-        .max_age(DEFAULT_MAX_AGE)
-        .expose_headers(
-            DEFAULT_EXPOSED_HEADERS
-                .iter()
-                .cloned()
-                .map(HeaderName::from_static)
-                .collect::<Vec<HeaderName>>(),
-        )
-        .allow_headers(
-            DEFAULT_ALLOW_HEADERS
-                .iter()
-                .cloned()
-                .map(HeaderName::from_static)
-                .collect::<Vec<HeaderName>>(),
-        );
-    ConsoleLayer::builder()
-        .with_default_env()
-        .with_cors(cors)
-        .init();
-    // spawn optional extras from CLI args
-    // skip first which is command name
-    for opt in std::env::args().skip(1) {
-        match &*opt {
-            "blocks" => {
-                tokio::task::Builder::new()
-                    .name("blocks")
-                    .spawn(double_sleepy(1, 10))
-                    .unwrap();
-            }
-            "coma" => {
-                tokio::task::Builder::new()
-                    .name("coma")
-                    .spawn(std::future::pending::<()>())
-                    .unwrap();
-            }
-            "burn" => {
-                tokio::task::Builder::new()
-                    .name("burn")
-                    .spawn(burn(1, 10))
-                    .unwrap();
-            }
-            "noyield" => {
-                tokio::task::Builder::new()
-                    .name("noyield")
-                    .spawn(no_yield(20))
-                    .unwrap();
-            }
-            "blocking" => {
-                tokio::task::Builder::new()
-                    .name("spawns_blocking")
-                    .spawn(spawn_blocking(5))
-                    .unwrap();
-            }
-            "help" | "-h" => {
-                eprintln!("{}", HELP);
-                return Ok(());
-            }
-            wat => {
-                return Err(
-                    format!("unknown option: {:?}, run with '-h' to see options", wat).into(),
+    let (console_layer, server) = ConsoleLayer::builder().with_default_env().build();
+    thread::Builder::new()
+        .name("subscriber".into())
+        .spawn(move || {
+            // Do not trace anything in this thread.
+            let _subscriber_guard;
+            _subscriber_guard =
+                tracing::subscriber::set_default(tracing_core::subscriber::NoSubscriber::default());
+            // Custom CORS configuration.
+            let cors = CorsLayer::new()
+                .allow_origin(AllowOrigin::mirror_request())
+                .allow_credentials(true)
+                .max_age(DEFAULT_MAX_AGE)
+                .expose_headers(
+                    DEFAULT_EXPOSED_HEADERS
+                        .iter()
+                        .cloned()
+                        .map(HeaderName::from_static)
+                        .collect::<Vec<HeaderName>>(),
                 )
-            }
-        }
-    }
+                .allow_headers(
+                    DEFAULT_ALLOW_HEADERS
+                        .iter()
+                        .cloned()
+                        .map(HeaderName::from_static)
+                        .collect::<Vec<HeaderName>>(),
+                );
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("console subscriber runtime initialization failed");
+            runtime.block_on(async move {
+                let ServerParts {
+                    instrument_server,
+                    aggregator,
+                    ..
+                } = server.into_parts();
+                tokio::spawn(aggregator.run());
+                let router = tonic::transport::Server::builder()
+                    // Accept gRPC-Web requests and enable CORS.
+                    .accept_http1(true)
+                    .layer(cors)
+                    .layer(GrpcWebLayer::new())
+                    .add_service(instrument_server);
+                let serve = router.serve(std::net::SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+                    9999,
+                ));
+                serve.await.expect("console subscriber server failed");
+            });
+        })
+        .expect("console subscriber could not spawn thread");
+    tracing_subscriber::registry().with(console_layer).init();
 
     let task1 = tokio::task::Builder::new()
         .name("task1")
@@ -140,52 +119,4 @@ async fn wait(seconds: u64) {
     tracing::debug!("waiting...");
     tokio::time::sleep(Duration::from_secs(seconds)).await;
     tracing::trace!("done!");
-}
-
-#[tracing::instrument]
-async fn double_sleepy(min: u64, max: u64) {
-    loop {
-        for i in min..max {
-            // woops!
-            std::thread::sleep(Duration::from_secs(i));
-            tokio::time::sleep(Duration::from_secs(max - i)).await;
-        }
-    }
-}
-
-#[tracing::instrument]
-async fn burn(min: u64, max: u64) {
-    loop {
-        for i in min..max {
-            for _ in 0..i {
-                tokio::task::yield_now().await;
-            }
-            tokio::time::sleep(Duration::from_secs(i - min)).await;
-        }
-    }
-}
-
-#[tracing::instrument]
-async fn no_yield(seconds: u64) {
-    loop {
-        let handle = tokio::task::Builder::new()
-            .name("greedy")
-            .spawn(async move {
-                std::thread::sleep(Duration::from_secs(seconds));
-            })
-            .expect("Couldn't spawn greedy task");
-
-        _ = handle.await;
-    }
-}
-
-#[tracing::instrument]
-async fn spawn_blocking(seconds: u64) {
-    loop {
-        let seconds = seconds;
-        _ = tokio::task::spawn_blocking(move || {
-            std::thread::sleep(Duration::from_secs(seconds));
-        })
-        .await;
-    }
 }

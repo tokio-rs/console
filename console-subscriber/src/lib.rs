@@ -923,42 +923,7 @@ impl Server {
     /// ```
     /// [`serve_with`]: Server::serve_with
     pub async fn serve(self) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-        self.serve_with(tonic::transport::Server::builder()).await
-    }
-
-    #[cfg(feature = "grpc-web")]
-    /// Starts the gRPC service with the default gRPC settings and gRPC-Web
-    /// support.
-    pub async fn serve_with_grpc_web(
-        self,
-        builder: tonic::transport::Server,
-        cors: tower_http::cors::CorsLayer,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let addr = self.addr.clone();
-        let ServerParts {
-            instrument_server,
-            aggregator,
-        } = self.into_parts();
-        let router = builder
-            .accept_http1(true)
-            .layer(cors)
-            .layer(tonic_web::GrpcWebLayer::new())
-            .add_service(instrument_server);
-        let aggregate = spawn_named(aggregator.run(), "console::aggregate");
-        let res = match addr {
-            ServerAddr::Tcp(addr) => {
-                let serve = router.serve(addr);
-                spawn_named(serve, "console::serve").await
-            }
-            #[cfg(unix)]
-            ServerAddr::Unix(path) => {
-                let incoming = UnixListener::bind(path)?;
-                let serve = router.serve_with_incoming(UnixListenerStream::new(incoming));
-                spawn_named(serve, "console::serve").await
-            }
-        };
-        aggregate.abort();
-        res?.map_err(Into::into)
+        self.serve_with(tonic::transport::Server::default()).await
     }
 
     /// Starts the gRPC service with the given [`tonic`] gRPC transport server
@@ -982,6 +947,38 @@ impl Server {
         } = self.into_parts();
         let aggregate = spawn_named(aggregator.run(), "console::aggregate");
         let router = builder.add_service(instrument_server);
+        let res = match addr {
+            ServerAddr::Tcp(addr) => {
+                let serve = router.serve(addr);
+                spawn_named(serve, "console::serve").await
+            }
+            #[cfg(unix)]
+            ServerAddr::Unix(path) => {
+                let incoming = UnixListener::bind(path)?;
+                let serve = router.serve_with_incoming(UnixListenerStream::new(incoming));
+                spawn_named(serve, "console::serve").await
+            }
+        };
+        aggregate.abort();
+        res?.map_err(Into::into)
+    }
+
+    #[cfg(feature = "grpc-web")]
+    /// Starts the gRPC service with the default gRPC settings and gRPC-Web
+    /// support.
+    pub async fn serve_with_grpc_web(
+        self,
+        builder: tonic::transport::Server,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+        let addr = self.addr.clone();
+        let ServerParts {
+            instrument_server,
+            aggregator,
+        } = self.into_parts();
+        let router = builder
+            .accept_http1(true)
+            .add_service(tonic_web::enable(instrument_server));
+        let aggregate = spawn_named(aggregator.run(), "console::aggregate");
         let res = match addr {
             ServerAddr::Tcp(addr) => {
                 let serve = router.serve(addr);
