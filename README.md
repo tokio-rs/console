@@ -332,8 +332,13 @@ Options:
 
 #### running the console on windows
 
-For best results on windows use a utf-8 enabled Terminal such as the new Windows [Terminal](https://learn.microsoft.com/en-us/windows/terminal/install).
-In order to get graph output and other visual features to work, make sure to explicitly call tokio-console with the utf-8 language flag set.
+The console uses the UTF-8 character set to display graphs and other visual
+features in the terminal. In order to display this rich terminal UI on Windows,
+it's necessary to use a UTF-8-enabled terminal emulator, such as the new
+[Windows Terminal](https://learn.microsoft.com/en-us/windows/terminal/install).
+
+If you're using a terminal that supports UTF-8, make sure to explicitly call
+tokio-console with the UTF-8 language flag set: 
 ```
 tokio-console --lang en_US.UTF-8
 ```
