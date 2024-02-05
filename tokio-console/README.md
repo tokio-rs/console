@@ -97,11 +97,24 @@ tokio-console http://my.instrumented.application.local:6669
 
 See [here][cli-ref] for a complete list of all command-line arguments.
 
-Tokio Console has a numnber of different views:
+Tokio Console has a number of different views:
 * [Tasks List](#tasks-list)
 * [Task Details](#task-details)
 * [Resources List](#resources-list)
 * [Resource Details](#resource-details)
+
+#### running the console on windows
+
+The console uses the UTF-8 character set to display graphs and other visual
+features in the terminal. In order to display this rich terminal UI on Windows,
+it's necessary to use a UTF-8-enabled terminal emulator, such as the new
+[Windows Terminal](https://learn.microsoft.com/en-us/windows/terminal/install).
+
+If you're using a terminal that supports UTF-8, make sure to explicitly call
+tokio-console with the UTF-8 language flag set: 
+```
+tokio-console --lang en_US.UTF-8
+```
 
 ### Tasks List
 
@@ -213,19 +226,6 @@ behavior. See [the documentation][cfg-ref] for details.
 [`tokio::sync::Semaphore`]: https://docs.rs/tokio/latest/tokio/sync/struct.Semaphore.html
 [cli-ref]: https://docs.rs/tokio-console/latest/tokio_console/config_reference/index.html#command-line-arguments
 [cfg-ref]: https://docs.rs/tokio-console/latest/tokio_console/config_reference/index.html#configuration-file
-
-#### running the console on windows
-
-The console uses the UTF-8 character set to display graphs and other visual
-features in the terminal. In order to display this rich terminal UI on Windows,
-it's necessary to use a UTF-8-enabled terminal emulator, such as the new
-[Windows Terminal](https://learn.microsoft.com/en-us/windows/terminal/install).
-
-If you're using a terminal that supports UTF-8, make sure to explicitly call
-tokio-console with the UTF-8 language flag set: 
-```
-tokio-console --lang en_US.UTF-8
-```
 
 ## Getting Help
 
