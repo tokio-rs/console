@@ -40,13 +40,14 @@ system consists of two primary components:
 This crate is the primary consumer of `tokio-console` telemetry, a command-line
 application that provides an interactive debugging interface.
 
-[wire format]: https://crates.io/crates/console-api
 [subscriber]: https://crates.io/crates/console-subscriber
+
 ## Getting Started
 
 To use the console to monitor and debug a program, it must be instrumented to
 emit the data the console consumes. Then, the `tokio-console` CLI application
 can be used to connect to the application and monitor its operation.
+
 ### Instrumenting the Application
 
 Before the console can connect to an application, it must first be instrumented
@@ -57,12 +58,12 @@ to record `tokio-console` telemetry. The easiest way  to do this is [using the
 emit [`tracing`] data in a format that the console can record. For programs that
 use the [Tokio] runtime, this means that:
 
-- Tokio's [unstable features][unstable] must be enabled. See [the `console-subscriber`
+* Tokio's [unstable features][unstable] must be enabled. See [the `console-subscriber`
   documentation][unstable] for details.
-- A [compatible Tokio version][versions] must be used. Tokio v1.0 or greater is required
+* A [compatible Tokio version][versions] must be used. Tokio v1.0 or greater is required
   to use the console, and some features are only available in later versions.
   See [the `console-subscriber` documentation][versions] for details.
- 
+
 [`tracing`]: https://crates.io/crates/tracing
 [unstable]: https://docs.rs/console-subscriber/0.1/console_subscriber/#enabling-tokio-instrumentation
 [versions]: https://docs.rs/console-subscriber/0.1/console_subscriber/#required-tokio-versions
@@ -91,6 +92,7 @@ tokio-console http://192.168.0.42:9090
 ```
 
 A DNS name can also be provided as the target address:
+
 ```shell
 tokio-console http://my.instrumented.application.local:6669
 ```
@@ -98,6 +100,7 @@ tokio-console http://my.instrumented.application.local:6669
 See [here][cli-ref] for a complete list of all command-line arguments.
 
 Tokio Console has a numnber of different views:
+
 * [Tasks List](#tasks-list)
 * [Task Details](#task-details)
 * [Resources List](#resources-list)
@@ -209,8 +212,6 @@ behavior. See [the documentation][cfg-ref] for details.
 [Tokio]: https://tokio.rs
 [asynchronous tasks]: https://tokio.rs/tokio/tutorial/spawning#tasks
 [resources]: https://tokio.rs/tokio/tutorial/async#async-fn-as-a-future
-[`tokio::sync::oneshot`]: https://docs.rs/tokio/latest/tokio/sync/oneshot/index.html
-[`tokio::sync::Semaphore`]: https://docs.rs/tokio/latest/tokio/sync/struct.Semaphore.html
 [cli-ref]: https://docs.rs/tokio-console/latest/tokio_console/config_reference/index.html#command-line-arguments
 [cfg-ref]: https://docs.rs/tokio-console/latest/tokio_console/config_reference/index.html#configuration-file
 
@@ -236,7 +237,7 @@ console project.
 ## Supported Rust Versions
 
 The Tokio console is built against the latest stable release. The minimum
-supported version is 1.64. The current Tokio console version is not guaranteed
+supported version is 1.70. The current Tokio console version is not guaranteed
 to build on Rust versions earlier than the minimum supported version.
 
 ## License
