@@ -294,8 +294,8 @@ impl Aggregator {
                     metadata: (*self.all_metadata).clone(),
                 }),
             };
-            let el = update.encoded_len();
-            if el < MAX_MESSAGE_SIZE {
+            let message_size = update.encoded_len();
+            if message_size < MAX_MESSAGE_SIZE {
                 // normal case
                 break Some(update);
             }
@@ -305,7 +305,7 @@ impl Aggregator {
             self.cleanup_closed();
             tracing::debug!(
                 retention = ?self.retention,
-                message_size = el,
+                message_size,
                 max_message_size = MAX_MESSAGE_SIZE,
                 "Message too big, reduced retention",
             );
