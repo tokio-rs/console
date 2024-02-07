@@ -65,19 +65,14 @@ async fn main() -> color_eyre::Result<()> {
     let (update_tx, update_rx) = watch::channel(UpdateKind::Other);
     // A channel to send the task details update stream (no need to keep outdated details in the memory)
     let (details_tx, mut details_rx) = mpsc::channel::<TaskDetails>(2);
-
     let warnings = match args.allow_warnings {
         Some(allow_warnings) => match allow_warnings {
-            AllowedWarnings::All => {
-                vec![]
-            }
-            AllowedWarnings::Some(allow_warnings) => {
-                let warnings = args
-                    .warnings
-                    .iter()
-                    .filter(|lint| !allow_warnings.contains(lint));
-                warnings.collect::<Vec<_>>()
-            }
+            AllowedWarnings::All => vec![],
+            AllowedWarnings::Some(allow_warnings) => args
+                .warnings
+                .iter()
+                .filter(|lint| !allow_warnings.contains(lint))
+                .collect::<Vec<_>>(),
         },
         None => args.warnings.iter().collect::<Vec<_>>(),
     };
