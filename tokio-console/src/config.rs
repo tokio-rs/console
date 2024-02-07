@@ -83,7 +83,7 @@ pub struct Config {
     /// If this is set to `all`, all warnings are allowed.
     ///
     /// [possible values: all, self-wakes, lost-waker, never-yielded]
-    #[clap(long = "allow", short = 'A', value_delimiter = ',', num_args = 1..)]
+    #[clap(long = "allow", short = 'A', num_args = 1..)]
     pub(crate) allow_warnings: Option<AllowedWarnings>,
 
     /// Path to a directory to write the console's internal logs to.
