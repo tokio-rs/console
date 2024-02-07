@@ -6,6 +6,7 @@ use clap::{ArgAction, ArgGroup, CommandFactory, Parser as Clap, Subcommand, Valu
 use clap_complete::Shell;
 use color_eyre::eyre::WrapErr;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
 use std::ops::Not;
@@ -77,8 +78,8 @@ pub struct Config {
     /// * `lost-waker` -- Warns when a task is dropped without being woken.
     ///
     /// * `never-yielded` -- Warns when a task has never yielded.
-    #[clap(long = "allow", short = 'A', value_delimiter = ',', num_args = 1..)]
-    pub(crate) allow_warnings: Vec<KnownWarnings>,
+    #[clap(long = "allow", short = 'A')]
+    pub(crate) allow_warnings: AllowedWarnings,
 
     /// Path to a directory to write the console's internal logs to.
     ///
@@ -139,6 +140,17 @@ pub(crate) enum KnownWarnings {
     NeverYielded,
 }
 
+impl From<&str> for KnownWarnings {
+    fn from(s: &str) -> Self {
+        match s {
+            "self-wakes" => KnownWarnings::SelfWakes,
+            "lost-waker" => KnownWarnings::LostWaker,
+            "never-yielded" => KnownWarnings::NeverYielded,
+            _ => panic!("unknown warning: {}", s),
+        }
+    }
+}
+
 impl From<&KnownWarnings> for warnings::Linter<Task> {
     fn from(warning: &KnownWarnings) -> Self {
         match warning {
@@ -166,6 +178,45 @@ impl KnownWarnings {
             KnownWarnings::LostWaker,
             KnownWarnings::NeverYielded,
         ]
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub(crate) enum AllowedWarnings {
+    All,
+    Some(BTreeSet<KnownWarnings>),
+}
+
+impl From<&str> for AllowedWarnings {
+    fn from(s: &str) -> Self {
+        match s {
+            "all" => AllowedWarnings::All,
+            _ => {
+                let warnings = s
+                    .split(',')
+                    .map(KnownWarnings::from)
+                    .collect::<BTreeSet<_>>();
+                AllowedWarnings::Some(warnings)
+            }
+        }
+    }
+}
+
+impl AllowedWarnings {
+    fn default() -> Self {
+        AllowedWarnings::Some(BTreeSet::default())
+    }
+
+    fn merge(&self, allowed: &Self) -> Self {
+        match (self, allowed) {
+            (AllowedWarnings::All, _) => AllowedWarnings::All,
+            (_, AllowedWarnings::All) => AllowedWarnings::All,
+            (AllowedWarnings::Some(a), AllowedWarnings::Some(b)) => {
+                let mut warnings = a.clone();
+                warnings.extend(b.clone());
+                AllowedWarnings::Some(warnings)
+            }
+        }
     }
 }
 
@@ -312,7 +363,7 @@ struct ConfigFile {
     default_target_addr: Option<String>,
     log: Option<String>,
     warnings: Vec<KnownWarnings>,
-    allow_warnings: Vec<KnownWarnings>,
+    allow_warnings: AllowedWarnings,
     log_directory: Option<PathBuf>,
     retention: Option<RetainFor>,
     charset: Option<CharsetConfig>,
@@ -508,13 +559,7 @@ impl Config {
                 warns.dedup();
                 warns
             },
-            allow_warnings: {
-                let mut allow_warnings: Vec<KnownWarnings> = other.allow_warnings;
-                allow_warnings.extend(self.allow_warnings);
-                allow_warnings.sort_unstable();
-                allow_warnings.dedup();
-                allow_warnings
-            },
+            allow_warnings: { self.allow_warnings.merge(&other.allow_warnings) },
             retain_for: other.retain_for.or(self.retain_for),
             view_options: self.view_options.merge_with(other.view_options),
             subcmd: other.subcmd.or(self.subcmd),
@@ -530,7 +575,7 @@ impl Default for Config {
                 filter::Targets::new().with_default(filter::LevelFilter::OFF),
             )),
             warnings: KnownWarnings::default_enabled_warnings(),
-            allow_warnings: Vec::default(),
+            allow_warnings: AllowedWarnings::default(),
             log_directory: Some(default_log_directory()),
             retain_for: Some(RetainFor::default()),
             view_options: ViewOptions::default(),

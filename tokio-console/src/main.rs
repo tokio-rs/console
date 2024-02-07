@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use color_eyre::{eyre::eyre, Help, SectionExt};
 use console_api::tasks::TaskDetails;
 use state::State;
@@ -17,6 +15,7 @@ use ratatui::{
 use tokio::sync::{mpsc, watch};
 
 use crate::{
+    config::AllowedWarnings,
     input::{Event, KeyEvent, KeyEventKind},
     view::{bold, UpdateKind},
 };
@@ -67,14 +66,21 @@ async fn main() -> color_eyre::Result<()> {
     // A channel to send the task details update stream (no need to keep outdated details in the memory)
     let (details_tx, mut details_rx) = mpsc::channel::<TaskDetails>(2);
 
-    let allow_warnings = args.allow_warnings.iter().collect::<BTreeSet<_>>();
-    let warnings = args
-        .warnings
-        .iter()
-        .filter(|lint| !allow_warnings.contains(lint));
+    let warnings = match args.allow_warnings {
+        AllowedWarnings::All => {
+            vec![]
+        }
+        AllowedWarnings::Some(allow_warnings) => {
+            let warnings = args
+                .warnings
+                .iter()
+                .filter(|lint| !allow_warnings.contains(lint));
+            warnings.collect()
+        }
+    };
 
     let mut state = State::default()
-        .with_task_linters(warnings.map(|lint| lint.into()))
+        .with_task_linters(warnings.into_iter().map(|lint| lint.into()))
         .with_retain_for(retain_for);
     let mut input = Box::pin(input::EventStream::new().try_filter(|event| {
         future::ready(!matches!(
