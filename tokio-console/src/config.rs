@@ -79,7 +79,7 @@ pub struct Config {
     ///
     /// * `never-yielded` -- Warns when a task has never yielded.
     #[clap(long = "allow", short = 'A')]
-    pub(crate) allow_warnings: AllowedWarnings,
+    pub(crate) allow_warnings: Option<AllowedWarnings>,
 
     /// Path to a directory to write the console's internal logs to.
     ///
@@ -203,10 +203,6 @@ impl From<&str> for AllowedWarnings {
 }
 
 impl AllowedWarnings {
-    fn default() -> Self {
-        AllowedWarnings::Some(BTreeSet::default())
-    }
-
     fn merge(&self, allowed: &Self) -> Self {
         match (self, allowed) {
             (AllowedWarnings::All, _) => AllowedWarnings::All,
@@ -363,7 +359,7 @@ struct ConfigFile {
     default_target_addr: Option<String>,
     log: Option<String>,
     warnings: Vec<KnownWarnings>,
-    allow_warnings: AllowedWarnings,
+    allow_warnings: Option<AllowedWarnings>,
     log_directory: Option<PathBuf>,
     retention: Option<RetainFor>,
     charset: Option<CharsetConfig>,
@@ -559,7 +555,12 @@ impl Config {
                 warns.dedup();
                 warns
             },
-            allow_warnings: { self.allow_warnings.merge(&other.allow_warnings) },
+            allow_warnings: {
+                match (self.allow_warnings, other.allow_warnings) {
+                    (Some(a), Some(b)) => Some(a.merge(&b)),
+                    (a, b) => a.or(b),
+                }
+            },
             retain_for: other.retain_for.or(self.retain_for),
             view_options: self.view_options.merge_with(other.view_options),
             subcmd: other.subcmd.or(self.subcmd),
@@ -575,7 +576,7 @@ impl Default for Config {
                 filter::Targets::new().with_default(filter::LevelFilter::OFF),
             )),
             warnings: KnownWarnings::default_enabled_warnings(),
-            allow_warnings: AllowedWarnings::default(),
+            allow_warnings: None,
             log_directory: Some(default_log_directory()),
             retain_for: Some(RetainFor::default()),
             view_options: ViewOptions::default(),

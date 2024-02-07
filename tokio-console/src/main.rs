@@ -67,16 +67,19 @@ async fn main() -> color_eyre::Result<()> {
     let (details_tx, mut details_rx) = mpsc::channel::<TaskDetails>(2);
 
     let warnings = match args.allow_warnings {
-        AllowedWarnings::All => {
-            vec![]
-        }
-        AllowedWarnings::Some(allow_warnings) => {
-            let warnings = args
-                .warnings
-                .iter()
-                .filter(|lint| !allow_warnings.contains(lint));
-            warnings.collect()
-        }
+        Some(allow_warnings) => match allow_warnings {
+            AllowedWarnings::All => {
+                vec![]
+            }
+            AllowedWarnings::Some(allow_warnings) => {
+                let warnings = args
+                    .warnings
+                    .iter()
+                    .filter(|lint| !allow_warnings.contains(lint));
+                warnings.collect::<Vec<_>>()
+            }
+        },
+        None => args.warnings.iter().collect::<Vec<_>>(),
     };
 
     let mut state = State::default()

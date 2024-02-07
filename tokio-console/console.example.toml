@@ -5,7 +5,6 @@ warnings = [
     'lost-waker',
     'never-yielded',
 ]
-allow_warnings = []
 log_directory = '/tmp/tokio-console/logs'
 retention = '6s'
 
