@@ -73,13 +73,15 @@ pub struct Config {
     ///
     /// Each warning is specified by its name, which is one of:
     ///
+    /// * `all` -- Allow all warnings.
+    ///
     /// * `self-wakes` -- Warns when a task wakes itself more than a certain percentage of its total wakeups.
     ///                  Default percentage is 50%.
     ///
     /// * `lost-waker` -- Warns when a task is dropped without being woken.
     ///
     /// * `never-yielded` -- Warns when a task has never yielded.
-    #[clap(long = "allow", short = 'A', value_delimiter = ',', num_args = 1..)]
+    #[clap(long = "allow", short = 'A', value_delimiter = ',', num_args = 1.., value_parser = PossibleValuesParser::new(AllowedWarnings::possible_values()))]
     pub(crate) allow_warnings: Option<AllowedWarnings>,
 
     /// Path to a directory to write the console's internal logs to.
@@ -209,6 +211,11 @@ impl FromStr for AllowedWarnings {
 }
 
 impl AllowedWarnings {
+    fn possible_values() -> &'static [&'static str] {
+        // NOTE: Please keep this list in sync with the `KnownWarnings` enum.
+        &["all", "self-wakes", "lost-waker", "never-yielded"]
+    }
+
     fn merge(&self, allowed: &Self) -> Self {
         match (self, allowed) {
             (AllowedWarnings::All, _) => AllowedWarnings::All,
