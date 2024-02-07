@@ -141,13 +141,15 @@ pub(crate) enum KnownWarnings {
     NeverYielded,
 }
 
-impl From<&str> for KnownWarnings {
-    fn from(s: &str) -> Self {
+impl FromStr for KnownWarnings {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "self-wakes" => KnownWarnings::SelfWakes,
-            "lost-waker" => KnownWarnings::LostWaker,
-            "never-yielded" => KnownWarnings::NeverYielded,
-            _ => panic!("unknown warning: {}", s),
+            "self-wakes" => Ok(KnownWarnings::SelfWakes),
+            "lost-waker" => Ok(KnownWarnings::LostWaker),
+            "never-yielded" => Ok(KnownWarnings::NeverYielded),
+            _ => Err(format!("unknown warning: {}", s)),
         }
     }
 }
@@ -188,16 +190,19 @@ pub(crate) enum AllowedWarnings {
     Some(BTreeSet<KnownWarnings>),
 }
 
-impl From<&str> for AllowedWarnings {
-    fn from(s: &str) -> Self {
+impl FromStr for AllowedWarnings {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "all" => AllowedWarnings::All,
+            "all" => Ok(AllowedWarnings::All),
             _ => {
                 let warnings = s
                     .split(',')
-                    .map(KnownWarnings::from)
-                    .collect::<BTreeSet<_>>();
-                AllowedWarnings::Some(warnings)
+                    .map(|s| s.parse::<KnownWarnings>())
+                    .collect::<Result<BTreeSet<_>, _>>()
+                    .map_err(|err| format!("failed to parse warning: {}", err))?;
+                Ok(AllowedWarnings::Some(warnings))
             }
         }
     }
