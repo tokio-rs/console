@@ -236,8 +236,6 @@ Options:
           
           Each warning is specified by its name, which is one of:
           
-          * `all` -- Allow all warnings.
-          
           * `self-wakes` -- Warns when a task wakes itself more than a
           certain percentage of its total wakeups. Default percentage is
           50%.
@@ -246,6 +244,8 @@ Options:
           woken.
           
           * `never-yielded` -- Warns when a task has never yielded.
+          
+          If this is set to `all`, all warnings are allowed.
           
           [possible values: all, self-wakes, lost-waker, never-yielded]
 
