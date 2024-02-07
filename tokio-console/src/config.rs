@@ -81,7 +81,9 @@ pub struct Config {
     /// * `never-yielded` -- Warns when a task has never yielded.
     ///
     /// If this is set to `all`, all warnings are allowed.
-    #[clap(long = "allow", short = 'A', value_delimiter = ',', num_args = 1.., value_parser = PossibleValuesParser::new(AllowedWarnings::possible_values()))]
+    ///
+    /// [possible values: all, self-wakes, lost-waker, never-yielded]
+    #[clap(long = "allow", short = 'A', value_delimiter = ',', num_args = 1..)]
     pub(crate) allow_warnings: Option<AllowedWarnings>,
 
     /// Path to a directory to write the console's internal logs to.
@@ -211,11 +213,6 @@ impl FromStr for AllowedWarnings {
 }
 
 impl AllowedWarnings {
-    fn possible_values() -> &'static [&'static str] {
-        // NOTE: Please keep this list in sync with the `KnownWarnings` enum.
-        &["all", "self-wakes", "lost-waker", "never-yielded"]
-    }
-
     fn merge(&self, allowed: &Self) -> Self {
         match (self, allowed) {
             (AllowedWarnings::All, _) => AllowedWarnings::All,
