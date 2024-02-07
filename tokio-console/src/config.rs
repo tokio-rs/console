@@ -63,7 +63,6 @@ pub struct Config {
     /// * `lost-waker` -- Warns when a task is dropped without being woken.
     ///
     /// * `never-yielded` -- Warns when a task has never yielded.
-    ///
     #[clap(long = "warn", short = 'W', value_delimiter = ',', num_args = 1..)]
     #[clap(default_values_t = KnownWarnings::default_enabled_warnings())]
     pub(crate) warnings: Vec<KnownWarnings>,
@@ -73,12 +72,14 @@ pub struct Config {
     /// This is a comma-separated list of warnings to allow.
     ///
     /// Each warning is specified by its name, which is one of:
+    ///
     /// * `self-wakes` -- Warns when a task wakes itself more than a certain percentage of its total wakeups.
     ///                  Default percentage is 50%.
+    ///
     /// * `lost-waker` -- Warns when a task is dropped without being woken.
     ///
     /// * `never-yielded` -- Warns when a task has never yielded.
-    #[clap(long = "allow", short = 'A')]
+    #[clap(long = "allow", short = 'A', value_delimiter = ',', num_args = 1..)]
     pub(crate) allow_warnings: Option<AllowedWarnings>,
 
     /// Path to a directory to write the console's internal logs to.

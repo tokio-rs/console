@@ -234,15 +234,16 @@ Options:
           
           This is a comma-separated list of warnings to allow.
           
-          Each warning is specified by its name, which is one of: *
-          `self-wakes` -- Warns when a task wakes itself more than a
+          Each warning is specified by its name, which is one of:
+          
+          * `self-wakes` -- Warns when a task wakes itself more than a
           certain percentage of its total wakeups. Default percentage is
-          50%. * `lost-waker` -- Warns when a task is dropped without
-          being woken.
+          50%.
+          
+          * `lost-waker` -- Warns when a task is dropped without being
+          woken.
           
           * `never-yielded` -- Warns when a task has never yielded.
-          
-          [possible values: self-wakes, lost-waker, never-yielded]
 
       --log-dir <LOG_DIRECTORY>
           Path to a directory to write the console's internal logs to.
