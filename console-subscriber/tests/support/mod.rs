@@ -8,6 +8,8 @@ use subscriber::run_test;
 
 pub(crate) use subscriber::MAIN_TASK_NAME;
 pub(crate) use task::ExpectedTask;
+#[allow(unused_imports)]
+pub(crate) use task::TaskState;
 use tokio::task::JoinHandle;
 
 /// Assert that an `expected_task` is recorded by a console-subscriber
