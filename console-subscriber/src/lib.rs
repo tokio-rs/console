@@ -965,6 +965,101 @@ impl Server {
     #[cfg(feature = "grpc-web")]
     /// Starts the gRPC service with the default gRPC settings and gRPC-Web
     /// support.
+    ///
+    /// # Examples
+    ///
+    /// To serve the instrument server with gRPC-Web support with the default
+    /// settings:
+    ///
+    /// ```rust
+    /// # async fn docs() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    /// # let (_, server) = console_subscriber::ConsoleLayer::new();
+    /// server.serve_with_grpc_web(tonic::transport::Server::default()).await
+    /// # }
+    /// ```
+    ///
+    /// To serve the instrument server with gRPC-Web support and a custom CORS configuration, use the
+    /// following code:
+    ///
+    /// ```rust
+    /// # use std::{thread, time::Duration};
+    /// #
+    /// use console_subscriber::{ConsoleLayer, ServerParts};
+    /// use tonic_web::GrpcWebLayer;
+    /// use tower_web::cors::{CorsLayer, AllowOrigin};
+    /// use http::header::HeaderName;
+    /// # use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+    /// # const DEFAULT_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
+    /// # const DEFAULT_EXPOSED_HEADERS: [&str; 3] =
+    /// #    ["grpc-status", "grpc-message", "grpc-status-details-bin"];
+    /// # const DEFAULT_ALLOW_HEADERS: [&str; 5] = [
+    /// #    "x-grpc-web",
+    /// #    "content-type",
+    /// #    "x-user-agent",
+    /// #    "grpc-timeout",
+    /// #    "user-agent",
+    /// # ];
+    ///
+    /// let (console_layer, server) = ConsoleLayer::builder().with_default_env().build();
+    /// # thread::Builder::new()
+    /// #    .name("subscriber".into())
+    /// #    .spawn(move || {
+    /// // Customize the CORS configuration.
+    /// let cors = CorsLayer::new()
+    ///     .allow_origin(AllowOrigin::mirror_request())
+    ///     .allow_credentials(true)
+    ///     .max_age(DEFAULT_MAX_AGE)
+    ///     .expose_headers(
+    ///         DEFAULT_EXPOSED_HEADERS
+    ///             .iter()
+    ///             .cloned()
+    ///             .map(HeaderName::from_static)
+    ///             .collect::<Vec<HeaderName>>(),
+    ///     )
+    ///     .allow_headers(
+    ///         DEFAULT_ALLOW_HEADERS
+    ///             .iter()
+    ///             .cloned()
+    ///             .map(HeaderName::from_static)
+    ///             .collect::<Vec<HeaderName>>(),
+    ///     );
+    /// #       let runtime = tokio::runtime::Builder::new_current_thread()
+    /// #           .enable_all()
+    /// #           .build()
+    /// #           .expect("console subscriber runtime initialization failed");
+    /// #       runtime.block_on(async move {
+    ///
+    /// let ServerParts {
+    ///     instrument_server,
+    ///     aggregator,
+    ///     ..
+    /// } = server.into_parts();
+    /// tokio::spawn(aggregator.run());
+    ///
+    /// // Serve the instrument server with gRPC-Web support and the CORS configuration.
+    /// let router = tonic::transport::Server::builder()
+    ///     .accept_http1(true)
+    ///     .layer(cors)
+    ///     .layer(GrpcWebLayer::new())
+    ///     .add_service(instrument_server);
+    /// let serve = router.serve(std::net::SocketAddr::new(
+    ///     std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+    /// // 6669 is a restricted port on Chrome, so we cannot use it. We use a different port instead.
+    ///     9999,
+    /// ));
+    ///
+    /// // Finally, spawn the server.
+    /// serve.await.expect("console subscriber server failed");
+    /// #       });
+    /// #   })
+    /// #   .expect("console subscriber could not spawn thread");
+    /// # tracing_subscriber::registry().with(console_layer).init();
+    /// ```
+    ///
+    /// For a comprehensive understanding and complete code example,
+    /// please refer to the `grpc-web` example in the examples directory.
+    ///
+    /// [`Router::serve`]: fn@tonic::transport::server::Router::serve
     pub async fn serve_with_grpc_web(
         self,
         builder: tonic::transport::Server,

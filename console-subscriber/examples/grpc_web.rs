@@ -70,6 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                     .add_service(instrument_server);
                 let serve = router.serve(std::net::SocketAddr::new(
                     std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+                    // 6669 is a restricted port on Chrome, so we cannot use it. We use a different port instead.
                     9999,
                 ));
                 serve.await.expect("console subscriber server failed");
