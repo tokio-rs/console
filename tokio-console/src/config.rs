@@ -187,11 +187,14 @@ impl KnownWarnings {
         ]
     }
 }
-
+/// An enum representing the types of warnings that are allowed.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub(crate) enum AllowedWarnings {
+    /// Represents the case where all warnings are allowed.
     All,
-    Some(BTreeSet<KnownWarnings>),
+    /// Represents the case where only some specific warnings are allowed.
+    /// The allowed warnings are stored in a `BTreeSet` of `KnownWarnings`.
+    Explicit(BTreeSet<KnownWarnings>),
 }
 
 impl FromStr for AllowedWarnings {
@@ -206,7 +209,7 @@ impl FromStr for AllowedWarnings {
                     .map(|s| s.parse::<KnownWarnings>())
                     .collect::<Result<BTreeSet<_>, _>>()
                     .map_err(|err| format!("failed to parse warning: {}", err))?;
-                Ok(AllowedWarnings::Some(warnings))
+                Ok(AllowedWarnings::Explicit(warnings))
             }
         }
     }
@@ -217,10 +220,10 @@ impl AllowedWarnings {
         match (self, allowed) {
             (AllowedWarnings::All, _) => AllowedWarnings::All,
             (_, AllowedWarnings::All) => AllowedWarnings::All,
-            (AllowedWarnings::Some(a), AllowedWarnings::Some(b)) => {
+            (AllowedWarnings::Explicit(a), AllowedWarnings::Explicit(b)) => {
                 let mut warnings = a.clone();
                 warnings.extend(b.clone());
-                AllowedWarnings::Some(warnings)
+                AllowedWarnings::Explicit(warnings)
             }
         }
     }
