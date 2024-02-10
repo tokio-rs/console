@@ -30,8 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .name("subscriber".into())
         .spawn(move || {
             // Do not trace anything in this thread.
-            let _subscriber_guard;
-            _subscriber_guard =
+            let _subscriber_guard =
                 tracing::subscriber::set_default(tracing_core::subscriber::NoSubscriber::default());
             // Custom CORS configuration.
             let cors = CorsLayer::new()
