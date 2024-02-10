@@ -148,6 +148,10 @@ impl Warn<Task> for SelfWakePercent {
     }
 
     fn check(&self, task: &Task) -> Warning {
+        // Don't fire warning for tasks that are not async
+        if task.is_blocking() {
+            return Warning::Ok;
+        }
         let self_wakes = task.self_wake_percent();
         if self_wakes > self.min_percent {
             Warning::Warn
@@ -174,6 +178,10 @@ impl Warn<Task> for LostWaker {
     }
 
     fn check(&self, task: &Task) -> Warning {
+        // Don't fire warning for tasks that are not async
+        if task.is_blocking() {
+            return Warning::Ok;
+        }
         if !task.is_completed()
             && task.waker_count() == 0
             && !task.is_running()
@@ -222,6 +230,10 @@ impl Warn<Task> for NeverYielded {
     }
 
     fn check(&self, task: &Task) -> Warning {
+        // Don't fire warning for tasks that are not async
+        if task.is_blocking() {
+            return Warning::Ok;
+        }
         // Don't fire warning for tasks that are waiting to run
         if task.state() != TaskState::Running {
             return Warning::Ok;

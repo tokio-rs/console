@@ -354,6 +354,10 @@ impl Task {
         self.stats.last_wake > self.stats.last_poll_started
     }
 
+    pub(crate) fn is_blocking(&self) -> bool {
+        matches!(self.kind.as_ref(), "block_on" | "blocking")
+    }
+
     pub(crate) fn is_completed(&self) -> bool {
         self.stats.total.is_some()
     }
