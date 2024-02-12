@@ -188,6 +188,8 @@ impl KnownWarnings {
     }
 }
 /// An enum representing the types of warnings that are allowed.
+// Note: ValueEnum only supports unit variants, so we have to use a custom
+// parser for this.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub(crate) enum AllowedWarnings {
     /// Represents the case where all warnings are allowed.
