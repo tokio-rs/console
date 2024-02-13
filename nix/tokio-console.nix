@@ -31,7 +31,8 @@ let
   src = gitignoreSource extraIgnores ../.;
 
   cargoTOML = lib.importTOML "${src}/tokio-console/Cargo.toml";
-in rustPlatform.buildRustPackage rec {
+in
+rustPlatform.buildRustPackage rec {
   pname = cargoTOML.package.name;
   version = cargoTOML.package.version;
 
