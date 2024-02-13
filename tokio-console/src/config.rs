@@ -6,6 +6,7 @@ use clap::{ArgAction, ArgGroup, CommandFactory, Parser as Clap, Subcommand, Valu
 use clap_complete::Shell;
 use color_eyre::eyre::WrapErr;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
 use std::ops::Not;
@@ -62,10 +63,28 @@ pub struct Config {
     /// * `lost-waker` -- Warns when a task is dropped without being woken.
     ///
     /// * `never-yielded` -- Warns when a task has never yielded.
-    ///
     #[clap(long = "warn", short = 'W', value_delimiter = ',', num_args = 1..)]
     #[clap(default_values_t = KnownWarnings::default_enabled_warnings())]
     pub(crate) warnings: Vec<KnownWarnings>,
+
+    /// Allow lint warnings.
+    ///
+    /// This is a comma-separated list of warnings to allow.
+    ///
+    /// Each warning is specified by its name, which is one of:
+    ///
+    /// * `self-wakes` -- Warns when a task wakes itself more than a certain percentage of its total wakeups.
+    ///                  Default percentage is 50%.
+    ///
+    /// * `lost-waker` -- Warns when a task is dropped without being woken.
+    ///
+    /// * `never-yielded` -- Warns when a task has never yielded.
+    ///
+    /// If this is set to `all`, all warnings are allowed.
+    ///
+    /// [possible values: all, self-wakes, lost-waker, never-yielded]
+    #[clap(long = "allow", short = 'A', num_args = 1..)]
+    pub(crate) allow_warnings: Option<AllowedWarnings>,
 
     /// Path to a directory to write the console's internal logs to.
     ///
@@ -126,6 +145,19 @@ pub(crate) enum KnownWarnings {
     NeverYielded,
 }
 
+impl FromStr for KnownWarnings {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "self-wakes" => Ok(KnownWarnings::SelfWakes),
+            "lost-waker" => Ok(KnownWarnings::LostWaker),
+            "never-yielded" => Ok(KnownWarnings::NeverYielded),
+            _ => Err(format!("unknown warning: {}", s)),
+        }
+    }
+}
+
 impl From<&KnownWarnings> for warnings::Linter<Task> {
     fn from(warning: &KnownWarnings) -> Self {
         match warning {
@@ -153,6 +185,49 @@ impl KnownWarnings {
             KnownWarnings::LostWaker,
             KnownWarnings::NeverYielded,
         ]
+    }
+}
+/// An enum representing the types of warnings that are allowed.
+// Note: ValueEnum only supports unit variants, so we have to use a custom
+// parser for this.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub(crate) enum AllowedWarnings {
+    /// Represents the case where all warnings are allowed.
+    All,
+    /// Represents the case where only some specific warnings are allowed.
+    /// The allowed warnings are stored in a `BTreeSet` of `KnownWarnings`.
+    Explicit(BTreeSet<KnownWarnings>),
+}
+
+impl FromStr for AllowedWarnings {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "all" => Ok(AllowedWarnings::All),
+            _ => {
+                let warnings = s
+                    .split(',')
+                    .map(|s| s.parse::<KnownWarnings>())
+                    .collect::<Result<BTreeSet<_>, _>>()
+                    .map_err(|err| format!("failed to parse warning: {}", err))?;
+                Ok(AllowedWarnings::Explicit(warnings))
+            }
+        }
+    }
+}
+
+impl AllowedWarnings {
+    fn merge(&self, allowed: &Self) -> Self {
+        match (self, allowed) {
+            (AllowedWarnings::All, _) => AllowedWarnings::All,
+            (_, AllowedWarnings::All) => AllowedWarnings::All,
+            (AllowedWarnings::Explicit(a), AllowedWarnings::Explicit(b)) => {
+                let mut warnings = a.clone();
+                warnings.extend(b.clone());
+                AllowedWarnings::Explicit(warnings)
+            }
+        }
     }
 }
 
@@ -299,6 +374,7 @@ struct ConfigFile {
     default_target_addr: Option<String>,
     log: Option<String>,
     warnings: Vec<KnownWarnings>,
+    allow_warnings: Option<AllowedWarnings>,
     log_directory: Option<PathBuf>,
     retention: Option<RetainFor>,
     charset: Option<CharsetConfig>,
@@ -494,6 +570,12 @@ impl Config {
                 warns.dedup();
                 warns
             },
+            allow_warnings: {
+                match (self.allow_warnings, other.allow_warnings) {
+                    (Some(a), Some(b)) => Some(a.merge(&b)),
+                    (a, b) => a.or(b),
+                }
+            },
             retain_for: other.retain_for.or(self.retain_for),
             view_options: self.view_options.merge_with(other.view_options),
             subcmd: other.subcmd.or(self.subcmd),
@@ -509,6 +591,7 @@ impl Default for Config {
                 filter::Targets::new().with_default(filter::LevelFilter::OFF),
             )),
             warnings: KnownWarnings::default_enabled_warnings(),
+            allow_warnings: None,
             log_directory: Some(default_log_directory()),
             retain_for: Some(RetainFor::default()),
             view_options: ViewOptions::default(),
@@ -745,6 +828,7 @@ impl From<Config> for ConfigFile {
             log: config.log_filter.map(|filter| filter.to_string()),
             log_directory: config.log_directory,
             warnings: config.warnings,
+            allow_warnings: config.allow_warnings,
             retention: config.retain_for,
             charset: Some(CharsetConfig {
                 lang: config.view_options.lang,
@@ -768,6 +852,7 @@ impl TryFrom<ConfigFile> for Config {
             target_addr: value.target_addr()?,
             log_filter: value.log_filter()?,
             warnings: value.warnings.clone(),
+            allow_warnings: value.allow_warnings.clone(),
             log_directory: value.log_directory.take(),
             retain_for: value.retain_for(),
             view_options: ViewOptions {

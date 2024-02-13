@@ -15,6 +15,7 @@ use ratatui::{
 use tokio::sync::{mpsc, watch};
 
 use crate::{
+    config::AllowedWarnings,
     input::{Event, KeyEvent, KeyEventKind},
     view::{bold, UpdateKind},
 };
@@ -64,9 +65,18 @@ async fn main() -> color_eyre::Result<()> {
     let (update_tx, update_rx) = watch::channel(UpdateKind::Other);
     // A channel to send the task details update stream (no need to keep outdated details in the memory)
     let (details_tx, mut details_rx) = mpsc::channel::<TaskDetails>(2);
+    let warnings = match args.allow_warnings {
+        Some(AllowedWarnings::All) => vec![],
+        Some(AllowedWarnings::Explicit(allow_warnings)) => args
+            .warnings
+            .iter()
+            .filter(|lint| !allow_warnings.contains(lint))
+            .collect::<Vec<_>>(),
+        None => args.warnings.iter().collect::<Vec<_>>(),
+    };
 
     let mut state = State::default()
-        .with_task_linters(args.warnings.iter().map(|lint| lint.into()))
+        .with_task_linters(warnings.into_iter().map(|lint| lint.into()))
         .with_retain_for(retain_for);
     let mut input = Box::pin(input::EventStream::new().try_filter(|event| {
         future::ready(!matches!(
