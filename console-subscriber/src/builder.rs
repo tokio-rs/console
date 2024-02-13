@@ -279,6 +279,10 @@ impl Builder {
     /// By default, this is `false`. If enabled, the console subscriber will
     /// serve the gRPC-Web protocol in addition to the standard gRPC protocol.
     /// This is useful for serving the console subscriber to web clients.
+    /// Please be aware that the current default server port is set to 6669.
+    /// However, certain browsers may restrict this port due to security reasons.
+    /// If you encounter issues with this, consider changing the port to an
+    /// alternative one that is not commonly blocked by browsers.
     ///
     /// [`serve_with_grpc_web`] is used to provide more advanced configuration
     /// for the gRPC-Web server.
