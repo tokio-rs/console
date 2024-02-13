@@ -57,8 +57,8 @@ pub struct Builder {
     /// value. Higher values will result in more memory usage.
     pub(super) scheduled_duration_max: Duration,
 
-    #[cfg(feature = "grpc-web")]
     /// Whether to enable the grpc-web support.
+    #[cfg(feature = "grpc-web")]
     enable_grpc_web: bool,
 }
 
