@@ -274,7 +274,6 @@ impl Builder {
         Self { self_trace, ..self }
     }
 
-    #[cfg(feature = "grpc-web")]
     /// Sets whether to enable the grpc-web support.
     ///
     /// By default, this is `false`. If enabled, the console subscriber will
@@ -285,6 +284,7 @@ impl Builder {
     /// for the gRPC-Web server.
     ///
     /// [`serve_with_grpc_web`]: crate::Server::serve_with_grpc_web
+    #[cfg(feature = "grpc-web")]
     pub fn enable_grpc_web(self, enable_grpc_web: bool) -> Self {
         Self {
             enable_grpc_web,

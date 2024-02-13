@@ -1060,6 +1060,7 @@ impl Server {
     /// please refer to the `grpc-web` example in the examples directory.
     ///
     /// [`Router::serve`]: fn@tonic::transport::server::Router::serve
+    #[cfg(feature = "grpc-web")]
     pub async fn serve_with_grpc_web(
         self,
         builder: tonic::transport::Server,
