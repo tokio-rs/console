@@ -1043,7 +1043,7 @@ impl Server {
     ///     .add_service(instrument_server);
     /// let serve = router.serve(std::net::SocketAddr::new(
     ///     std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
-    /// // 6669 is a restricted port on Chrome, so we cannot use it. We use a different port instead.
+    ///     // 6669 is a restricted port on Chrome, so we cannot use it. We use a different port instead.
     ///     9999,
     /// ));
     ///
