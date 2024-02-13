@@ -962,7 +962,6 @@ impl Server {
         res?.map_err(Into::into)
     }
 
-    #[cfg(feature = "grpc-web")]
     /// Starts the gRPC service with the default gRPC settings and gRPC-Web
     /// support.
     ///
