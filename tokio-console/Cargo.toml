@@ -26,6 +26,12 @@ keywords = [
     "async",
 ]
 
+[package.metadata.wix]
+upgrade-guid = "A36733B4-B8CD-440A-8E06-549EAE8A6695"
+path-guid = "3DF6EE78-06E2-42BF-99AA-9A463E328BBD"
+license = false
+eula = false
+
 [dependencies]
 atty = "0.2"
 console-api = { version = "0.6.0", path = "../console-api", features = ["transport"] }
