@@ -317,6 +317,8 @@ if [[ "$dry_run" ]]; then
 fi
 
 echo ""
+status "Running" "cargo dist plan"
+cargo dist plan
 
 if confirm "commit?"; then
     echo ""
