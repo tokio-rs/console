@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{future::Future, task::Poll, time::Duration};
 
 static HELP: &str = r#"
 Example console-instrumented app
@@ -121,7 +121,7 @@ async fn burn(min: u64, max: u64) {
     loop {
         for i in min..max {
             for _ in 0..i {
-                tokio::task::yield_now().await;
+                self_wake().await;
             }
             tokio::time::sleep(Duration::from_secs(i - min)).await;
         }
@@ -151,4 +151,30 @@ async fn spawn_blocking(seconds: u64) {
         })
         .await;
     }
+}
+
+fn self_wake() -> impl Future<Output = ()> {
+    struct SelfWake {
+        yielded: bool,
+    }
+
+    impl Future for SelfWake {
+        type Output = ();
+
+        fn poll(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> Poll<Self::Output> {
+            if self.yielded == true {
+                return Poll::Ready(());
+            }
+
+            self.yielded = true;
+            cx.waker().wake_by_ref();
+
+            Poll::Pending
+        }
+    }
+
+    SelfWake { yielded: false }
 }

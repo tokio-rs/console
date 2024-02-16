@@ -63,7 +63,7 @@ fn self_wakes() {
         .match_default_name()
         .expect_self_wakes(1);
 
-    let future = async { task::yield_now().await };
+    let future = async { support::self_wake().await };
 
     assert_task(expected_task, future);
 }
