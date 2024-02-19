@@ -40,7 +40,7 @@ This example leverages the [connect-es] library to enable communication with the
 The [buf] tool is used to generate the gRPC code. You can generate the code using the following command:
 
 ```sh
-npm run buf
+npm run gen
 ```
 
 For more information about the connect-es library, refer to the [connect-es documentation].
