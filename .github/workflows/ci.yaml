@@ -127,5 +127,8 @@ jobs:
       - name: Generate
         run: npm run gen
 
+      - name: Check no changes
+        run: git diff --exit-code
+
       - name: Build
         run: npm run build
