@@ -4,6 +4,7 @@
 //! ```sh
 //! cargo run --example grpc_web --features grpc-web
 //! ```
+//! If you want to test the gRPC-Web server, you can check out the README.md to see how to run the full example.
 use std::{thread, time::Duration};
 
 use console_subscriber::{ConsoleLayer, ServerParts};
