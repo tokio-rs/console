@@ -15,9 +15,9 @@ Follow these steps to get the application up and running:
 
 1. **Install Dependencies:** Navigate to the `console-subscriber/examples/grpc_web/app` directory and install all necessary dependencies:
 
-   ```sh
-   npm install
-   ```
+    ```sh
+    npm install
+    ```
 
 2. **Start the gRPC-web Server:** In the console-subscriber directory, start the server:
 
