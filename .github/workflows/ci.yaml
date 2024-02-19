@@ -107,7 +107,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: console-subscriber/examples/grpc-web/app
+        working-directory: console-subscriber/examples/grpc_web/app
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
