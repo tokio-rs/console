@@ -101,3 +101,34 @@ jobs:
 
       - name: Run cargo clippy
         run: cargo clippy -- -D warnings
+
+  grpc_web:
+    name: gRPC-web Example
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: console-subscriber/examples/grpc_web/app
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format
+        run: npm run fmt
+
+      - name: Generate
+        run: npm run gen
+
+      - name: Check no changes
+        run: git diff --exit-code
+
+      - name: Build
+        run: npm run build
