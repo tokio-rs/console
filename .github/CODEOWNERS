@@ -1,1 +1,2 @@
 * @tokio-rs/console
+/console-subscriber/examples/grpc_web @hi-rustin
