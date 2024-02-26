@@ -1755,7 +1755,6 @@ dependencies = [
 name = "tokio-console"
 version = "0.1.10"
 dependencies = [
- "atty",
  "clap",
  "clap_complete",
  "color-eyre",

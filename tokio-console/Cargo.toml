@@ -33,7 +33,6 @@ license = false
 eula = false
 
 [dependencies]
-atty = "0.2"
 console-api = { version = "0.6.0", path = "../console-api", features = ["transport"] }
 # Use 1.64.0 compatible version of `clap@4.1.14`.
 clap = { version = "~4.1.14", features = ["wrap_help", "cargo", "derive", "env"] }
