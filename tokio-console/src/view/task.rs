@@ -204,8 +204,9 @@ impl TaskView {
         if let Some(since) = task.since_wake(now) {
             wakeups.reserve(3);
             wakeups.push(Span::raw(", "));
-            wakeups.push(bold("last woken:"));
-            wakeups.push(Span::from(format!(" {:?} ago", since)));
+            wakeups.push(bold("last woken: "));
+            wakeups.push(styles.time_units(since, view::DUR_LIST_PRECISION, None));
+            wakeups.push(Span::raw(" ago"));
         }
 
         waker_stats.push(Spans::from(wakeups));
