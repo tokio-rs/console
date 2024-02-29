@@ -55,10 +55,11 @@ version 1.7.0 and newer.
 ### Enabling Tokio Instrumentation
 
 &#x26A0;&#xFE0F; Currently, the [`tracing`] support in the [`tokio`
-runtime][Tokio] is considered *experimental*. In order to use
+runtime][Tokio] is considered _experimental_. In order to use
 `console-subscriber` with Tokio, the following is required:
 
 * Tokio's optional `tracing` dependency must be enabled. For example:
+
   ```toml
   [dependencies]
   # ...
@@ -68,14 +69,18 @@ runtime][Tokio] is considered *experimental*. In order to use
 * The `tokio_unstable` cfg flag, which enables experimental APIs in Tokio, must
   be enabled. It can be enabled by setting the `RUSTFLAGS` environment variable
   at build-time:
+
   ```shell
-  $ RUSTFLAGS="--cfg tokio_unstable" cargo build
+  RUSTFLAGS="--cfg tokio_unstable" cargo build
   ```
+
   or, by adding the following to the `.cargo/config.toml` file in a Cargo workspace:
+
   ```toml
   [build]
   rustflags = ["--cfg", "tokio_unstable"]
   ```
+
   If you're using a workspace, you should put the `.cargo/config.toml` file in the root of your workspace.
   Otherwise, put the `.cargo/config.toml` file in the root directory of your crate.
 
@@ -93,21 +98,21 @@ runtime][Tokio] is considered *experimental*. In order to use
 * The `tokio` and `runtime` [`tracing` targets] must be enabled at the [`TRACE`
   level].
 
-  + If you're using the [`console_subscriber::init()`][init] or
+  * If you're using the [`console_subscriber::init()`][init] or
   [`console_subscriber::Builder`][builder] APIs, these targets are enabled
   automatically.
 
-  + If you are manually configuring the `tracing` subscriber using the
+  * If you are manually configuring the `tracing` subscriber using the
   [`EnvFilter`] or [`Targets`] filters from [`tracing-subscriber`], add
   `"tokio=trace,runtime=trace"` to your filter configuration.
 
-  + Also, ensure you have not enabled any of the [compile time filter
+  * Also, ensure you have not enabled any of the [compile time filter
     features][compile_time_filters] in your `Cargo.toml`.
 
 #### Required Tokio Versions
 
 Because instrumentation for different aspects of the runtime is being added to
-Tokio over time, the latest Tokio release is generally *recommended* to access all of
+Tokio over time, the latest Tokio release is generally _recommended_ to access all of
 the console's functionality. However, it should generally be compatible with
 earlier Tokio versions, although some information may not be available. A
 minimum version of [Tokio v1.0.0] or later is required to use the console's
@@ -202,7 +207,6 @@ tracing_subscriber::registry()
 [`Layer`]:https://docs.rs/tracing-subscriber/0.3/tracing_subscriber/layer/index.html
 [default]: https://docs.rs/tracing/latest/tracing/#in-executables
 [env]: https://docs.rs/console-subscriber/latest/console_subscriber/struct.Builder.html#method.with_default_env
-[builder]: https://docs.rs/console-subscriber/latest/console_subscriber/struct.Builder.html
 [`tokio-console`]: https://github.com/tokio-rs/console
 [Tokio]: https://tokio.rs
 
@@ -245,7 +249,7 @@ console project.
 ## Supported Rust Versions
 
 The Tokio console is built against the latest stable release. The minimum
-supported version is 1.64. The current Tokio console version is not guaranteed
+supported version is 1.70. The current Tokio console version is not guaranteed
 to build on Rust versions earlier than the minimum supported version.
 
 ## License

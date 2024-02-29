@@ -44,7 +44,7 @@ The wire format [protobuf] bindings in this crate are used by both the
 instrumentation in the [`console-subscriber`] crate, which emits telemetry in
 this format, and by the clients that consume that telemetry.
 
-In general, most [`tokio-console`] users will *not* depend on this crate
+In general, most [`tokio-console`] users will _not_ depend on this crate
 directly. Applications are typically instrumented using the
 [`console-subscriber`] crate, which collects data and exports it using
 this wire format; this data can be consumed using the [`tokio-console`]
@@ -96,7 +96,7 @@ console project.
 ## Supported Rust Versions
 
 The Tokio console is built against the latest stable release. The minimum
-supported version is 1.64. The current Tokio console version is not guaranteed
+supported version is 1.70. The current Tokio console version is not guaranteed
 to build on Rust versions earlier than the minimum supported version.
 
 ## License

@@ -13,7 +13,7 @@ use crate::{
 use ratatui::{
     layout,
     style::{self, Color, Style},
-    text::{Span, Spans, Text},
+    text::{Line, Span, Text},
     widgets::{self, Cell, ListItem, Row, Table},
 };
 
@@ -45,10 +45,10 @@ impl TableList<12> for TasksTable {
         Self::HEADER[11].len() + 1,
     ];
 
-    fn render<B: ratatui::backend::Backend>(
+    fn render(
         table_list_state: &mut TableListState<Self, 12>,
         styles: &view::Styles,
-        frame: &mut ratatui::terminal::Frame<B>,
+        frame: &mut ratatui::terminal::Frame,
         area: layout::Rect,
         state: &mut State,
         _: Self::Context,
@@ -112,7 +112,7 @@ impl TableList<12> for TasksTable {
                     let warnings = if n_warnings > 0 {
                         let n_warnings = n_warnings.to_string();
                         warn_width.update_len(n_warnings.len() + 2); // add 2 for the warning icon + whitespace
-                        Cell::from(Spans::from(vec![
+                        Cell::from(Line::from(vec![
                             styles.warning_narrow(),
                             Span::from(n_warnings),
                         ]))
@@ -136,7 +136,7 @@ impl TableList<12> for TasksTable {
                         Cell::from(polls_width.update_str(task.total_polls().to_string())),
                         Cell::from(kind_width.update_str(task.kind()).to_owned()),
                         Cell::from(location_width.update_str(task.location()).to_owned()),
-                        Cell::from(Spans::from(
+                        Cell::from(Line::from(
                             task.formatted_fields()
                                 .iter()
                                 .flatten()
@@ -173,9 +173,9 @@ impl TableList<12> for TasksTable {
         .style(header_style);
 
         let table = if table_list_state.sort_descending {
-            Table::new(rows)
+            Table::default().rows(rows)
         } else {
-            Table::new(rows.rev())
+            Table::default().rows(rows.rev())
         };
 
         let block = styles.border_block().title(vec![
@@ -201,7 +201,7 @@ impl TableList<12> for TasksTable {
             .tasks_state()
             .warnings()
             .map(|warning| {
-                ListItem::new(Text::from(Spans::from(vec![
+                ListItem::new(Text::from(Line::from(vec![
                     styles.warning_wide(),
                     // TODO(eliza): it would be nice to handle singular vs plural...
                     Span::from(format!("{} {}", warning.count(), warning.summary())),
@@ -275,7 +275,7 @@ impl TableList<12> for TasksTable {
         if let Some(area) = warnings_area {
             let block = styles
                 .border_block()
-                .title(Spans::from(vec![bold("Warnings")]));
+                .title(Line::from(vec![bold("Warnings")]));
             frame.render_widget(widgets::List::new(warnings).block(block), area);
         }
 

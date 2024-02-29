@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use ratatui::{
-    text::{Spans, Text},
+    text::{Line, Text},
     widgets::{Paragraph, Widget},
 };
 
@@ -51,7 +51,7 @@ impl<'a> Percentiles<'a> {
             .iter()
             .map(move |i| (*i, histogram.value_at_percentile(*i)));
         let percentiles = pairs.map(|pair| {
-            Spans::from(vec![
+            Line::from(vec![
                 bold(format!("p{:>2}: ", pair.0)),
                 self.styles.time_units(
                     Duration::from_nanos(pair.1),
