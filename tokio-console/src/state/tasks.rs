@@ -159,14 +159,18 @@ impl TasksState {
 
         self.tasks
             .insert_with(visibility, update.new_tasks, |ids, mut task| {
-                if task.id.is_none() {
-                    tracing::warn!(?task, "skipping task with no id");
-                }
+                let span_id = match task.id.as_ref() {
+                    Some(id) => id.id,
+                    None => {
+                        tracing::warn!(?task, "task has no id, skipping");
+                        return None;
+                    }
+                };
 
                 let meta_id = match task.metadata.as_ref() {
                     Some(id) => id.id,
                     None => {
-                        tracing::warn!(?task, "task has no metadata ID, skipping");
+                        tracing::warn!(?task, "task has no metadata id, skipping");
                         return None;
                     }
                 };
@@ -214,7 +218,6 @@ impl TasksState {
                     .collect::<Vec<_>>();
 
                 let formatted_fields = Field::make_formatted(styles, &mut fields);
-                let span_id = task.id?.id;
 
                 let stats = stats_update.remove(&span_id)?.into();
                 let location = format_location(task.location);
