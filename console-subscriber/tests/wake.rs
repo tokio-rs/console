@@ -2,7 +2,7 @@ mod support;
 use std::time::Duration;
 
 use support::{assert_task, ExpectedTask};
-use tokio::{task, time::sleep};
+use tokio::time::sleep;
 
 #[test]
 fn sleep_wakes() {
@@ -41,7 +41,7 @@ fn self_wake() {
         .expect_self_wakes(1);
 
     let future = async {
-        task::yield_now().await;
+        support::self_wake().await;
     };
 
     assert_task(expected_task, future);
