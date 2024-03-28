@@ -175,14 +175,18 @@ impl ResourcesState {
         let mut stats_update = update.stats_update;
         self.resources
             .insert_with(visibility, update.new_resources, |ids, resource| {
-                if resource.id.is_none() {
-                    tracing::warn!(?resource, "skipping resource with no id");
-                }
+                let span_id = match resource.id.as_ref() {
+                    Some(id) => id.id,
+                    None => {
+                        tracing::warn!(?resource, "skipping resource with no id");
+                        return None;
+                    }
+                };
 
                 let meta_id = match resource.metadata.as_ref() {
                     Some(id) => id.id,
                     None => {
-                        tracing::warn!(?resource, "resource has no metadata ID, skipping");
+                        tracing::warn!(?resource, "resource has no metadata id skipping");
                         return None;
                     }
                 };
@@ -201,7 +205,6 @@ impl ResourcesState {
                     }
                 };
 
-                let span_id = resource.id?.id;
                 let stats = ResourceStats::from_proto(
                     stats_update.remove(&span_id)?,
                     meta,
