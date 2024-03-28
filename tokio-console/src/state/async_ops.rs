@@ -141,14 +141,17 @@ impl AsyncOpsState {
 
         self.async_ops
             .insert_with(visibility, update.new_async_ops, |ids, async_op| {
-                if async_op.id.is_none() {
-                    tracing::warn!(?async_op, "skipping async op with no id");
-                }
-
+                let span_id = match async_op.id.as_ref() {
+                    Some(id) => id.id,
+                    None => {
+                        tracing::warn!(?async_op, "skipping async op with no id");
+                        return None;
+                    }
+                };
                 let meta_id = match async_op.metadata.as_ref() {
                     Some(id) => id.id,
                     None => {
-                        tracing::warn!(?async_op, "async op has no metadata ID, skipping");
+                        tracing::warn!(?async_op, "async op has no metadata id, skipping");
                         return None;
                     }
                 };
@@ -160,7 +163,6 @@ impl AsyncOpsState {
                     }
                 };
 
-                let span_id = async_op.id?.id;
                 let stats = AsyncOpStats::from_proto(
                     stats_update.remove(&span_id)?,
                     meta,
