@@ -5,7 +5,10 @@ license = "MIT"
 repository = "https://github.com/tokio-rs/console"
 edition = "2021"
 rust-version = "1.64.0"
-authors = ["Eliza Weisman <eliza@buoyant.io>", "Tokio Contributors <team@tokio.rs>",]
+authors = [
+    "Eliza Weisman <eliza@buoyant.io>",
+    "Tokio Contributors <team@tokio.rs>",
+]
 readme = "README.md"
 default-run = "tokio-console"
 homepage = "https://github.com/tokio-rs/console/tree/main/tokio-console"
@@ -18,13 +21,7 @@ categories = [
     "command-line-utilities",
     "asynchronous",
 ]
-keywords = [
-    "tracing",
-    "tokio-console",
-    "debugging",
-    "console",
-    "async",
-]
+keywords = ["tracing", "tokio-console", "debugging", "console", "async"]
 
 [package.metadata.wix]
 upgrade-guid = "A36733B4-B8CD-440A-8E06-549EAE8A6695"
@@ -33,14 +30,23 @@ license = false
 eula = false
 
 [dependencies]
-console-api = { version = "0.6.0", path = "../console-api", features = ["transport"] }
+console-api = { version = "0.6.0", path = "../console-api", features = [
+    "transport",
+] }
 # Use 1.64.0 compatible version of `clap@4.1.14`.
-clap = { version = "~4.1.14", features = ["wrap_help", "cargo", "derive", "env"] }
+clap = { version = "~4.1.14", features = [
+    "wrap_help",
+    "cargo",
+    "derive",
+    "env",
+] }
 clap_complete = "~4.1.6"
 tokio = { version = "1", features = ["full", "rt-multi-thread"] }
 tonic = { version = "0.10", features = ["transport"] }
 futures = "0.3"
-ratatui = { version = "0.20.1", default-features = false, features = ["crossterm"] }
+ratatui = { version = "0.20.1", default-features = false, features = [
+    "crossterm",
+] }
 tower = "0.4.12"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3" }
@@ -48,7 +54,9 @@ tracing-journald = { version = "0.2", optional = true }
 prost-types = "0.12"
 crossterm = { version = "0.26.1", features = ["event-stream"] }
 color-eyre = { version = "0.6", features = ["issue-url"] }
-hdrhistogram = { version = "7.3.0", default-features = false, features = ["serialization"] }
+hdrhistogram = { version = "7.3.0", default-features = false, features = [
+    "serialization",
+] }
 # Keep this in sync with the version from `tonic`.
 # Because we inspect the error from tonic, we need to make sure that the
 # version of h2 we use is compatible with the version of tonic we use.
@@ -61,5 +69,4 @@ toml = "0.5"
 dirs = "5"
 
 [dev-dependencies]
-# Use 1.64.0 compatible version of `trycmd@0.13.6`.
-trycmd = "=0.13.6"
+trycmd = "0.15.1"
