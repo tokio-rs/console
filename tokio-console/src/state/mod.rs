@@ -538,3 +538,35 @@ fn pb_duration(dur: prost_types::Duration) -> Duration {
     let nanos = u64::try_from(dur.nanos).expect("duration should not be negative!");
     Duration::from_secs(secs) + Duration::from_nanos(nanos)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_location() {
+        let mut location1 = proto::Location::default();
+        location1.file = Some(
+            "/home/user/.cargo/registry/src/github.com-1ecc6299db9ec823/tokio-1.0.1/src/lib.rs"
+                .to_string(),
+        );
+        let mut location2 = proto::Location::default();
+        location2.file = Some("/home/user/.cargo/git/checkouts/tokio-1.0.1/src/lib.rs".to_string());
+        let mut location3 = proto::Location::default();
+        location3.file = Some("/home/user/projects/tokio-1.0.1/src/lib.rs".to_string());
+
+        assert_eq!(
+            format_location(Some(location1)),
+            "<cargo>/tokio-1.0.1/src/lib.rs"
+        );
+        assert_eq!(
+            format_location(Some(location2)),
+            "<cargo>/tokio-1.0.1/src/lib.rs"
+        );
+        assert_eq!(
+            format_location(Some(location3)),
+            "/home/user/projects/tokio-1.0.1/src/lib.rs"
+        );
+        assert_eq!(format_location(None), "<unknown location>");
+    }
+}
