@@ -985,7 +985,7 @@ impl Server {
     /// #
     /// use console_subscriber::{ConsoleLayer, ServerParts};
     /// use tonic_web::GrpcWebLayer;
-    /// use tower_web::cors::{CorsLayer, AllowOrigin};
+    /// use tower_http::cors::{CorsLayer, AllowOrigin};
     /// use http::header::HeaderName;
     /// # use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
     /// # const DEFAULT_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
