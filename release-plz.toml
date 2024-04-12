@@ -1,0 +1,11 @@
+[workspace]
+changelog_config = "cliff.toml"
+
+[[package]]
+name = "console-api"
+
+[[package]]
+name = "console-subscriber"
+
+[[package]]
+name = "tokio-console"
