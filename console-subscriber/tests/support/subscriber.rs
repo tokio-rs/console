@@ -23,9 +23,9 @@ struct TestFailure {
 
 impl fmt::Display for TestFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Task validation failed:\n")?;
+        writeln!(f, "Task validation failed:")?;
         for failure in &self.failures {
-            write!(f, " - {failure}\n")?;
+            writeln!(f, " - {failure}")?;
         }
         Ok(())
     }
