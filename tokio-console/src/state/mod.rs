@@ -544,6 +544,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn test_format_location() {
         let mut location1 = proto::Location::default();
         location1.file = Some(
@@ -568,5 +569,33 @@ mod tests {
             "/home/user/projects/tokio-1.0.1/src/lib.rs"
         );
         assert_eq!(format_location(None), "<unknown location>");
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn test_format_location_macos() {
+        let mut location1 = proto::Location::default();
+        location1.file = Some(
+            "/Users/user/.cargo/registry/src/github.com-1ecc6299db9ec823/tokio-1.0.1/src/lib.rs"
+                .to_string(),
+        );
+        let mut location2 = proto::Location::default();
+        location2.file =
+            Some("/Users/user/.cargo/git/checkouts/tokio-1.0.1/src/lib.rs".to_string());
+        let mut location3 = proto::Location::default();
+        location3.file = Some("/Users/user/projects/tokio-1.0.1/src/lib.rs".to_string());
+
+        assert_eq!(
+            format_location(Some(location1)),
+            "<cargo>/tokio-1.0.1/src/lib.rs"
+        );
+        assert_eq!(
+            format_location(Some(location2)),
+            "<cargo>/tokio-1.0.1/src/lib.rs"
+        );
+        assert_eq!(
+            format_location(Some(location3)),
+            "/Users/user/projects/tokio-1.0.1/src/lib.rs"
+        );
     }
 }
