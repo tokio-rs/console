@@ -145,7 +145,6 @@ async fn no_yield(seconds: u64) {
 #[tracing::instrument]
 async fn spawn_blocking(seconds: u64) {
     loop {
-        let seconds = seconds;
         _ = tokio::task::spawn_blocking(move || {
             std::thread::sleep(Duration::from_secs(seconds));
         })
