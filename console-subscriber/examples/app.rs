@@ -165,7 +165,7 @@ fn self_wake() -> impl Future<Output = ()> {
             mut self: std::pin::Pin<&mut Self>,
             cx: &mut std::task::Context<'_>,
         ) -> Poll<Self::Output> {
-            if self.yielded == true {
+            if self.yielded {
                 return Poll::Ready(());
             }
 
