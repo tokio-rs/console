@@ -60,7 +60,7 @@ where
     tokio::task::Builder::new()
         .name(name)
         .spawn(f)
-        .expect(&format!("spawning task '{name}' failed"))
+        .unwrap_or_else(|_| panic!("spawning task '{name}' failed"))
 }
 
 /// Wakes itself from within this task.
