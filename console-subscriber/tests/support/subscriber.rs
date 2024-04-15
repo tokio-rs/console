@@ -322,6 +322,7 @@ fn validate_expected_tasks(
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn validate_expected_task(
     expected: &ExpectedTask,
     actual_tasks: &Vec<ActualTask>,
