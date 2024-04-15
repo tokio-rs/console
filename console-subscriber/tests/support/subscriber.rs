@@ -318,7 +318,7 @@ fn validate_expected_tasks(
     if failures.is_empty() {
         Ok(())
     } else {
-        Err(TestFailure { failures: failures })
+        Err(TestFailure { failures })
     }
 }
 
