@@ -1,6 +1,6 @@
 on:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
   pull_request:
 
 name: CI
@@ -48,8 +48,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: [stable]
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+        rust: [ stable ]
         include:
           # Make 1.64 MSRV, as it's Tonic 0.10's MSRV.
           - rust: 1.64.0
@@ -100,7 +100,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run cargo clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --workspace --all-targets --no-deps -- -D warnings
 
   grpc_web:
     name: gRPC-web Example
