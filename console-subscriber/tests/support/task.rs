@@ -84,25 +84,13 @@ impl fmt::Debug for TaskValidationFailure {
 /// This struct contains the fields that an expected task will attempt to match
 /// actual tasks on, as well as the expectations that will be used to validate
 /// which the actual task is as expected.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct ExpectedTask {
     match_name: Option<String>,
     expect_present: Option<bool>,
     expect_wakes: Option<u64>,
     expect_self_wakes: Option<u64>,
     expect_polls: Option<u64>,
-}
-
-impl Default for ExpectedTask {
-    fn default() -> Self {
-        Self {
-            match_name: None,
-            expect_present: None,
-            expect_wakes: None,
-            expect_self_wakes: None,
-            expect_polls: None,
-        }
-    }
 }
 
 impl ExpectedTask {
