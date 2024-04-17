@@ -543,18 +543,29 @@ fn pb_duration(dur: prost_types::Duration) -> Duration {
 mod tests {
     use super::*;
 
+    // This test should be run on all platforms. The console can display instrumentation data
+    // from different console subscribers that may be running on different operating systems.
+    // For instance, the console could be running on Windows, while the application is running on Linux.
+    // Therefore, it's important to ensure that paths, which can differ between operating systems,
+    // are displayed correctly in the console.
     #[test]
-    #[cfg(target_os = "linux")]
     fn test_format_location() {
-        let mut location1 = proto::Location::default();
-        location1.file = Some(
-            "/home/user/.cargo/registry/src/github.com-1ecc6299db9ec823/tokio-1.0.1/src/lib.rs"
-                .to_string(),
-        );
-        let mut location2 = proto::Location::default();
-        location2.file = Some("/home/user/.cargo/git/checkouts/tokio-1.0.1/src/lib.rs".to_string());
-        let mut location3 = proto::Location::default();
-        location3.file = Some("/home/user/projects/tokio-1.0.1/src/lib.rs".to_string());
+        // Linux style paths.
+        let location1 = proto::Location {
+            file: Some(
+                "/home/user/.cargo/registry/src/github.com-1ecc6299db9ec823/tokio-1.0.1/src/lib.rs"
+                    .to_string(),
+            ),
+            ..Default::default()
+        };
+        let location2 = proto::Location {
+            file: Some("/home/user/.cargo/git/checkouts/tokio-1.0.1/src/lib.rs".to_string()),
+            ..Default::default()
+        };
+        let location3 = proto::Location {
+            file: Some("/home/user/projects/tokio-1.0.1/src/lib.rs".to_string()),
+            ..Default::default()
+        };
 
         assert_eq!(
             format_location(Some(location1)),
@@ -568,34 +579,31 @@ mod tests {
             format_location(Some(location3)),
             "/home/user/projects/tokio-1.0.1/src/lib.rs"
         );
-        assert_eq!(format_location(None), "<unknown location>");
-    }
 
-    #[test]
-    #[cfg(target_os = "macos")]
-    fn test_format_location_macos() {
-        let mut location1 = proto::Location::default();
-        location1.file = Some(
-            "/Users/user/.cargo/registry/src/github.com-1ecc6299db9ec823/tokio-1.0.1/src/lib.rs"
-                .to_string(),
-        );
-        let mut location2 = proto::Location::default();
-        location2.file =
-            Some("/Users/user/.cargo/git/checkouts/tokio-1.0.1/src/lib.rs".to_string());
-        let mut location3 = proto::Location::default();
-        location3.file = Some("/Users/user/projects/tokio-1.0.1/src/lib.rs".to_string());
+        // macOS style paths.
+        let location4 = proto::Location { file: Some("/Users/user/.cargo/registry/src/github.com-1ecc6299db9ec823/tokio-1.0.1/src/lib.rs".to_string()), ..Default::default() };
+        let location5 = proto::Location {
+            file: Some("/Users/user/.cargo/git/checkouts/tokio-1.0.1/src/lib.rs".to_string()),
+            ..Default::default()
+        };
+        let location6 = proto::Location {
+            file: Some("/Users/user/projects/tokio-1.0.1/src/lib.rs".to_string()),
+            ..Default::default()
+        };
 
         assert_eq!(
-            format_location(Some(location1)),
+            format_location(Some(location4)),
             "<cargo>/tokio-1.0.1/src/lib.rs"
         );
         assert_eq!(
-            format_location(Some(location2)),
+            format_location(Some(location5)),
             "<cargo>/tokio-1.0.1/src/lib.rs"
         );
         assert_eq!(
-            format_location(Some(location3)),
+            format_location(Some(location6)),
             "/Users/user/projects/tokio-1.0.1/src/lib.rs"
         );
+
+        assert_eq!(format_location(None), "<unknown location>");
     }
 }
