@@ -10,6 +10,8 @@ use support::{assert_tasks, spawn_named, ExpectedTask};
 /// spawned the child task). In this scenario, that would result in the parent
 /// having 3 polls counted, when it should really be 1.
 #[test]
+// The child task is polled explicitly to control its execution.
+// As a result, the clippy warning is ignored.
 #[allow(clippy::async_yields_async)]
 fn child_polls_dont_count_towards_parent_polls() {
     let expected_tasks = vec![
