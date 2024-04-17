@@ -93,6 +93,7 @@ pub(crate) struct ExpectedTask {
     expect_polls: Option<u64>,
 }
 
+#[allow(clippy::result_large_err)]
 impl ExpectedTask {
     /// Returns whether or not an actual task matches this expected task.
     ///
@@ -110,7 +111,6 @@ impl ExpectedTask {
 
     /// Returns an error specifying that no match was found for this expected
     /// task.
-    #[allow(clippy::result_large_err)]
     pub(super) fn no_match_error(&self) -> Result<(), TaskValidationFailure> {
         Err(TaskValidationFailure {
             expected: self.clone(),
@@ -127,7 +127,6 @@ impl ExpectedTask {
     /// If all expectations are met, this method returns `Ok(())`. If any
     /// expectations are not met, then the first incorrect expectation will
     /// be returned as an `Err`.
-    #[allow(clippy::result_large_err)]
     pub(super) fn validate_actual_task(
         &self,
         actual_task: &ActualTask,
