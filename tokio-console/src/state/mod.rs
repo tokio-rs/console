@@ -586,7 +586,10 @@ mod tests {
     #[test]
     fn test_format_location_macos() {
         // macOS style paths.
-        let location4 = proto::Location { file: Some("/Users/user/.cargo/registry/src/github.com-1ecc6299db9ec823/tokio-1.0.1/src/lib.rs".to_string()), ..Default::default() };
+        let location4 = proto::Location {
+            file: Some("/Users/user/.cargo/registry/src/github.com-1ecc6299db9ec823/tokio-1.0.1/src/lib.rs".to_string()),
+            ..Default::default()
+        };
         let location5 = proto::Location {
             file: Some("/Users/user/.cargo/git/checkouts/tokio-1.0.1/src/lib.rs".to_string()),
             ..Default::default()
