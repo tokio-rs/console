@@ -549,7 +549,7 @@ mod tests {
     // Therefore, it's important to ensure that paths, which can differ between operating systems,
     // are displayed correctly in the console.
     #[test]
-    fn test_format_location() {
+    fn test_format_location_linux() {
         // Linux style paths.
         let location1 = proto::Location {
             file: Some(
@@ -580,6 +580,11 @@ mod tests {
             "/home/user/projects/tokio-1.0.1/src/lib.rs"
         );
 
+        assert_eq!(format_location(None), "<unknown location>");
+    }
+
+    #[test]
+    fn test_format_location_macos() {
         // macOS style paths.
         let location4 = proto::Location { file: Some("/Users/user/.cargo/registry/src/github.com-1ecc6299db9ec823/tokio-1.0.1/src/lib.rs".to_string()), ..Default::default() };
         let location5 = proto::Location {
@@ -603,7 +608,5 @@ mod tests {
             format_location(Some(location6)),
             "/Users/user/projects/tokio-1.0.1/src/lib.rs"
         );
-
-        assert_eq!(format_location(None), "<unknown location>");
     }
 }
