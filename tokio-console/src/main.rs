@@ -78,15 +78,7 @@ async fn main() -> color_eyre::Result<()> {
     let mut state = State::default()
         .with_task_linters(warnings.into_iter().map(|lint| lint.into()))
         .with_retain_for(retain_for);
-    let mut input = Box::pin(input::EventStream::new().try_filter(|event| {
-        future::ready(!matches!(
-            event,
-            Event::Key(KeyEvent {
-                kind: KeyEventKind::Release,
-                ..
-            })
-        ))
-    }));
+    let mut input = Box::pin(input::EventStream::new());
     let mut view = view::View::new(styles);
 
     loop {
