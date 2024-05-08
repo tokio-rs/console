@@ -238,10 +238,6 @@ enum WakeOp {
     Drop,
 }
 
-/// Marker type used to indicate that a span is actually tracked by the console.
-#[derive(Debug)]
-struct Tracked {}
-
 impl ConsoleLayer {
     /// Returns a `ConsoleLayer` built with the default settings.
     ///
