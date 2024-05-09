@@ -2,10 +2,7 @@ use color_eyre::{eyre::eyre, Help, SectionExt};
 use console_api::tasks::TaskDetails;
 use state::State;
 
-use futures::{
-    future,
-    stream::{StreamExt, TryStreamExt},
-};
+use futures::stream::StreamExt;
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::Color,
@@ -16,7 +13,6 @@ use tokio::sync::{mpsc, watch};
 
 use crate::{
     config::AllowedWarnings,
-    input::{Event, KeyEvent, KeyEventKind},
     view::{bold, UpdateKind},
 };
 
