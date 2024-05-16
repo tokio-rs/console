@@ -174,14 +174,12 @@ The Tokio console: a debugger for async Rust.
 Usage: tokio-console[EXE] [OPTIONS] [TARGET_ADDR] [COMMAND]
 
 Commands:
-  gen-config
-          Generate a `console.toml` config file with the default
-          configuration values, overridden by any provided command-line
-          arguments
-  gen-completion
-          Generate shell completions
-  help
-          Print this message or the help of the given subcommand(s)
+  gen-config      Generate a `console.toml` config file with the
+                      default configuration values, overridden by any
+                      provided command-line arguments
+  gen-completion  Generate shell completions
+  help            Print this message or the help of the given
+                      subcommand(s)
 
 Arguments:
   [TARGET_ADDR]
