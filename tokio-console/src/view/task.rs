@@ -11,7 +11,7 @@ use crate::{
 };
 use ratatui::{
     layout::{self, Layout},
-    text::{Span, Spans, Text},
+    text::{Line, Span, Text},
     widgets::{List, ListItem, Paragraph},
 };
 use std::{
@@ -35,10 +35,10 @@ impl TaskView {
         // TODO :D
     }
 
-    pub(crate) fn render<B: ratatui::backend::Backend>(
+    pub(crate) fn render(
         &mut self,
         styles: &view::Styles,
-        frame: &mut ratatui::terminal::Frame<B>,
+        frame: &mut ratatui::terminal::Frame,
         area: layout::Rect,
         now: SystemTime,
     ) {
@@ -60,7 +60,7 @@ impl TaskView {
             .warnings()
             .iter()
             .map(|linter| {
-                ListItem::new(Text::from(Spans::from(vec![
+                ListItem::new(Text::from(Line::from(vec![
                     styles.warning_wide(),
                     // TODO(eliza): it would be nice to handle singular vs plural...
                     Span::from(linter.format(task)),
@@ -140,20 +140,17 @@ impl TaskView {
 
         // Just preallocate capacity for ID, name, target, total, busy, and idle.
         let mut overview = Vec::with_capacity(8);
-        overview.push(Spans::from(vec![
+        overview.push(Line::from(vec![
             bold("ID: "),
             Span::raw(format!("{} ", task.id_str())),
             task.state().render(styles),
         ]));
 
         if let Some(name) = task.name() {
-            overview.push(Spans::from(vec![bold("Name: "), Span::raw(name)]));
+            overview.push(Line::from(vec![bold("Name: "), Span::raw(name)]));
         }
 
-        overview.push(Spans::from(vec![
-            bold("Target: "),
-            Span::raw(task.target()),
-        ]));
+        overview.push(Line::from(vec![bold("Target: "), Span::raw(task.target())]));
 
         let title = "Location: ";
         let location_max_width = stats_area[0].width as usize - 2 - title.len(); // NOTE: -2 for the border
@@ -165,20 +162,20 @@ impl TaskView {
             task.location().to_string()
         };
 
-        overview.push(Spans::from(vec![bold(title), Span::raw(location)]));
+        overview.push(Line::from(vec![bold(title), Span::raw(location)]));
 
         let total = task.total(now);
 
-        let dur_percent = |name: &'static str, amt: Duration| -> Spans {
+        let dur_percent = |name: &'static str, amt: Duration| -> Line {
             let percent = amt.as_secs_f64().percent_of(total.as_secs_f64());
-            Spans::from(vec![
+            Line::from(vec![
                 bold(name),
                 styles.time_units(amt, view::DUR_LIST_PRECISION, None),
                 Span::from(format!(" ({:.2}%)", percent)),
             ])
         };
 
-        overview.push(Spans::from(vec![
+        overview.push(Line::from(vec![
             bold("Total Time: "),
             styles.time_units(total, view::DUR_LIST_PRECISION, None),
         ]));
@@ -186,7 +183,7 @@ impl TaskView {
         overview.push(dur_percent("Scheduled: ", task.scheduled(now)));
         overview.push(dur_percent("Idle: ", task.idle(now)));
 
-        let mut waker_stats = vec![Spans::from(vec![
+        let mut waker_stats = vec![Line::from(vec![
             bold("Current wakers: "),
             Span::from(format!("{} (", task.waker_count())),
             bold("clones: "),
@@ -209,10 +206,10 @@ impl TaskView {
             wakeups.push(Span::raw(" ago"));
         }
 
-        waker_stats.push(Spans::from(wakeups));
+        waker_stats.push(Line::from(wakeups));
 
         if task.self_wakes() > 0 {
-            waker_stats.push(Spans::from(vec![
+            waker_stats.push(Line::from(vec![
                 bold("Self Wakes: "),
                 Span::from(format!(
                     "{} times ({}%)",
@@ -223,7 +220,7 @@ impl TaskView {
         }
 
         let mut fields = Text::default();
-        fields.extend(task.formatted_fields().iter().cloned().map(Spans::from));
+        fields.extend(task.formatted_fields().iter().cloned().map(Line::from));
 
         if let Some(warnings_area) = warnings_area {
             let warnings = List::new(warnings).block(styles.border_block().title("Warnings"));

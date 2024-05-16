@@ -2,7 +2,7 @@ use crate::view::{self, bold};
 
 use ratatui::{
     layout,
-    text::{Span, Spans, Text},
+    text::{Line, Span, Text},
     widgets::{Paragraph, Widget},
 };
 
@@ -37,21 +37,21 @@ impl Controls {
         area: &layout::Rect,
         styles: &view::Styles,
     ) -> Self {
-        let mut spans_controls = Vec::with_capacity(view_controls.len() + UNIVERSAL_CONTROLS.len());
-        spans_controls.extend(view_controls.iter().map(|c| c.to_spans(styles, 0)));
-        spans_controls.extend(UNIVERSAL_CONTROLS.iter().map(|c| c.to_spans(styles, 0)));
+        let mut line_controls = Vec::with_capacity(view_controls.len() + UNIVERSAL_CONTROLS.len());
+        line_controls.extend(view_controls.iter().map(|c| c.to_spans(styles, 0)));
+        line_controls.extend(UNIVERSAL_CONTROLS.iter().map(|c| c.to_spans(styles, 0)));
 
-        let mut lines = vec![Spans::from(vec![Span::from("controls: ")])];
+        let mut lines = vec![Line::from(vec![Span::from("controls: ")])];
         let mut current_line = lines.last_mut().expect("This vector is never empty");
         let separator = Span::from(", ");
 
-        let controls_count: usize = spans_controls.len();
-        for (idx, spans) in spans_controls.into_iter().enumerate() {
+        let controls_count: usize = line_controls.len();
+        for (idx, line) in line_controls.into_iter().enumerate() {
             // If this is the first item on this line - or first item on the
             // first line, then always include it - even if it goes beyond the
             // line width, not much we can do anyway.
             if idx == 0 || current_line.width() == 0 {
-                current_line.0.extend(spans.0);
+                current_line.spans.extend(line.spans);
                 continue;
             }
 
@@ -66,7 +66,7 @@ impl Controls {
 
             let total_width = current_line.width()
                 + separator.width()
-                + spans.width()
+                + line.width()
                 + needed_trailing_separator_width;
 
             // If the current item fits on this line, append it.
@@ -74,11 +74,11 @@ impl Controls {
             // width in the previous loop iteration - and then create a new
             // line for the current item.
             if total_width <= area.width as usize {
-                current_line.0.push(separator.clone());
-                current_line.0.extend(spans.0);
+                current_line.push_span(separator.clone());
+                current_line.spans.extend(line.spans);
             } else {
-                current_line.0.push(separator.clone());
-                lines.push(spans);
+                current_line.push_span(separator.clone());
+                lines.push(line);
                 current_line = lines.last_mut().expect("This vector is never empty");
             }
         }
@@ -106,7 +106,7 @@ pub(crate) fn controls_paragraph<'a>(
     styles: &view::Styles,
 ) -> Paragraph<'a> {
     let mut spans = Vec::with_capacity(1 + view_controls.len() + UNIVERSAL_CONTROLS.len());
-    spans.push(Spans::from(vec![Span::raw("controls:")]));
+    spans.push(Line::from(vec![Span::raw("controls:")]));
     spans.extend(view_controls.iter().map(|c| c.to_spans(styles, 2)));
     spans.extend(UNIVERSAL_CONTROLS.iter().map(|c| c.to_spans(styles, 2)));
 
@@ -137,7 +137,7 @@ pub(crate) struct KeyDisplay {
 }
 
 impl ControlDisplay {
-    pub(crate) fn to_spans(&self, styles: &view::Styles, indent: usize) -> Spans<'static> {
+    pub(crate) fn to_spans(&self, styles: &view::Styles, indent: usize) -> Line<'static> {
         let mut spans = Vec::new();
 
         spans.push(Span::from(" ".repeat(indent)));
@@ -153,6 +153,6 @@ impl ControlDisplay {
             }));
         }
 
-        Spans::from(spans)
+        Line::from(spans)
     }
 }

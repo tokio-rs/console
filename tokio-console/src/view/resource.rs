@@ -14,7 +14,7 @@ use crate::{
 use once_cell::sync::OnceCell;
 use ratatui::{
     layout::{self, Layout},
-    text::{Span, Spans, Text},
+    text::{Line, Span, Text},
     widgets::Paragraph,
 };
 use std::{cell::RefCell, rc::Rc};
@@ -38,10 +38,10 @@ impl ResourceView {
         self.async_ops_table.update_input(event)
     }
 
-    pub(crate) fn render<B: ratatui::backend::Backend>(
+    pub(crate) fn render(
         &mut self,
         styles: &view::Styles,
-        frame: &mut ratatui::terminal::Frame<B>,
+        frame: &mut ratatui::terminal::Frame,
         area: layout::Rect,
         state: &mut State,
     ) {
@@ -78,17 +78,17 @@ impl ResourceView {
             .split(stats_area);
 
         let overview = vec![
-            Spans::from(vec![bold("ID: "), Span::raw(resource.id_str())]),
-            Spans::from(vec![bold("Parent ID: "), Span::raw(resource.parent())]),
-            Spans::from(vec![bold("Kind: "), Span::raw(resource.kind())]),
-            Spans::from(vec![bold("Target: "), Span::raw(resource.target())]),
-            Spans::from(vec![
+            Line::from(vec![bold("ID: "), Span::raw(resource.id_str())]),
+            Line::from(vec![bold("Parent ID: "), Span::raw(resource.parent())]),
+            Line::from(vec![bold("Kind: "), Span::raw(resource.kind())]),
+            Line::from(vec![bold("Target: "), Span::raw(resource.target())]),
+            Line::from(vec![
                 bold("Type: "),
                 Span::raw(resource.concrete_type()),
                 Span::raw(" "),
                 resource.type_visibility().render(styles),
             ]),
-            Spans::from(vec![bold("Location: "), Span::raw(resource.location())]),
+            Line::from(vec![bold("Location: "), Span::raw(resource.location())]),
         ];
 
         let mut fields = Text::default();
@@ -97,7 +97,7 @@ impl ResourceView {
                 .formatted_attributes()
                 .iter()
                 .cloned()
-                .map(Spans::from),
+                .map(Line::from),
         );
 
         let resource_widget =

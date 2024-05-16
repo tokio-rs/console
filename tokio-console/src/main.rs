@@ -2,21 +2,17 @@ use color_eyre::{eyre::eyre, Help, SectionExt};
 use console_api::tasks::TaskDetails;
 use state::State;
 
-use futures::{
-    future,
-    stream::{StreamExt, TryStreamExt},
-};
+use futures::stream::StreamExt;
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::Color,
-    text::{Span, Spans},
+    text::{Line, Span},
     widgets::{Paragraph, Wrap},
 };
 use tokio::sync::{mpsc, watch};
 
 use crate::{
     config::AllowedWarnings,
-    input::{Event, KeyEvent, KeyEventKind},
     view::{bold, UpdateKind},
 };
 
@@ -78,15 +74,7 @@ async fn main() -> color_eyre::Result<()> {
     let mut state = State::default()
         .with_task_linters(warnings.into_iter().map(|lint| lint.into()))
         .with_retain_for(retain_for);
-    let mut input = Box::pin(input::EventStream::new().try_filter(|event| {
-        future::ready(!matches!(
-            event,
-            Event::Key(KeyEvent {
-                kind: KeyEventKind::Release,
-                ..
-            })
-        ))
-    }));
+    let mut input = Box::pin(input::EventStream::new());
     let mut view = view::View::new(styles);
 
     loop {
@@ -95,6 +83,11 @@ async fn main() -> color_eyre::Result<()> {
                 let input = input
                     .ok_or_else(|| eyre!("keyboard input stream ended early"))
                     .with_section(|| "this is probably a bug".header("Note:"))??;
+
+                if input::should_ignore_key_event(&input) {
+                    continue;
+                }
+
                 if input::should_quit(&input) {
                     return Ok(());
                 }
@@ -156,9 +149,7 @@ async fn main() -> color_eyre::Result<()> {
 
             let mut header_text = conn.render(&view.styles);
             if state.is_paused() {
-                header_text
-                    .0
-                    .push(Span::styled(" PAUSED", view.styles.fg(Color::Red)));
+                header_text.push_span(Span::styled(" PAUSED", view.styles.fg(Color::Red)));
             }
             let dropped_async_ops_state = state.async_ops_state().dropped_events();
             let dropped_tasks_state = state.tasks_state().dropped_events();
@@ -174,13 +165,13 @@ async fn main() -> color_eyre::Result<()> {
                 if dropped_resources_state > 0 {
                     dropped_texts.push(format!("{} resources", dropped_resources_state))
                 }
-                header_text.0.push(Span::styled(
+                header_text.push_span(Span::styled(
                     format!(" dropped: {}", dropped_texts.join(", ")),
                     view.styles.fg(Color::Red),
                 ));
             }
             let header = Paragraph::new(header_text).wrap(Wrap { trim: true });
-            let view_controls = Paragraph::new(Spans::from(vec![
+            let view_controls = Paragraph::new(Line::from(vec![
                 Span::raw("views: "),
                 bold("t"),
                 Span::raw(" = tasks, "),
