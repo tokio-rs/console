@@ -38,7 +38,7 @@ console-api = { version = "0.6.0", path = "../console-api", features = ["transpo
 clap = { version = "~4.1.14", features = ["wrap_help", "cargo", "derive", "env"] }
 clap_complete = "~4.1.6"
 tokio = { version = "1", features = ["full", "rt-multi-thread"] }
-tonic = { version = "0.10", features = ["transport"] }
+tonic = { version = "0.11", features = ["transport"] }
 futures = "0.3"
 ratatui = { version = "0.26.2", default-features = false, features = ["crossterm"] }
 tower = "0.4.12"
