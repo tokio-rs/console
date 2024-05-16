@@ -51,8 +51,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [stable]
         include:
-          # Make 1.64 MSRV, as it's Tonic 0.10's MSRV.
-          - rust: 1.64.0
+          - rust: 1.74.0
             os: ubuntu-latest
           # Try to build on the latest nightly. This job is allowed to fail, but
           # it's useful to help catch bugs in upcoming Rust versions.
