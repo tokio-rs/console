@@ -62,7 +62,7 @@ use the [Tokio] runtime, this means that:
 - A [compatible Tokio version][versions] must be used. Tokio v1.0 or greater is required
   to use the console, and some features are only available in later versions.
   See [the `console-subscriber` documentation][versions] for details.
- 
+
 [`tracing`]: https://crates.io/crates/tracing
 [unstable]: https://docs.rs/console-subscriber/0.1/console_subscriber/#enabling-tokio-instrumentation
 [versions]: https://docs.rs/console-subscriber/0.1/console_subscriber/#required-tokio-versions
@@ -111,8 +111,8 @@ it's necessary to use a UTF-8-enabled terminal emulator, such as the new
 [Windows Terminal](https://learn.microsoft.com/en-us/windows/terminal/install).
 
 If you're using a terminal that supports UTF-8, make sure to explicitly call
-tokio-console with the UTF-8 language flag set: 
-```
+tokio-console with the UTF-8 language flag set:
+```shell
 tokio-console --lang en_US.UTF-8
 ```
 

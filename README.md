@@ -338,8 +338,8 @@ it's necessary to use a UTF-8-enabled terminal emulator, such as the new
 [Windows Terminal](https://learn.microsoft.com/en-us/windows/terminal/install).
 
 If you're using a terminal that supports UTF-8, make sure to explicitly call
-tokio-console with the UTF-8 language flag set: 
-```
+tokio-console with the UTF-8 language flag set:
+```shell
 tokio-console --lang en_US.UTF-8
 ```
 
