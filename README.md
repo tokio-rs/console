@@ -330,6 +330,19 @@ Options:
 
 ```
 
+#### running the console on windows
+
+The console uses the UTF-8 character set to display graphs and other visual
+features in the terminal. In order to display this rich terminal UI on Windows,
+it's necessary to use a UTF-8-enabled terminal emulator, such as the new
+[Windows Terminal](https://learn.microsoft.com/en-us/windows/terminal/install).
+
+If you're using a terminal that supports UTF-8, make sure to explicitly call
+tokio-console with the UTF-8 language flag set:
+```shell
+tokio-console --lang en_US.UTF-8
+```
+
 ## for development
 
 the `console-subscriber/examples` directory contains **some potentially useful
