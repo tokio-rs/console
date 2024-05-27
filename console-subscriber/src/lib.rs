@@ -530,7 +530,7 @@ where
 {
     fn register_callsite(&self, meta: &'static Metadata<'static>) -> subscriber::Interest {
         if !meta.is_span() && !meta.is_event() {
-            return subscriber::Interest::never()
+            return subscriber::Interest::never();
         }
 
         let dropped = match (meta.name(), meta.target()) {
