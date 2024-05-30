@@ -511,15 +511,20 @@ fn truncate_registry_path(s: String) -> String {
 
     static REGEX: OnceCell<Regex> = OnceCell::new();
     let regex = REGEX.get_or_init(|| {
-        Regex::new(r".*/\.cargo(/registry/src/[^/]*/|/git/checkouts/)")
-            .expect("failed to compile regex")
+        Regex::new(
+            r".*(/|\\)\.cargo(/|\\)(registry(/|\\)src(/|\\)[^/\\]*(/|\\)|git(/|\\)checkouts(/|\\))",
+        )
+        .expect("failed to compile regex")
     });
 
-    return match regex.replace(&s, "<cargo>/") {
+    let s = match regex.replace(&s, "<cargo>/") {
         Cow::Owned(s) => s,
         // String was not modified, return the original.
-        Cow::Borrowed(_) => s.to_string(),
+        Cow::Borrowed(_) => s,
     };
+
+    // This help use the same path separator on all platforms.
+    s.replace('\\', "/")
 }
 
 fn format_location(loc: Option<proto::Location>) -> String {
@@ -586,30 +591,69 @@ mod tests {
     #[test]
     fn test_format_location_macos() {
         // macOS style paths.
-        let location4 = proto::Location {
+        let location1 = proto::Location {
             file: Some("/Users/user/.cargo/registry/src/github.com-1ecc6299db9ec823/tokio-1.0.1/src/lib.rs".to_string()),
             ..Default::default()
         };
-        let location5 = proto::Location {
+        let location2 = proto::Location {
             file: Some("/Users/user/.cargo/git/checkouts/tokio-1.0.1/src/lib.rs".to_string()),
             ..Default::default()
         };
-        let location6 = proto::Location {
+        let location3 = proto::Location {
             file: Some("/Users/user/projects/tokio-1.0.1/src/lib.rs".to_string()),
             ..Default::default()
         };
 
         assert_eq!(
-            format_location(Some(location4)),
+            format_location(Some(location1)),
             "<cargo>/tokio-1.0.1/src/lib.rs"
         );
         assert_eq!(
-            format_location(Some(location5)),
+            format_location(Some(location2)),
             "<cargo>/tokio-1.0.1/src/lib.rs"
         );
         assert_eq!(
-            format_location(Some(location6)),
+            format_location(Some(location3)),
             "/Users/user/projects/tokio-1.0.1/src/lib.rs"
+        );
+    }
+
+    #[test]
+    fn test_format_location_windows() {
+        // Windows style paths.
+        let location1 = proto::Location {
+            file: Some(
+                "C:\\Users\\user\\.cargo\\registry\\src\\github.com-1ecc6299db9ec823\\tokio-1.0.1\\src\\lib.rs"
+                    .to_string(),
+            ),
+            ..Default::default()
+        };
+
+        let location2 = proto::Location {
+            file: Some(
+                "C:\\Users\\user\\.cargo\\git\\checkouts\\tokio-1.0.1\\src\\lib.rs".to_string(),
+            ),
+            ..Default::default()
+        };
+
+        let location3 = proto::Location {
+            file: Some("C:\\Users\\user\\projects\\tokio-1.0.1\\src\\lib.rs".to_string()),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            format_location(Some(location1)),
+            "<cargo>/tokio-1.0.1/src/lib.rs"
+        );
+
+        assert_eq!(
+            format_location(Some(location2)),
+            "<cargo>/tokio-1.0.1/src/lib.rs"
+        );
+
+        assert_eq!(
+            format_location(Some(location3)),
+            "C:/Users/user/projects/tokio-1.0.1/src/lib.rs"
         );
     }
 }
