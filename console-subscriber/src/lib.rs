@@ -529,6 +529,10 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn register_callsite(&self, meta: &'static Metadata<'static>) -> subscriber::Interest {
+        if !meta.is_span() && !meta.is_event() {
+            return subscriber::Interest::never();
+        }
+
         let dropped = match (meta.name(), meta.target()) {
             ("runtime.spawn", _) | ("task", "tokio::task") => {
                 self.spawn_callsites.insert(meta);
