@@ -290,6 +290,8 @@ Must be one of the following:
 * **feat**: A new feature
 * **fix**: A bug fix
 * **docs**: Documentation only changes
+* **update**: A dependency update (when a core dependency, especially
+  `tonic`, gets a breaking update)
 * **style**: Changes that do not affect the meaning of the code
   (white-space, formatting, missing semi-colons, etc)
 * **refactor**: A code change that neither fixes a bug or adds a feature

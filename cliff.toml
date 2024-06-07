@@ -67,6 +67,7 @@ split_commits = false
 # regex for preprocessing the commit messages
 commit_preprocessors = [
   { pattern = '^(feat|fix|doc|perf)\((api|subscriber|console)\) ', replace = '${1}(${2}): '}, # fix missing colon after commit type
+  { pattern = '^chore: bump tonic', replace = 'update: bump tonic' }, # Upgrading tonic is a breaking change and hence, not a chore
   { pattern = '\((\w+\s)?#([0-9]+)\)', replace = "([#${2}](https://github.com/tokio-rs/console/issues/${2}))"}, # replace issue numbers
 ]
 # regex for parsing and grouping commits
@@ -75,6 +76,7 @@ commit_parsers = [
   { message = "^fix", group = "Fixed" },
   { message = "^doc", group = "Documented" },
   { message = "^perf", group = "Performance" },
+  { message = "^update", group = "Updated" },
   { message = "^refactor", skip = true },
   { message = "^refac", skip = true },
   { message = "^style", skip = true },
