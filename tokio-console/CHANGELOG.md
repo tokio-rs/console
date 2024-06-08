@@ -3,6 +3,38 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.0 - (2024-06-08)
+
+### <a id = "0.2.0-breaking"></a>Breaking Changes
+- **Bump tonic to 0.11 ([#547](https://github.com/tokio-rs/console/pull/547))** ([ef6816c](https://github.com/tokio-rs/console/commit/ef6816caa0fe84171105b513425506f25d3082af))<br />This is a breaking change for users of `console-api` and
+`console-subscriber`, as it changes the public `tonic` dependency to a
+semver-incompatible version. This breaks compatibility with `tonic`
+0.10.x.
+
+### Added
+
+- Replace target column with kind column in tasks view ([#478](https://github.com/tokio-rs/console/pull/478)) ([903d9fa](https://github.com/tokio-rs/console/commit/903d9fa9f9d2dddec2235206b792c264ed9892fb))
+- Add flags and configurations for warnings ([#493](https://github.com/tokio-rs/console/pull/493)) ([174883f](https://github.com/tokio-rs/console/commit/174883f15747fe8069bcfd0750c0c07b3acaa232))
+- Add `--allow` flag ([#513](https://github.com/tokio-rs/console/pull/513)) ([8da7037](https://github.com/tokio-rs/console/commit/8da70370340401ebc7e82076780d5186a939118c))
+
+### Documented
+
+- Add note about running on Windows ([#510](https://github.com/tokio-rs/console/pull/510)) ([a0d20fd](https://github.com/tokio-rs/console/commit/a0d20fd62df07470b6033524afc00a96d156aaa5))
+
+### Fixed
+
+- Ignore key release events ([#468](https://github.com/tokio-rs/console/pull/468)) ([715713a](https://github.com/tokio-rs/console/commit/715713abda2f2ac22e84f7cf286fed9d723d22f7))
+- Accept only `file://`, `http://`, `https://` URI ([#486](https://github.com/tokio-rs/console/pull/486)) ([031bddd](https://github.com/tokio-rs/console/commit/031bdddd2b0828e8407f09bdb8f0be473bd72bc1))
+- Fix column sorting in resources tab ([#491](https://github.com/tokio-rs/console/pull/491)) ([96c65bd](https://github.com/tokio-rs/console/commit/96c65bd739444f450e9236c7d9e55d384238d6cb))
+- Only trigger lints on async tasks ([#517](https://github.com/tokio-rs/console/pull/517)) ([4593222](https://github.com/tokio-rs/console/commit/45932229fb5aea7a4994a7644bded9baf2776ea8))
+- Remove duplicate controls from async ops view ([#519](https://github.com/tokio-rs/console/pull/519)) ([f28ba4a](https://github.com/tokio-rs/console/commit/f28ba4abcf1644b10d260797806f7425b391b226))
+- Add pretty format for 'last woken' time ([#529](https://github.com/tokio-rs/console/pull/529)) ([ea11ad8](https://github.com/tokio-rs/console/commit/ea11ad8d6040ef564952b80d58abc713376b6160))
+
+### Updated
+
+- [**breaking**](#0.2.0-breaking) Bump tonic to 0.11 ([#547](https://github.com/tokio-rs/console/pull/547)) ([ef6816c](https://github.com/tokio-rs/console/commit/ef6816caa0fe84171105b513425506f25d3082af))
+
+
 ## tokio-console-v0.1.10 - (2023-09-29)
 
 [c8c4a85](https://github.com/tokio-rs/console/commit/c8c4a85df2da55c9745df6f38e19631e84ed0cf5)...[c8c4a85](https://github.com/tokio-rs/console/commit/c8c4a85df2da55c9745df6f38e19631e84ed0cf5)

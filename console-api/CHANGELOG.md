@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.7.0 - (2024-06-08)
+
+### <a id = "0.7.0-breaking"></a>Breaking Changes
+- **Bump tonic to 0.11 ([#547](https://github.com/tokio-rs/console/pull/547))** ([ef6816c](https://github.com/tokio-rs/console/commit/ef6816caa0fe84171105b513425506f25d3082af))<br />This is a breaking change for users of `console-api` and
+`console-subscriber`, as it changes the public `tonic` dependency to a
+semver-incompatible version. This breaks compatibility with `tonic`
+0.10.x.
+
+### Documented
+
+- Fix typo in proto ([#472](https://github.com/tokio-rs/console/pull/472)) ([2dd3559](https://github.com/tokio-rs/console/commit/2dd3559ccf8a88e0e0a140f076135ea3f6f26f02))
+
+### Updated
+
+- [**breaking**](#0.7.0-breaking) Bump tonic to 0.11 ([#547](https://github.com/tokio-rs/console/pull/547)) ([ef6816c](https://github.com/tokio-rs/console/commit/ef6816caa0fe84171105b513425506f25d3082af))
+
+
 ## console-api-v0.6.0 - (2023-09-29)
 
 ### <a id = "console-api-v0.6.0-breaking"></a>Breaking Changes
