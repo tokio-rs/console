@@ -3,13 +3,7 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.2.0 - (2024-06-08)
-
-### <a id = "0.2.0-breaking"></a>Breaking Changes
-- **Bump tonic to 0.11 ([#547](https://github.com/tokio-rs/console/pull/547))** ([ef6816c](https://github.com/tokio-rs/console/commit/ef6816caa0fe84171105b513425506f25d3082af))<br />This is a breaking change for users of `console-api` and
-`console-subscriber`, as it changes the public `tonic` dependency to a
-semver-incompatible version. This breaks compatibility with `tonic`
-0.10.x.
+## tokio-console-v0.1.11 - (2024-06-10)
 
 ### Added
 
@@ -29,10 +23,6 @@ semver-incompatible version. This breaks compatibility with `tonic`
 - Only trigger lints on async tasks ([#517](https://github.com/tokio-rs/console/pull/517)) ([4593222](https://github.com/tokio-rs/console/commit/45932229fb5aea7a4994a7644bded9baf2776ea8))
 - Remove duplicate controls from async ops view ([#519](https://github.com/tokio-rs/console/pull/519)) ([f28ba4a](https://github.com/tokio-rs/console/commit/f28ba4abcf1644b10d260797806f7425b391b226))
 - Add pretty format for 'last woken' time ([#529](https://github.com/tokio-rs/console/pull/529)) ([ea11ad8](https://github.com/tokio-rs/console/commit/ea11ad8d6040ef564952b80d58abc713376b6160))
-
-### Updated
-
-- [**breaking**](#0.2.0-breaking) Bump tonic to 0.11 ([#547](https://github.com/tokio-rs/console/pull/547)) ([ef6816c](https://github.com/tokio-rs/console/commit/ef6816caa0fe84171105b513425506f25d3082af))
 
 
 ## tokio-console-v0.1.10 - (2023-09-29)

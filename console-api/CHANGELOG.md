@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.7.0 - (2024-06-08)
+## console-api-v0.7.0 - (2024-06-10)
 
 ### <a id = "0.7.0-breaking"></a>Breaking Changes
 - **Bump tonic to 0.11 ([#547](https://github.com/tokio-rs/console/pull/547))** ([ef6816c](https://github.com/tokio-rs/console/commit/ef6816caa0fe84171105b513425506f25d3082af))<br />This is a breaking change for users of `console-api` and
