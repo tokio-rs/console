@@ -3,6 +3,35 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## console-subscriber-v0.3.0 - (2024-06-10)
+
+### <a id = "0.3.0-breaking"></a>Breaking Changes
+- **Bump tonic to 0.11 ([#547](https://github.com/tokio-rs/console/pull/547))** ([ef6816c](https://github.com/tokio-rs/console/commit/ef6816caa0fe84171105b513425506f25d3082af))<br />This is a breaking change for users of `console-api` and
+`console-subscriber`, as it changes the public `tonic` dependency to a
+semver-incompatible version. This breaks compatibility with `tonic`
+0.10.x.
+
+### Added
+
+- Replace target column with kind column in tasks view ([#478](https://github.com/tokio-rs/console/pull/478)) ([903d9fa](https://github.com/tokio-rs/console/commit/903d9fa9f9d2dddec2235206b792c264ed9892fb))
+- Reduce retention period to fit in max message size ([#503](https://github.com/tokio-rs/console/pull/503)) ([bd3dd71](https://github.com/tokio-rs/console/commit/bd3dd71eb0645c028858967ed5b3f14ed34d0605))
+- Support grpc-web and add `grpc-web` feature ([#498](https://github.com/tokio-rs/console/pull/498)) ([4150253](https://github.com/tokio-rs/console/commit/41502531396106b551a9dde2d3a83ddb0beac774))
+
+### Documented
+
+- Add a grpc-web app example ([#526](https://github.com/tokio-rs/console/pull/526)) ([4af30f2](https://github.com/tokio-rs/console/commit/4af30f2c1df919a1e0d4f448534d15b4a1bb836b))
+- Fix typo in doc comment ([#543](https://github.com/tokio-rs/console/pull/543)) ([ff22678](https://github.com/tokio-rs/console/commit/ff2267880ba96f4fdf32090e05b66cf80189d7f8))
+
+### Fixed
+
+- Don't save poll_ops if no-one is receiving them ([#501](https://github.com/tokio-rs/console/pull/501)) ([1656c79](https://github.com/tokio-rs/console/commit/1656c791af35bb0500bb6dd3c60344a0ceb12520))
+- Ignore metadata that is not a span or event ([#554](https://github.com/tokio-rs/console/pull/554)) ([852a977](https://github.com/tokio-rs/console/commit/852a977bab71d0f6ae47c6c5c1c20b8679c9e576))
+
+### Updated
+
+- [**breaking**](#0.3.0-breaking) Bump tonic to 0.11 ([#547](https://github.com/tokio-rs/console/pull/547)) ([ef6816c](https://github.com/tokio-rs/console/commit/ef6816caa0fe84171105b513425506f25d3082af))
+
+
 ## console-subscriber-v0.2.0 - (2023-09-29)
 
 [c8c4a85](https://github.com/tokio-rs/console/commit/c8c4a85df2da55c9745df6f38e19631e84ed0cf5)...[c8c4a85](https://github.com/tokio-rs/console/commit/c8c4a85df2da55c9745df6f38e19631e84ed0cf5)

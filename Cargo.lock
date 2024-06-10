@@ -398,7 +398,7 @@ checksum = "d6417fe6fc03a8b533fd2177742eeb39a90c7233eedec7bac96d4d6b69a09449"
 
 [[package]]
 name = "console-api"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "futures-core",
  "prost",
@@ -411,7 +411,7 @@ dependencies = [
 
 [[package]]
 name = "console-subscriber"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "console-api",
  "crossbeam-channel",
@@ -1843,7 +1843,7 @@ dependencies = [
 
 [[package]]
 name = "tokio-console"
-version = "0.1.10"
+version = "0.2.0"
 dependencies = [
  "clap",
  "clap_complete",
