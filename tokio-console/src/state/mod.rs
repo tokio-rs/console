@@ -511,10 +511,8 @@ fn truncate_registry_path(s: String) -> String {
 
     static REGEX: OnceCell<Regex> = OnceCell::new();
     let regex = REGEX.get_or_init(|| {
-        Regex::new(
-            r".*(/|\\)\.cargo(/|\\)(registry(/|\\)src(/|\\)[^/\\]*(/|\\)|git(/|\\)checkouts(/|\\))",
-        )
-        .expect("failed to compile regex")
+        Regex::new(r".*[/\\]\.cargo[/\\](registry[/\\]src[/\\][^/\\]*[/\\]|git[/\\]checkouts[/\\])")
+            .expect("failed to compile regex")
     });
 
     let s = match regex.replace(&s, "<cargo>/") {
