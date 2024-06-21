@@ -116,7 +116,7 @@ notes:
   rustflags = ["--cfg", "tokio_unstable"]
   ```
 
-  For more information on the appropriate location of your `.cargo/config.toml` file,
+  for more information on the appropriate location of your `.cargo/config.toml` file,
   especially when using workspaces, see the
   [console-subscriber readme](console-subscriber/README.md#enabling-tokio-instrumentation).
 * the `tokio` and `runtime` [`tracing` targets] must be enabled at the [`TRACE`
@@ -163,8 +163,8 @@ as an argument to the console (either as an `<IP>:<PORT>` or
 cargo run -- http://my.great.console.app.local:5555
 ```
 
-The console command-line tool supports a number of additional flags to configure
-its behavior. The `help` command will print a list of supported command-line
+the console command-line tool supports a number of additional flags to configure
+its behavior. the `help` command will print a list of supported command-line
 flags and arguments:
 
 ```console
@@ -332,13 +332,14 @@ Options:
 
 #### running the console on windows
 
-The console uses the UTF-8 character set to display graphs and other visual
-features in the terminal. In order to display this rich terminal UI on Windows,
+the console uses the UTF-8 character set to display graphs and other visual
+features in the terminal. in order to display this rich terminal UI on Windows,
 it's necessary to use a UTF-8-enabled terminal emulator, such as the new
 [Windows Terminal](https://learn.microsoft.com/en-us/windows/terminal/install).
 
-If you're using a terminal that supports UTF-8, make sure to explicitly call
+if you're using a terminal that supports UTF-8, make sure to explicitly call
 tokio-console with the UTF-8 language flag set:
+
 ```shell
 tokio-console --lang en_US.UTF-8
 ```
@@ -353,7 +354,7 @@ tools**:
 * `dump.rs`: a simple CLI program that dumps the data stream from a `Tasks`
   server
 
-Examples can be executed with:
+examples can be executed with:
 
 ```shell
 cargo run --example $name
