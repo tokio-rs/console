@@ -3,6 +3,7 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
 ## console-subscriber-v0.3.0 - (2024-06-10)
 
 ### <a id = "0.3.0-breaking"></a>Breaking Changes
