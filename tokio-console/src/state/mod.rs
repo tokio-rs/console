@@ -504,9 +504,18 @@ impl Attribute {
     }
 }
 
+// A naive way to determine if a path is a Windows path.
+// If the path has a drive letter and more backslashes than forward slashes, it's a Windows path.
 fn is_windows_path(path: &str) -> bool {
-    let re = regex::Regex::new(r"^[a-zA-Z]:\\").unwrap();
-    re.is_match(path)
+    use once_cell::sync::OnceCell;
+    use regex::Regex;
+
+    static REGEX: OnceCell<Regex> = OnceCell::new();
+    let regex = REGEX.get_or_init(|| Regex::new(r"^[a-zA-Z]:\\").expect("failed to compile regex"));
+    let has_drive_letter = regex.is_match(path);
+    let slash_count = path.find('/').iter().count();
+    let backslash_count = path.find('\\').iter().count();
+    has_drive_letter && backslash_count > slash_count
 }
 
 fn truncate_registry_path(s: String) -> String {
