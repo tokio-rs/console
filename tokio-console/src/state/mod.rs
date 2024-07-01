@@ -504,6 +504,11 @@ impl Attribute {
     }
 }
 
+fn is_windows_path(path: &str) -> bool {
+    let re = regex::Regex::new(r"^[a-zA-Z]:\\").unwrap();
+    re.is_match(path)
+}
+
 fn truncate_registry_path(s: String) -> String {
     use once_cell::sync::OnceCell;
     use regex::Regex;
@@ -515,14 +520,17 @@ fn truncate_registry_path(s: String) -> String {
             .expect("failed to compile regex")
     });
 
-    let s = match regex.replace(&s, "<cargo>/") {
+    let rep = if is_windows_path(&s) {
+        "<cargo>\\"
+    } else {
+        "<cargo>/"
+    };
+
+    match regex.replace(&s, rep) {
         Cow::Owned(s) => s,
         // String was not modified, return the original.
         Cow::Borrowed(_) => s,
-    };
-
-    // This help use the same path separator on all platforms.
-    s.replace('\\', "/")
+    }
 }
 
 fn format_location(loc: Option<proto::Location>) -> String {
@@ -641,17 +649,17 @@ mod tests {
 
         assert_eq!(
             format_location(Some(location1)),
-            "<cargo>/tokio-1.0.1/src/lib.rs"
+            "<cargo>\\tokio-1.0.1\\src\\lib.rs"
         );
 
         assert_eq!(
             format_location(Some(location2)),
-            "<cargo>/tokio-1.0.1/src/lib.rs"
+            "<cargo>\\tokio-1.0.1\\src\\lib.rs"
         );
 
         assert_eq!(
             format_location(Some(location3)),
-            "C:/Users/user/projects/tokio-1.0.1/src/lib.rs"
+            "C:\\Users\\user\\projects\\tokio-1.0.1\\src\\lib.rs"
         );
     }
 }
