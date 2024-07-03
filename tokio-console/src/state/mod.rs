@@ -513,8 +513,8 @@ fn is_windows_path(path: &str) -> bool {
     static REGEX: OnceCell<Regex> = OnceCell::new();
     let regex = REGEX.get_or_init(|| Regex::new(r"^[a-zA-Z]:\\").expect("failed to compile regex"));
     let has_drive_letter = regex.is_match(path);
-    let slash_count = path.find('/').iter().count();
-    let backslash_count = path.find('\\').iter().count();
+    let slash_count = path.chars().filter(|&c| c == '/').count();
+    let backslash_count = path.chars().filter(|&c| c == '\\').count();
     has_drive_letter && backslash_count > slash_count
 }
 
