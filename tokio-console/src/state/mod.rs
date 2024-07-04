@@ -5,6 +5,7 @@ use crate::{
     warnings::Linter,
 };
 use console_api as proto;
+use console_api::instrument::Temporality;
 use ratatui::{
     style::{Color, Modifier},
     text::Span,
@@ -71,12 +72,6 @@ pub(crate) enum FieldValue {
     Debug(String),
 }
 
-#[derive(Debug)]
-enum Temporality {
-    Live,
-    Paused,
-}
-
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) struct Attribute {
     field: Field,
@@ -107,6 +102,14 @@ impl State {
         current_view: &view::ViewState,
         update: proto::instrument::Update,
     ) {
+        match Temporality::try_from(update.temporality) {
+            Ok(temporality) => {
+                self.temporality = temporality;
+            }
+            Err(..) => {
+                tracing::warn!(?update.temporality, "invalid temporality");
+            }
+        }
         if let Some(now) = update.now.map(|v| v.try_into().unwrap()) {
             self.last_updated_at = Some(now);
         }
@@ -247,12 +250,6 @@ impl State {
 
     pub(crate) fn is_paused(&self) -> bool {
         matches!(self.temporality, Temporality::Paused)
-    }
-}
-
-impl Default for Temporality {
-    fn default() -> Self {
-        Self::Live
     }
 }
 

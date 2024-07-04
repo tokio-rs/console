@@ -70,6 +70,17 @@ message Update {
 
     // Any new span metadata that was registered since the last update.
     common.RegisterMetadata new_metadata = 5;
+
+    // The time "state" of the aggregator, such as paused or live.
+    Temporality temporality = 6;
+}
+
+// The time "state" of the aggregator.
+enum Temporality {
+    // The aggregator is currently live.
+    LIVE = 0;
+    // The aggregator is currently paused.
+    PAUSED = 1;
 }
 
 // `PauseResponse` is the value returned after a pause request.

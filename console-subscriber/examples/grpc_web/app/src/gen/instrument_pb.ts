@@ -11,6 +11,32 @@ import { ResourceUpdate } from "./resources_pb.js";
 import { AsyncOpUpdate } from "./async_ops_pb.js";
 
 /**
+ * The time "state" of the aggregator.
+ *
+ * @generated from enum rs.tokio.console.instrument.Temporality
+ */
+export enum Temporality {
+  /**
+   * The aggregator is currently live.
+   *
+   * @generated from enum value: LIVE = 0;
+   */
+  LIVE = 0,
+
+  /**
+   * The aggregator is currently paused.
+   *
+   * @generated from enum value: PAUSED = 1;
+   */
+  PAUSED = 1,
+}
+// Retrieve enum metadata with: proto3.getEnumType(Temporality)
+proto3.util.setEnumType(Temporality, "rs.tokio.console.instrument.Temporality", [
+  { no: 0, name: "LIVE" },
+  { no: 1, name: "PAUSED" },
+]);
+
+/**
  * InstrumentRequest requests the stream of updates
  * to observe the async runtime state over time.
  *
@@ -207,6 +233,13 @@ export class Update extends Message<Update> {
    */
   newMetadata?: RegisterMetadata;
 
+  /**
+   * The time "state" of the aggregator, such as paused or live.
+   *
+   * @generated from field: rs.tokio.console.instrument.Temporality temporality = 6;
+   */
+  temporality = Temporality.LIVE;
+
   constructor(data?: PartialMessage<Update>) {
     super();
     proto3.util.initPartial(data, this);
@@ -220,6 +253,7 @@ export class Update extends Message<Update> {
     { no: 3, name: "resource_update", kind: "message", T: ResourceUpdate },
     { no: 4, name: "async_op_update", kind: "message", T: AsyncOpUpdate },
     { no: 5, name: "new_metadata", kind: "message", T: RegisterMetadata },
+    { no: 6, name: "temporality", kind: "enum", T: proto3.getEnumType(Temporality) },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Update {

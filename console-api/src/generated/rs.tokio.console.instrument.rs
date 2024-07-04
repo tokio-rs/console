@@ -54,6 +54,9 @@ pub struct Update {
     /// Any new span metadata that was registered since the last update.
     #[prost(message, optional, tag = "5")]
     pub new_metadata: ::core::option::Option<super::common::RegisterMetadata>,
+    /// The time "state" of the aggregator, such as paused or live.
+    #[prost(enumeration = "Temporality", tag = "6")]
+    pub temporality: i32,
 }
 /// `PauseResponse` is the value returned after a pause request.
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -63,6 +66,35 @@ pub struct PauseResponse {}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct ResumeResponse {}
+/// The time "state" of the aggregator.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum Temporality {
+    /// The aggregator is currently live.
+    Live = 0,
+    /// The aggregator is currently paused.
+    Paused = 1,
+}
+impl Temporality {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Temporality::Live => "LIVE",
+            Temporality::Paused => "PAUSED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "LIVE" => Some(Self::Live),
+            "PAUSED" => Some(Self::Paused),
+            _ => None,
+        }
+    }
+}
 /// Generated client implementations.
 pub mod instrument_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
