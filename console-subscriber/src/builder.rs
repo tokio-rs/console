@@ -333,6 +333,10 @@ impl Builder {
             self.recording_path = Some(path.into());
         }
 
+        if let Some(capacity) = usize_from_env("TOKIO_CONSOLE_BUFFER_CAPACITY") {
+            self.event_buffer_capacity = capacity;
+        }
+
         self
     }
 
@@ -761,6 +765,17 @@ fn duration_from_env(var_name: &str) -> Option<Duration> {
         Ok(dur) => Some(dur.into()),
         Err(e) => panic!(
             "failed to parse a duration from `{}={:?}`: {}",
+            var_name, var, e
+        ),
+    }
+}
+
+fn usize_from_env(var_name: &str) -> Option<usize> {
+    let var = std::env::var(var_name).ok()?;
+    match var.parse::<usize>() {
+        Ok(num) => Some(num),
+        Err(e) => panic!(
+            "failed to parse a usize from `{}={:?}`: {}",
             var_name, var, e
         ),
     }
