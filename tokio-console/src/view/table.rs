@@ -154,18 +154,19 @@ impl<T: TableList<N>, const N: usize> TableListState<T, N> {
         self.scroll_with(|_, _| 0)
     }
 
-    pub(in crate::view) fn selected_item(&self) -> Weak<RefCell<T::Row>> {
-        self.table_state
-            .selected()
-            .map(|i| {
-                let selected = if self.sort_descending {
-                    i
+    pub(in crate::view) fn selected_item(&self) -> Option<Weak<RefCell<T::Row>>> {
+        self.table_state.selected().and_then(|i| {
+            if self.sort_descending {
+                if i < self.sorted_items.len() {
+                    Some(self.sorted_items[i].clone())
                 } else {
-                    self.sorted_items.len() - i - 1
-                };
-                self.sorted_items[selected].clone()
-            })
-            .unwrap_or_default()
+                    None
+                }
+            } else {
+                let adjusted_index = self.sorted_items.len().checked_sub(i + 1)?;
+                self.sorted_items.get(adjusted_index).cloned()
+            }
+        })
     }
 
     pub(in crate::view) fn render(
