@@ -2,7 +2,7 @@
 #![allow(dead_code, unused_imports)]
 
 #[cfg(feature = "parking_lot")]
-pub(crate) use parking_lot_crate::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+pub(crate) use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 #[cfg(not(feature = "parking_lot"))]
 pub(crate) use self::std_impl::*;
