@@ -236,8 +236,6 @@ impl From<Id> for u64 {
     }
 }
 
-impl Copy for Id {}
-
 impl From<tracing_core::span::Id> for Id {
     fn from(id: tracing_core::span::Id) -> Self {
         Id { id: id.into_u64() }

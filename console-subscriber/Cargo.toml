@@ -36,7 +36,7 @@ tokio = { version = "^1.21", features = ["sync", "time", "macros", "tracing"] }
 tokio-stream = { version = "0.1", features = ["net"] }
 thread_local = "1.1.3"
 console-api = { version = "0.7.0", path = "../console-api", features = ["transport"] }
-tonic = { version = "0.11", features = ["transport"] }
+tonic = { version = "0.12", features = ["transport"] }
 tracing-core = "0.1.24"
 tracing = "0.1.26"
 tracing-subscriber = { version = "0.3.17", default-features = false, features = ["fmt", "registry"] }
@@ -46,8 +46,9 @@ hdrhistogram = { version = "7.3.0", default-features = false, features = ["seria
 # feature to also enable `tracing-subscriber`'s parking_lot feature flag.
 parking_lot_crate = { package = "parking_lot", version = "0.12", optional = true }
 humantime = "2.1.0"
-prost = "0.12"
-prost-types = "0.12.0"
+prost = "0.13.1"
+prost-types = "0.13.1"
+hyper-util = { version = "0.1.6", features = ["tokio"] }
 
 # Required for recording:
 serde = { version = "1", features = ["derive"] }
@@ -55,14 +56,14 @@ serde_json = "1"
 crossbeam-channel = "0.5"
 
 # Only for the web feature:
-tonic-web = { version = "0.11", optional = true }
+tonic-web = { version = "0.12", optional = true }
 
 [dev-dependencies]
 tokio = { version = "^1.21", features = ["full", "rt-multi-thread"] }
 tower = { version = "0.4", default-features = false }
 futures = "0.3"
-http = "0.2"
-tower-http = { version = "0.4", features = ["cors"] }
+http = "1.1"
+tower-http = { version = "0.5", features = ["cors"] }
 
 [package.metadata.docs.rs]
 all-features = true

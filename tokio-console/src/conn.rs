@@ -4,6 +4,8 @@ use console_api::instrument::{
 };
 use console_api::tasks::TaskDetails;
 use futures::stream::StreamExt;
+use futures::TryFutureExt;
+use hyper_util::rt::TokioIo;
 use std::{error::Error, time::Duration};
 #[cfg(unix)]
 use tokio::net::UnixStream;
@@ -94,7 +96,7 @@ impl Connection {
                         let endpoint = Endpoint::from_static("http://localhost");
                         endpoint
                             .connect_with_connector(tower::service_fn(move |_| {
-                                UnixStream::connect(path.clone())
+                                UnixStream::connect(path.clone()).map_ok(TokioIo::new)
                             }))
                             .await?
                     }
