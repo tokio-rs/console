@@ -308,7 +308,7 @@ impl Visit for FieldVisitor {
         self.fields.push(proto::Field {
             name: Some(field.name().into()),
             value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
+            metadata_id: Some(self.meta_id),
         });
     }
 
@@ -316,7 +316,7 @@ impl Visit for FieldVisitor {
         self.fields.push(proto::Field {
             name: Some(field.name().into()),
             value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
+            metadata_id: Some(self.meta_id),
         });
     }
 
@@ -324,7 +324,7 @@ impl Visit for FieldVisitor {
         self.fields.push(proto::Field {
             name: Some(field.name().into()),
             value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
+            metadata_id: Some(self.meta_id),
         });
     }
 
@@ -332,7 +332,7 @@ impl Visit for FieldVisitor {
         self.fields.push(proto::Field {
             name: Some(field.name().into()),
             value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
+            metadata_id: Some(self.meta_id),
         });
     }
 
@@ -340,7 +340,7 @@ impl Visit for FieldVisitor {
         self.fields.push(proto::Field {
             name: Some(field.name().into()),
             value: Some(value.into()),
-            metadata_id: Some(self.meta_id.clone()),
+            metadata_id: Some(self.meta_id),
         });
     }
 }
@@ -473,7 +473,7 @@ impl Visit for StateUpdateVisitor {
             self.field = Some(proto::Field {
                 name: Some(field.name().into()),
                 value: Some(value.into()),
-                metadata_id: Some(self.meta_id.clone()),
+                metadata_id: Some(self.meta_id),
             });
         }
     }
@@ -485,7 +485,7 @@ impl Visit for StateUpdateVisitor {
             self.field = Some(proto::Field {
                 name: Some(field.name().into()),
                 value: Some(value.into()),
-                metadata_id: Some(self.meta_id.clone()),
+                metadata_id: Some(self.meta_id),
             });
         }
     }
@@ -497,7 +497,7 @@ impl Visit for StateUpdateVisitor {
             self.field = Some(proto::Field {
                 name: Some(field.name().into()),
                 value: Some(value.into()),
-                metadata_id: Some(self.meta_id.clone()),
+                metadata_id: Some(self.meta_id),
             });
         }
     }
@@ -509,7 +509,7 @@ impl Visit for StateUpdateVisitor {
             self.field = Some(proto::Field {
                 name: Some(field.name().into()),
                 value: Some(value.into()),
-                metadata_id: Some(self.meta_id.clone()),
+                metadata_id: Some(self.meta_id),
             });
         }
     }
@@ -528,7 +528,7 @@ impl Visit for StateUpdateVisitor {
             self.field = Some(proto::Field {
                 name: Some(field.name().into()),
                 value: Some(value.into()),
-                metadata_id: Some(self.meta_id.clone()),
+                metadata_id: Some(self.meta_id),
             });
         }
     }

@@ -6,6 +6,7 @@ use console_api::{
 };
 use console_subscriber::ServerParts;
 use futures::stream::StreamExt;
+use hyper_util::rt::TokioIo;
 use tokio::{io::DuplexStream, task};
 use tonic::transport::{Channel, Endpoint, Server, Uri};
 use tower::service_fn;
@@ -205,7 +206,7 @@ async fn console_client(client_stream: DuplexStream, mut test_state: TestState) 
             async move {
                 // We need to return a Result from this async block, which is
                 // why we don't unwrap the `client` here.
-                client.ok_or_else(|| {
+                client.map(TokioIo::new).ok_or_else(|| {
                     std::io::Error::new(
                         std::io::ErrorKind::Other,
                         "console-test error: client already taken. This shouldn't happen.",
