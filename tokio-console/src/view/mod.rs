@@ -132,14 +132,12 @@ impl View {
                 // mutate the currently selected view.
                 match event {
                     key!(Enter) => {
-                        if let Some(task_weak) = self.tasks_list.selected_item() {
-                            if let Some(task) = task_weak.upgrade() {
-                                update_kind = UpdateKind::SelectTask(task.borrow().span_id());
-                                self.state = TaskInstance(self::task::TaskView::new(
-                                    task,
-                                    state.task_details_ref(),
-                                ));
-                            }
+                        if let Some(task) = self.tasks_list.selected_item() {
+                            update_kind = UpdateKind::SelectTask(task.borrow().span_id());
+                            self.state = TaskInstance(self::task::TaskView::new(
+                                task,
+                                state.task_details_ref(),
+                            ));
                         }
                     }
                     _ => {
@@ -151,12 +149,9 @@ impl View {
             ResourcesList => {
                 match event {
                     key!(Enter) => {
-                        if let Some(res_weak) = self.resources_list.selected_item() {
-                            if let Some(res) = res_weak.upgrade() {
-                                update_kind = UpdateKind::SelectResource(res.borrow().span_id());
-                                self.state =
-                                    ResourceInstance(self::resource::ResourceView::new(res));
-                            }
+                        if let Some(res) = self.resources_list.selected_item() {
+                            update_kind = UpdateKind::SelectResource(res.borrow().span_id());
+                            self.state = ResourceInstance(self::resource::ResourceView::new(res));
                         }
                     }
                     _ => {
@@ -174,24 +169,21 @@ impl View {
                         update_kind = UpdateKind::Other;
                     }
                     key!(Enter) => {
-                        if let Some(op_weak) = view.async_ops_table.selected_item() {
-                            if let Some(op) = op_weak.upgrade() {
-                                if let Some(task_id) = op.borrow().task_id() {
-                                    let task = self
-                                        .tasks_list
-                                        .sorted_items
-                                        .iter()
-                                        .filter_map(|i| i.upgrade())
-                                        .find(|t| task_id == t.borrow().id());
+                        if let Some(op) = view.async_ops_table.selected_item() {
+                            if let Some(task_id) = op.borrow().task_id() {
+                                let task = self
+                                    .tasks_list
+                                    .sorted_items
+                                    .iter()
+                                    .filter_map(|i| i.upgrade())
+                                    .find(|t| task_id == t.borrow().id());
 
-                                    if let Some(task) = task {
-                                        update_kind =
-                                            UpdateKind::SelectTask(task.borrow().span_id());
-                                        self.state = TaskInstance(self::task::TaskView::new(
-                                            task,
-                                            state.task_details_ref(),
-                                        ));
-                                    }
+                                if let Some(task) = task {
+                                    update_kind = UpdateKind::SelectTask(task.borrow().span_id());
+                                    self.state = TaskInstance(self::task::TaskView::new(
+                                        task,
+                                        state.task_details_ref(),
+                                    ));
                                 }
                             }
                         }
