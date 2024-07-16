@@ -61,5 +61,4 @@ dirs = "5"
 hyper-util = { version = "0.1.6", features = ["tokio"] }
 
 [dev-dependencies]
-# Use 1.64.0 compatible version of `trycmd@0.13.6`.
-trycmd = "=0.13.6"
+trycmd = "0.15.4"
