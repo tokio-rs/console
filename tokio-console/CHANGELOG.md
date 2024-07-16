@@ -3,6 +3,24 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.0 - (2024-07-16)
+
+### <a id = "0.2.0-breaking"></a>Breaking Changes
+- **Upgrade tonic to 0.12 ([#571](https://github.com/tokio-rs/console/pull/571))** ([5f6faa2](https://github.com/tokio-rs/console/commit/5f6faa22d944735c2b8c312cac03b35a4ab228ef))<br />This is a breaking change for users of `console-api` and
+`console-subscriber`, as it changes the public `tonic`, `prost` and
+`prost-types` dependency to a semver-incompatible version. This breaks
+compatibility with `tonic` 0.11.x as well as `prost`/`prost-types`
+0.12.x.
+
+### Fixed
+
+- Handle Windows path correctly ([#555](https://github.com/tokio-rs/console/pull/555)) ([6ad0def](https://github.com/tokio-rs/console/commit/6ad0def9c4ac3d4e85ad8b7247ca270ff07b45b8))
+
+### Updated
+
+- [**breaking**](#0.2.0-breaking) Upgrade tonic to 0.12 ([#571](https://github.com/tokio-rs/console/pull/571)) ([5f6faa2](https://github.com/tokio-rs/console/commit/5f6faa22d944735c2b8c312cac03b35a4ab228ef))
+
+
 ## tokio-console-v0.1.11 - (2024-06-10)
 
 ### Added
