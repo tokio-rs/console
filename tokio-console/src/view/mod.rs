@@ -132,7 +132,7 @@ impl View {
                 // mutate the currently selected view.
                 match event {
                     key!(Enter) => {
-                        if let Some(task) = self.tasks_list.selected_item().upgrade() {
+                        if let Some(task) = self.tasks_list.selected_item() {
                             update_kind = UpdateKind::SelectTask(task.borrow().span_id());
                             self.state = TaskInstance(self::task::TaskView::new(
                                 task,
@@ -149,7 +149,7 @@ impl View {
             ResourcesList => {
                 match event {
                     key!(Enter) => {
-                        if let Some(res) = self.resources_list.selected_item().upgrade() {
+                        if let Some(res) = self.resources_list.selected_item() {
                             update_kind = UpdateKind::SelectResource(res.borrow().span_id());
                             self.state = ResourceInstance(self::resource::ResourceView::new(res));
                         }
@@ -169,7 +169,7 @@ impl View {
                         update_kind = UpdateKind::Other;
                     }
                     key!(Enter) => {
-                        if let Some(op) = view.async_ops_table.selected_item().upgrade() {
+                        if let Some(op) = view.async_ops_table.selected_item() {
                             if let Some(task_id) = op.borrow().task_id() {
                                 let task = self
                                     .tasks_list

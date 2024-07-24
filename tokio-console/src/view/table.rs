@@ -13,7 +13,7 @@ use ratatui::{
 use std::convert::TryFrom;
 
 use std::cell::RefCell;
-use std::rc::Weak;
+use std::rc::{Rc, Weak};
 
 pub(crate) trait TableList<const N: usize> {
     type Row;
@@ -154,18 +154,22 @@ impl<T: TableList<N>, const N: usize> TableListState<T, N> {
         self.scroll_with(|_, _| 0)
     }
 
-    pub(in crate::view) fn selected_item(&self) -> Weak<RefCell<T::Row>> {
+    pub(in crate::view) fn selected_item(&self) -> Option<Rc<RefCell<T::Row>>> {
         self.table_state
             .selected()
-            .map(|i| {
-                let selected = if self.sort_descending {
-                    i
+            .and_then(|i| {
+                if self.sort_descending {
+                    if i < self.sorted_items.len() {
+                        Some(self.sorted_items[i].clone())
+                    } else {
+                        None
+                    }
                 } else {
-                    self.sorted_items.len() - i - 1
-                };
-                self.sorted_items[selected].clone()
+                    let adjusted_index = self.sorted_items.len().checked_sub(i + 1)?;
+                    self.sorted_items.get(adjusted_index).cloned()
+                }
             })
-            .unwrap_or_default()
+            .and_then(|weak| weak.upgrade())
     }
 
     pub(in crate::view) fn render(
