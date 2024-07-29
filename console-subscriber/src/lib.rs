@@ -15,10 +15,7 @@ use std::{
 use thread_local::ThreadLocal;
 #[cfg(unix)]
 use tokio::net::UnixListener;
-use tokio::{
-    sync::{mpsc, oneshot},
-    task::JoinHandle,
-};
+use tokio::sync::{mpsc, oneshot};
 #[cfg(unix)]
 use tokio_stream::wrappers::UnixListenerStream;
 use tracing_core::{
@@ -1185,38 +1182,6 @@ pub struct ServerParts {
     ///
     /// [`run`]: fn@crate::Aggregator::run
     pub aggregator: Aggregator,
-}
-
-/// Aggregator handle.
-///
-/// This object is returned from [`Server::into_parts`]. It can be
-/// used to abort the aggregator task.
-///
-/// The aggregator collects the traces that implement the async runtime
-/// being observed and prepares them to be served by the gRPC server.
-///
-/// Normally, if the server, started with [`Server::serve`] or
-/// [`Server::serve_with`] stops for any reason, the aggregator is aborted,
-/// hoewver, if the server was started with the [`InstrumentServer`] returned
-/// from [`Server::into_parts`], then it is the responsibility of the user
-/// of the API to stop the aggregator task by calling [`abort`] on this
-/// object.
-///
-/// [`abort`]: fn@crate::AggregatorHandle::abort
-pub struct AggregatorHandle {
-    join_handle: JoinHandle<()>,
-}
-
-impl AggregatorHandle {
-    /// Aborts the task running this aggregator.
-    ///
-    /// To avoid having a disconnected aggregator running forever, this
-    /// method should be called when the [`tonic::transport::Server`] started
-    /// with the [`InstrumentServer`] also returned from [`Server::into_parts`]
-    /// stops running.
-    pub fn abort(&mut self) {
-        self.join_handle.abort();
-    }
 }
 
 #[tonic::async_trait]

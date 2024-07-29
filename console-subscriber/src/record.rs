@@ -83,6 +83,9 @@ fn record_io(file: File, rx: Receiver<Event>) -> io::Result<()> {
     use std::io::{BufWriter, Write};
 
     fn write<T: Serialize>(mut file: &mut BufWriter<File>, val: &T) -> io::Result<()> {
+        // Clippy throws a false positive here. We can't actually pass the owned `file` to
+        // `to_writer` because we need it again in the line blow.
+        #[allow(clippy::needless_borrows_for_generic_args)]
         serde_json::to_writer(&mut file, val)?;
         file.write_all(b"\n")
     }
