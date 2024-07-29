@@ -94,12 +94,12 @@ runtime][Tokio] is considered *experimental*. In order to use
   level].
 
   + If you're using the [`console_subscriber::init()`][init] or
-  [`console_subscriber::Builder`][builder] APIs, these targets are enabled
-  automatically.
+    [`console_subscriber::Builder`][builder] APIs, these targets are enabled
+    automatically.
 
   + If you are manually configuring the `tracing` subscriber using the
-  [`EnvFilter`] or [`Targets`] filters from [`tracing-subscriber`], add
-  `"tokio=trace,runtime=trace"` to your filter configuration.
+    [`EnvFilter`] or [`Targets`] filters from [`tracing-subscriber`], add
+    `"tokio=trace,runtime=trace"` to your filter configuration.
 
   + Also, ensure you have not enabled any of the [compile time filter
     features][compile_time_filters] in your `Cargo.toml`.
