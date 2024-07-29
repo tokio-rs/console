@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.8.0 - (2024-07-29)
+
+### <a id = "0.8.0-breaking"></a>Breaking Changes
+- **Upgrade tonic to 0.12 ([#571](https://github.com/tokio-rs/console/pull/571))** ([5f6faa2](https://github.com/tokio-rs/console/commit/5f6faa22d944735c2b8c312cac03b35a4ab228ef))<br />This is a breaking change for users of `console-api` and
+`console-subscriber`, as it changes the public `tonic`, `prost` and
+`prost-types` dependency to a semver-incompatible version. This breaks
+compatibility with `tonic` 0.11.x as well as `prost`/`prost-types`
+0.12.x.
+
+### Updated
+
+- [**breaking**](#0.8.0-breaking) Upgrade tonic to 0.12 ([#571](https://github.com/tokio-rs/console/pull/571)) ([5f6faa2](https://github.com/tokio-rs/console/commit/5f6faa22d944735c2b8c312cac03b35a4ab228ef))
+
+
 ## console-api-v0.7.0 - (2024-06-10)
 
 ### <a id = "0.7.0-breaking"></a>Breaking Changes
