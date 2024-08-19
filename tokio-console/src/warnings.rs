@@ -174,7 +174,7 @@ pub(crate) struct LostWaker;
 
 impl Warn<Task> for LostWaker {
     fn summary(&self) -> &str {
-        "tasks have lost their waker"
+        "tasks have lost their wakers"
     }
 
     fn check(&self, task: &Task) -> Warning {
