@@ -178,6 +178,7 @@ struct Watch<T>(mpsc::Sender<Result<T, tonic::Status>>);
 enum Command {
     Instrument(Watch<proto::instrument::Update>),
     WatchTaskDetail(WatchRequest<proto::tasks::TaskDetails>),
+    WatchState(Watch<proto::instrument::State>),
     Pause,
     Resume,
 }
@@ -1190,6 +1191,8 @@ impl proto::instrument::instrument_server::Instrument for Server {
         tokio_stream::wrappers::ReceiverStream<Result<proto::instrument::Update, tonic::Status>>;
     type WatchTaskDetailsStream =
         tokio_stream::wrappers::ReceiverStream<Result<proto::tasks::TaskDetails, tonic::Status>>;
+    type WatchStateStream =
+        tokio_stream::wrappers::ReceiverStream<Result<proto::instrument::State, tonic::Status>>;
     async fn watch_updates(
         &self,
         req: tonic::Request<proto::instrument::InstrumentRequest>,
@@ -1242,6 +1245,18 @@ impl proto::instrument::instrument_server::Instrument for Server {
 
         tracing::debug!(id = ?task_id, "task details watch started");
         let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+        Ok(tonic::Response::new(stream))
+    }
+
+    async fn watch_state(
+        &self,
+        _req: tonic::Request<proto::instrument::StateRequest>,
+    ) -> Result<tonic::Response<Self::WatchStateStream>, tonic::Status> {
+       let (stream_sender, stream_recv) = mpsc::channel(self.client_buffer);
+       self.subscribe.send(Command::WatchState(Watch(stream_sender))).await.map_err(|_| {
+            tonic::Status::internal("cannot get state, aggregation task is not running")
+        })?;
+        let stream = tokio_stream::wrappers::ReceiverStream::new(stream_recv);
         Ok(tonic::Response::new(stream))
     }
 
