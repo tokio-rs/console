@@ -50,12 +50,52 @@ pub struct Update {
     #[prost(message, optional, tag = "5")]
     pub new_metadata: ::core::option::Option<super::common::RegisterMetadata>,
 }
+/// StateRequest requests the current state of the aggregator.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct StateRequest {}
+/// State carries the current state of the aggregator.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct State {
+    #[prost(enumeration = "Temporality", tag = "1")]
+    pub temporality: i32,
+}
 /// `PauseResponse` is the value returned after a pause request.
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct PauseResponse {}
 /// `ResumeResponse` is the value returned after a resume request.
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct ResumeResponse {}
+/// The time "state" of the aggregator.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum Temporality {
+    /// The aggregator is currently live.
+    Live = 0,
+    /// The aggregator is currently paused.
+    Paused = 1,
+}
+impl Temporality {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Temporality::Live => "LIVE",
+            Temporality::Paused => "PAUSED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "LIVE" => Some(Self::Live),
+            "PAUSED" => Some(Self::Paused),
+            _ => None,
+        }
+    }
+}
 /// Generated client implementations.
 pub mod instrument_client {
     #![allow(
@@ -208,6 +248,37 @@ pub mod instrument_client {
                 );
             self.inner.server_streaming(req, path, codec).await
         }
+        /// Produces a stream of state of the aggregator.
+        pub async fn watch_state(
+            &mut self,
+            request: impl tonic::IntoRequest<super::StateRequest>,
+        ) -> std::result::Result<
+            tonic::Response<tonic::codec::Streaming<super::State>>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/rs.tokio.console.instrument.Instrument/WatchState",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "rs.tokio.console.instrument.Instrument",
+                        "WatchState",
+                    ),
+                );
+            self.inner.server_streaming(req, path, codec).await
+        }
         /// Registers that the console observer wants to pause the stream.
         pub async fn pause(
             &mut self,
@@ -302,6 +373,17 @@ pub mod instrument_server {
             tonic::Response<Self::WatchTaskDetailsStream>,
             tonic::Status,
         >;
+        /// Server streaming response type for the WatchState method.
+        type WatchStateStream: tonic::codegen::tokio_stream::Stream<
+                Item = std::result::Result<super::State, tonic::Status>,
+            >
+            + Send
+            + 'static;
+        /// Produces a stream of state of the aggregator.
+        async fn watch_state(
+            &self,
+            request: tonic::Request<super::StateRequest>,
+        ) -> std::result::Result<tonic::Response<Self::WatchStateStream>, tonic::Status>;
         /// Registers that the console observer wants to pause the stream.
         async fn pause(
             &self,
@@ -467,6 +549,52 @@ pub mod instrument_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = WatchTaskDetailsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.server_streaming(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/rs.tokio.console.instrument.Instrument/WatchState" => {
+                    #[allow(non_camel_case_types)]
+                    struct WatchStateSvc<T: Instrument>(pub Arc<T>);
+                    impl<
+                        T: Instrument,
+                    > tonic::server::ServerStreamingService<super::StateRequest>
+                    for WatchStateSvc<T> {
+                        type Response = super::State;
+                        type ResponseStream = T::WatchStateStream;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::ResponseStream>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::StateRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Instrument>::watch_state(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = WatchStateSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
