@@ -34,7 +34,7 @@ pub(crate) type DetailsRef = Rc<RefCell<Option<Details>>>;
 pub(crate) struct State {
     metas: HashMap<u64, Metadata>,
     last_updated_at: Option<SystemTime>,
-    temporality: Temporality,
+    temporality: proto::instrument::Temporality,
     tasks_state: TasksState,
     resources_state: ResourcesState,
     async_ops_state: AsyncOpsState,
@@ -69,12 +69,6 @@ pub(crate) enum FieldValue {
     U64(u64),
     I64(i64),
     Debug(String),
-}
-
-#[derive(Debug)]
-enum Temporality {
-    Live,
-    Paused,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -169,6 +163,10 @@ impl State {
         }
     }
 
+    pub(crate) fn update_state(&mut self, state: proto::instrument::State) {
+        self.temporality = proto::instrument::Temporality::try_from(state.temporality).unwrap();
+    }
+
     pub(crate) fn retain_active(&mut self) {
         if self.is_paused() {
             return;
@@ -238,21 +236,15 @@ impl State {
     // temporality methods
 
     pub(crate) fn pause(&mut self) {
-        self.temporality = Temporality::Paused;
+        self.temporality = proto::instrument::Temporality::Paused;
     }
 
     pub(crate) fn resume(&mut self) {
-        self.temporality = Temporality::Live;
+        self.temporality = proto::instrument::Temporality::Live;
     }
 
     pub(crate) fn is_paused(&self) -> bool {
-        matches!(self.temporality, Temporality::Paused)
-    }
-}
-
-impl Default for Temporality {
-    fn default() -> Self {
-        Self::Live
+        matches!(self.temporality, proto::instrument::Temporality::Paused)
     }
 }
 

@@ -1252,10 +1252,13 @@ impl proto::instrument::instrument_server::Instrument for Server {
         &self,
         _req: tonic::Request<proto::instrument::StateRequest>,
     ) -> Result<tonic::Response<Self::WatchStateStream>, tonic::Status> {
-       let (stream_sender, stream_recv) = mpsc::channel(self.client_buffer);
-       self.subscribe.send(Command::WatchState(Watch(stream_sender))).await.map_err(|_| {
-            tonic::Status::internal("cannot get state, aggregation task is not running")
-        })?;
+        let (stream_sender, stream_recv) = mpsc::channel(self.client_buffer);
+        self.subscribe
+            .send(Command::WatchState(Watch(stream_sender)))
+            .await
+            .map_err(|_| {
+                tonic::Status::internal("cannot get state, aggregation task is not running")
+            })?;
         let stream = tokio_stream::wrappers::ReceiverStream::new(stream_recv);
         Ok(tonic::Response::new(stream))
     }

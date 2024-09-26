@@ -89,7 +89,7 @@ pub struct Aggregator {
     poll_ops: Vec<proto::resources::PollOp>,
 
     /// The time "state" of the aggregator, such as paused or live.
-    temporality:  proto::instrument::Temporality,
+    temporality: proto::instrument::Temporality,
 
     /// Used to anchor monotonic timestamps to a base `SystemTime`, to produce a
     /// timestamp that can be sent over the wire.
