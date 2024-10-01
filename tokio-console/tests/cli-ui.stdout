@@ -53,8 +53,13 @@ Options:
           
           * `never-yielded` -- Warns when a task has never yielded.
           
-          [default: self-wakes lost-waker never-yielded]
-          [possible values: self-wakes, lost-waker, never-yielded]
+          * `large-future` -- Warnings when the future driving a task
+          occupies a large amount of stack space.
+          
+          [default: self-wakes lost-waker never-yielded
+          auto-boxed-future large-future]
+          [possible values: self-wakes, lost-waker, never-yielded,
+          auto-boxed-future, large-future]
 
   -A, --allow <ALLOW_WARNINGS>...
           Allow lint warnings.
@@ -72,9 +77,13 @@ Options:
           
           * `never-yielded` -- Warns when a task has never yielded.
           
+          * `large-future` -- Warnings when the future driving a task
+          occupies a large amount of stack space.
+          
           If this is set to `all`, all warnings are allowed.
           
-          [possible values: all, self-wakes, lost-waker, never-yielded]
+          [possible values: all, self-wakes, lost-waker, never-yielded,
+          large-future]
 
       --log-dir <LOG_DIRECTORY>
           Path to a directory to write the console's internal logs to.

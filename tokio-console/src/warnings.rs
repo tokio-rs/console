@@ -258,3 +258,90 @@ impl Warn<Task> for NeverYielded {
         )
     }
 }
+
+/// Warning for if a task's driving future was auto-boxed by the runtime
+#[derive(Clone, Debug, Default)]
+pub(crate) struct AutoBoxedFuture;
+
+impl Warn<Task> for AutoBoxedFuture {
+    fn summary(&self) -> &str {
+        "tasks have been boxed by the runtime due to their size"
+    }
+
+    fn check(&self, task: &Task) -> Warning {
+        let (Some(size_bytes), Some(original_size_bytes)) =
+            (task.size_bytes(), task.original_size_bytes())
+        else {
+            return Warning::Ok;
+        };
+
+        if original_size_bytes != size_bytes {
+            Warning::Warn
+        } else {
+            Warning::Ok
+        }
+    }
+
+    fn format(&self, task: &Task) -> String {
+        let original_size = task
+            .original_size_bytes()
+            .expect("warning should not trigger if original size is None");
+        let boxed_size = task
+            .size_bytes()
+            .expect("warning should not trigger if size is None");
+        format!(
+            "This task was auto-boxed by the runtime due to its size (originally \
+            {original_size} bytes, boxed size {boxed_size} bytes)",
+        )
+    }
+}
+
+/// Warning for if a task's driving future if large
+#[derive(Clone, Debug)]
+pub(crate) struct LargeFuture {
+    min_size: usize,
+    description: String,
+}
+impl LargeFuture {
+    pub(crate) const DEFAULT_MIN_SIZE_BYTES: usize = 1024;
+    pub(crate) fn new(min_size: usize) -> Self {
+        Self {
+            min_size,
+            description: format!("tasks are large (threshold {} bytes)", min_size),
+        }
+    }
+}
+
+impl Default for LargeFuture {
+    fn default() -> Self {
+        Self::new(Self::DEFAULT_MIN_SIZE_BYTES)
+    }
+}
+
+impl Warn<Task> for LargeFuture {
+    fn summary(&self) -> &str {
+        self.description.as_str()
+    }
+
+    fn check(&self, task: &Task) -> Warning {
+        // Don't fire warning for tasks that are not async
+        if task.is_blocking() {
+            return Warning::Ok;
+        }
+
+        if let Some(size_bytes) = task.size_bytes() {
+            if size_bytes >= self.min_size {
+                return Warning::Warn;
+            }
+        }
+        Warning::Ok
+    }
+
+    fn format(&self, task: &Task) -> String {
+        format!(
+            "This task occupies a large amount of stack space ({} bytes)",
+            task.size_bytes()
+                .expect("warning should not trigger if size is None"),
+        )
+    }
+}

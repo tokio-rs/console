@@ -63,6 +63,9 @@ pub struct Config {
     /// * `lost-waker` -- Warns when a task is dropped without being woken.
     ///
     /// * `never-yielded` -- Warns when a task has never yielded.
+    ///
+    /// * `large-future` -- Warnings when the future driving a task occupies a large amount of
+    ///                     stack space.
     #[clap(long = "warn", short = 'W', value_delimiter = ',', num_args = 1..)]
     #[clap(default_values_t = KnownWarnings::default_enabled_warnings())]
     pub(crate) warnings: Vec<KnownWarnings>,
@@ -80,9 +83,12 @@ pub struct Config {
     ///
     /// * `never-yielded` -- Warns when a task has never yielded.
     ///
+    /// * `large-future` -- Warnings when the future driving a task occupies a large amount of
+    ///                     stack space.
+    ///
     /// If this is set to `all`, all warnings are allowed.
     ///
-    /// [possible values: all, self-wakes, lost-waker, never-yielded]
+    /// [possible values: all, self-wakes, lost-waker, never-yielded, large-future]
     #[clap(long = "allow", short = 'A', num_args = 1..)]
     pub(crate) allow_warnings: Option<AllowedWarnings>,
 
@@ -143,6 +149,8 @@ pub(crate) enum KnownWarnings {
     SelfWakes,
     LostWaker,
     NeverYielded,
+    AutoBoxedFuture,
+    LargeFuture,
 }
 
 impl FromStr for KnownWarnings {
@@ -153,6 +161,8 @@ impl FromStr for KnownWarnings {
             "self-wakes" => Ok(KnownWarnings::SelfWakes),
             "lost-waker" => Ok(KnownWarnings::LostWaker),
             "never-yielded" => Ok(KnownWarnings::NeverYielded),
+            "auto-boxed-future" => Ok(KnownWarnings::AutoBoxedFuture),
+            "large-future" => Ok(KnownWarnings::LargeFuture),
             _ => Err(format!("unknown warning: {}", s)),
         }
     }
@@ -164,6 +174,8 @@ impl From<&KnownWarnings> for warnings::Linter<Task> {
             KnownWarnings::SelfWakes => warnings::Linter::new(warnings::SelfWakePercent::default()),
             KnownWarnings::LostWaker => warnings::Linter::new(warnings::LostWaker),
             KnownWarnings::NeverYielded => warnings::Linter::new(warnings::NeverYielded::default()),
+            KnownWarnings::AutoBoxedFuture => warnings::Linter::new(warnings::AutoBoxedFuture),
+            KnownWarnings::LargeFuture => warnings::Linter::new(warnings::LargeFuture::default()),
         }
     }
 }
@@ -174,6 +186,8 @@ impl fmt::Display for KnownWarnings {
             KnownWarnings::SelfWakes => write!(f, "self-wakes"),
             KnownWarnings::LostWaker => write!(f, "lost-waker"),
             KnownWarnings::NeverYielded => write!(f, "never-yielded"),
+            KnownWarnings::AutoBoxedFuture => write!(f, "auto-boxed-future"),
+            KnownWarnings::LargeFuture => write!(f, "large-future"),
         }
     }
 }
@@ -184,6 +198,8 @@ impl KnownWarnings {
             KnownWarnings::SelfWakes,
             KnownWarnings::LostWaker,
             KnownWarnings::NeverYielded,
+            KnownWarnings::AutoBoxedFuture,
+            KnownWarnings::LargeFuture,
         ]
     }
 }
