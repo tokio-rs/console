@@ -88,7 +88,7 @@ pub struct Config {
     ///
     /// If this is set to `all`, all warnings are allowed.
     ///
-    /// [possible values: all, self-wakes, lost-waker, never-yielded, large-future]
+    /// [possible values: all, self-wakes, lost-waker, never-yielded, large-future, auto-boxed-future]
     #[clap(long = "allow", short = 'A', num_args = 1..)]
     pub(crate) allow_warnings: Option<AllowedWarnings>,
 

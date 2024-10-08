@@ -290,7 +290,7 @@ impl Warn<Task> for AutoBoxedFuture {
             .size_bytes()
             .expect("warning should not trigger if size is None");
         format!(
-            "This task was auto-boxed by the runtime due to its size (originally \
+            "This task's future was auto-boxed by the runtime when spawning, due to its size (originally \
             {original_size} bytes, boxed size {boxed_size} bytes)",
         )
     }
@@ -307,7 +307,7 @@ impl LargeFuture {
     pub(crate) fn new(min_size: usize) -> Self {
         Self {
             min_size,
-            description: format!("tasks are large (threshold {} bytes)", min_size),
+            description: format!("tasks are {} bytes or larger", min_size),
         }
     }
 }
