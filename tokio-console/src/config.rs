@@ -64,6 +64,9 @@ pub struct Config {
     ///
     /// * `never-yielded` -- Warns when a task has never yielded.
     ///
+    /// * `auto-boxed-future` -- Warnings when the future driving a task was automatically boxed by
+    ///                          the runtime because it was large.
+    ///
     /// * `large-future` -- Warnings when the future driving a task occupies a large amount of
     ///                     stack space.
     #[clap(long = "warn", short = 'W', value_delimiter = ',', num_args = 1..)]
@@ -82,6 +85,9 @@ pub struct Config {
     /// * `lost-waker` -- Warns when a task is dropped without being woken.
     ///
     /// * `never-yielded` -- Warns when a task has never yielded.
+    ///
+    /// * `auto-boxed-future` -- Warnings when the future driving a task was automatically boxed by
+    ///                          the runtime because it was large.
     ///
     /// * `large-future` -- Warnings when the future driving a task occupies a large amount of
     ///                     stack space.
