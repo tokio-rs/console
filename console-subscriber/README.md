@@ -130,6 +130,9 @@ Other instrumentation is added in later Tokio releases:
 
 * [Tokio v1.21.0] or later is required to use newest `task::Builder::spawn*` APIs.
 
+* [Tokio v1.41.0] (as yet unreleased) or later is required for task future sizes and the related
+  tokio-console lints `auto-boxed-future` and `large-future`.
+
 [Tokio v1.0.0]: https://github.com/tokio-rs/tokio/releases/tag/tokio-1.0.0
 [Tokio v1.7.0]: https://github.com/tokio-rs/tokio/releases/tag/tokio-1.7.0
 [Tokio v1.12.0]:https://github.com/tokio-rs/tokio/releases/tag/tokio-1.12.0
@@ -147,6 +150,7 @@ Other instrumentation is added in later Tokio releases:
 [init]: https://docs.rs/console-subscriber/latest/console_subscriber/fn.init.html
 [compile_time_filters]: https://docs.rs/tracing/latest/tracing/level_filters/index.html#compile-time-filters
 [Tokio v1.21.0]: https://github.com/tokio-rs/tokio/releases/tag/tokio-1.21.0
+[Tokio v1.41.0]: https://github.com/tokio-rs/tokio/releases/tag/tokio-1.41.0
 
 ### Adding the Console Subscriber
 
