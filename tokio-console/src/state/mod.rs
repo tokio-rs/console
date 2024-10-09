@@ -277,6 +277,8 @@ impl Field {
     const KIND: &'static str = "kind";
     const NAME: &'static str = "task.name";
     const TASK_ID: &'static str = "task.id";
+    const SIZE_BYTES: &'static str = "size.bytes";
+    const ORIGINAL_SIZE_BYTES: &'static str = "original_size.bytes";
 
     /// Creates a new Field with a pre-interned `name` and a `FieldValue`.
     fn new(name: InternedStr, value: FieldValue) -> Self {

@@ -4,6 +4,8 @@ warnings = [
     'self-wakes',
     'lost-waker',
     'never-yielded',
+    'auto-boxed-future',
+    'large-future',
 ]
 log_directory = '/tmp/tokio-console/logs'
 retention = '6s'

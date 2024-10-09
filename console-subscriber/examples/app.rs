@@ -12,6 +12,8 @@ OPTIONS:
     burn        Includes a (misbehaving) task that spins CPU with self-wakes
     coma        Includes a (misbehaving) task that forgets to register a waker
     noyield     Includes a (misbehaving) task that spawns tasks that never yield
+    blocking    Includes a blocking task that  (not misbehaving)
+    large       Includes tasks that are driven by futures that are larger than recommended
 "#;
 
 #[tokio::main]
@@ -50,6 +52,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                     .name("spawns_blocking")
                     .spawn(spawn_blocking(5))
                     .unwrap();
+            }
+            "large" => {
+                tokio::task::Builder::new()
+                    .name("pretty-big")
+                    // Below debug mode auto-boxing limit
+                    .spawn(large_future::<1024>())
+                    .unwrap();
+                tokio::task::Builder::new()
+                    .name("huge")
+                    // Larger than the release mode auto-boxing limit
+                    .spawn(large_future::<20_000>())
+                    .unwrap();
+                large_blocking::<20_000>();
             }
             "help" | "-h" => {
                 eprintln!("{}", HELP);
@@ -150,6 +165,42 @@ async fn spawn_blocking(seconds: u64) {
         })
         .await;
     }
+}
+
+#[tracing::instrument]
+async fn large_future<const N: usize>() {
+    let mut numbers = [0_u8; N];
+
+    loop {
+        for idx in 0..N {
+            numbers[idx] = (idx % 256) as u8;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            (0..=idx).for_each(|jdx| {
+                assert_eq!(numbers[jdx], (jdx % 256) as u8);
+            });
+        }
+    }
+}
+
+fn large_blocking<const N: usize>() {
+    let numbers = [0_u8; N];
+
+    tokio::task::Builder::new()
+        .name("huge-blocking")
+        .spawn_blocking(move || {
+            let mut numbers = numbers;
+
+            loop {
+                for idx in 0..N {
+                    numbers[idx] = (idx % 256) as u8;
+                    std::thread::sleep(Duration::from_millis(100));
+                    (0..=idx).for_each(|jdx| {
+                        assert_eq!(numbers[jdx], (jdx % 256) as u8);
+                    });
+                }
+            }
+        })
+        .unwrap();
 }
 
 fn self_wake() -> impl Future<Output = ()> {

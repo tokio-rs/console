@@ -62,3 +62,4 @@ hyper-util = { version = "0.1.6", features = ["tokio"] }
 
 [dev-dependencies]
 trycmd = "0.15.4"
+

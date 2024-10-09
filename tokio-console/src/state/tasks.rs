@@ -104,6 +104,10 @@ pub(crate) struct Task {
     location: String,
     /// The kind of task, currently one of task, blocking, block_on, local
     kind: InternedStr,
+    /// The size of the future driving the task
+    size_bytes: Option<usize>,
+    /// The original size of the future (before runtime auto-boxing)
+    original_size_bytes: Option<usize>,
 }
 
 #[derive(Debug)]
@@ -184,6 +188,8 @@ impl TasksState {
                 let mut name = None;
                 let mut task_id = None;
                 let mut kind = strings.string(String::new());
+                let mut size_bytes = None;
+                let mut original_size_bytes = None;
                 let target_field = Field::new(
                     strings.string_ref("target"),
                     FieldValue::Str(meta.target.to_string()),
@@ -209,6 +215,24 @@ impl TasksState {
                             Field::KIND => {
                                 kind = strings.string(field.value.to_string());
                                 None
+                            }
+                            Field::SIZE_BYTES => {
+                                size_bytes = match field.value {
+                                    FieldValue::U64(size_bytes) => Some(size_bytes as usize),
+                                    _ => None,
+                                };
+                                // Include size in pre-formatted fields
+                                Some(field)
+                            }
+                            Field::ORIGINAL_SIZE_BYTES => {
+                                original_size_bytes = match field.value {
+                                    FieldValue::U64(original_size_bytes) => {
+                                        Some(original_size_bytes as usize)
+                                    }
+                                    _ => None,
+                                };
+                                // Include size in pre-formatted fields
+                                Some(field)
                             }
                             _ => Some(field),
                         }
@@ -245,6 +269,8 @@ impl TasksState {
                     warnings: Vec::new(),
                     location,
                     kind,
+                    size_bytes,
+                    original_size_bytes,
                 };
                 if let TaskLintResult::RequiresRecheck = task.lint(linters) {
                     next_pending_lint.insert(task.id);
@@ -505,6 +531,14 @@ impl Task {
 
     pub(crate) fn location(&self) -> &str {
         &self.location
+    }
+
+    pub(crate) fn size_bytes(&self) -> Option<usize> {
+        self.size_bytes
+    }
+
+    pub(crate) fn original_size_bytes(&self) -> Option<usize> {
+        self.original_size_bytes
     }
 }
 
