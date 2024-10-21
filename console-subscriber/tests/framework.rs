@@ -179,7 +179,9 @@ fn fail_1_of_2_expected_tasks() {
 
 #[test]
 fn polls() {
-    let expected_task = ExpectedTask::default().match_default_name().expect_polls(2);
+    // There is an extra poll because the span enters one more time upon drop (see
+    // tokio-rs/tracing#2562).
+    let expected_task = ExpectedTask::default().match_default_name().expect_polls(3);
 
     let future = async { yield_to_runtime().await };
 
@@ -188,10 +190,12 @@ fn polls() {
 
 #[test]
 #[should_panic(expected = "Test failed: Task validation failed:
- - Task { name=console-test::main }: expected `polls` to be 2, but actual was 1
+ - Task { name=console-test::main }: expected `polls` to be 3, but actual was 2
 ")]
 fn fail_polls() {
-    let expected_task = ExpectedTask::default().match_default_name().expect_polls(2);
+    // There is an extra poll because the span enters one more time upon drop (see
+    // tokio-rs/tracing#2562).
+    let expected_task = ExpectedTask::default().match_default_name().expect_polls(3);
 
     let future = async {};
 

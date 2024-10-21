@@ -5,12 +5,10 @@
 /// TODO: In the future allow for the request to specify
 /// only the data that the caller cares about (i.e. only
 /// tasks but no resources)
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct InstrumentRequest {}
 /// TaskDetailsRequest requests the stream of updates about
 /// the specific task identified in the request.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct TaskDetailsRequest {
     /// Identifies the task for which details were requested.
@@ -18,11 +16,9 @@ pub struct TaskDetailsRequest {
     pub id: ::core::option::Option<super::common::Id>,
 }
 /// PauseRequest requests the stream of updates to pause.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct PauseRequest {}
 /// ResumeRequest requests the stream of updates to resume after a pause.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct ResumeRequest {}
 /// Update carries all information regarding tasks, resources, async operations
@@ -33,7 +29,6 @@ pub struct ResumeRequest {}
 /// - we can have all the new_metadata in one place
 /// - things such as async ops and resource ops do not make sense
 ///    on their own as they have relations to tasks and resources
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Update {
     /// The system time when this update was recorded.
@@ -56,16 +51,20 @@ pub struct Update {
     pub new_metadata: ::core::option::Option<super::common::RegisterMetadata>,
 }
 /// `PauseResponse` is the value returned after a pause request.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct PauseResponse {}
 /// `ResumeResponse` is the value returned after a resume request.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct ResumeResponse {}
 /// Generated client implementations.
 pub mod instrument_client {
-    #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
+    #![allow(
+        unused_variables,
+        dead_code,
+        missing_docs,
+        clippy::wildcard_imports,
+        clippy::let_unit_value,
+    )]
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
     /// `InstrumentServer<T>` implements `Instrument` as a service.
@@ -88,8 +87,8 @@ pub mod instrument_client {
     where
         T: tonic::client::GrpcService<tonic::body::BoxBody>,
         T::Error: Into<StdError>,
-        T::ResponseBody: Body<Data = Bytes> + Send + 'static,
-        <T::ResponseBody as Body>::Error: Into<StdError> + Send,
+        T::ResponseBody: Body<Data = Bytes> + std::marker::Send + 'static,
+        <T::ResponseBody as Body>::Error: Into<StdError> + std::marker::Send,
     {
         pub fn new(inner: T) -> Self {
             let inner = tonic::client::Grpc::new(inner);
@@ -114,7 +113,7 @@ pub mod instrument_client {
             >,
             <T as tonic::codegen::Service<
                 http::Request<tonic::body::BoxBody>,
-            >>::Error: Into<StdError> + Send + Sync,
+            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
         {
             InstrumentClient::new(InterceptedService::new(inner, interceptor))
         }
@@ -161,8 +160,7 @@ pub mod instrument_client {
                 .ready()
                 .await
                 .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
+                    tonic::Status::unknown(
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
@@ -192,8 +190,7 @@ pub mod instrument_client {
                 .ready()
                 .await
                 .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
+                    tonic::Status::unknown(
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
@@ -220,8 +217,7 @@ pub mod instrument_client {
                 .ready()
                 .await
                 .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
+                    tonic::Status::unknown(
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
@@ -245,8 +241,7 @@ pub mod instrument_client {
                 .ready()
                 .await
                 .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
+                    tonic::Status::unknown(
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
@@ -265,16 +260,22 @@ pub mod instrument_client {
 }
 /// Generated server implementations.
 pub mod instrument_server {
-    #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
+    #![allow(
+        unused_variables,
+        dead_code,
+        missing_docs,
+        clippy::wildcard_imports,
+        clippy::let_unit_value,
+    )]
     use tonic::codegen::*;
     /// Generated trait containing gRPC methods that should be implemented for use with InstrumentServer.
     #[async_trait]
-    pub trait Instrument: Send + Sync + 'static {
+    pub trait Instrument: std::marker::Send + std::marker::Sync + 'static {
         /// Server streaming response type for the WatchUpdates method.
         type WatchUpdatesStream: tonic::codegen::tokio_stream::Stream<
                 Item = std::result::Result<super::Update, tonic::Status>,
             >
-            + Send
+            + std::marker::Send
             + 'static;
         /// Produces a stream of updates representing the behavior of the instrumented async runtime.
         async fn watch_updates(
@@ -291,7 +292,7 @@ pub mod instrument_server {
                     tonic::Status,
                 >,
             >
-            + Send
+            + std::marker::Send
             + 'static;
         /// Produces a stream of updates describing the activity of a specific task.
         async fn watch_task_details(
@@ -314,14 +315,14 @@ pub mod instrument_server {
     }
     /// `InstrumentServer<T>` implements `Instrument` as a service.
     #[derive(Debug)]
-    pub struct InstrumentServer<T: Instrument> {
+    pub struct InstrumentServer<T> {
         inner: Arc<T>,
         accept_compression_encodings: EnabledCompressionEncodings,
         send_compression_encodings: EnabledCompressionEncodings,
         max_decoding_message_size: Option<usize>,
         max_encoding_message_size: Option<usize>,
     }
-    impl<T: Instrument> InstrumentServer<T> {
+    impl<T> InstrumentServer<T> {
         pub fn new(inner: T) -> Self {
             Self::from_arc(Arc::new(inner))
         }
@@ -375,8 +376,8 @@ pub mod instrument_server {
     impl<T, B> tonic::codegen::Service<http::Request<B>> for InstrumentServer<T>
     where
         T: Instrument,
-        B: Body + Send + 'static,
-        B::Error: Into<StdError> + Send + 'static,
+        B: Body + std::marker::Send + 'static,
+        B::Error: Into<StdError> + std::marker::Send + 'static,
     {
         type Response = http::Response<tonic::body::BoxBody>;
         type Error = std::convert::Infallible;
@@ -569,23 +570,25 @@ pub mod instrument_server {
                 }
                 _ => {
                     Box::pin(async move {
-                        Ok(
-                            http::Response::builder()
-                                .status(200)
-                                .header("grpc-status", tonic::Code::Unimplemented as i32)
-                                .header(
-                                    http::header::CONTENT_TYPE,
-                                    tonic::metadata::GRPC_CONTENT_TYPE,
-                                )
-                                .body(empty_body())
-                                .unwrap(),
-                        )
+                        let mut response = http::Response::new(empty_body());
+                        let headers = response.headers_mut();
+                        headers
+                            .insert(
+                                tonic::Status::GRPC_STATUS,
+                                (tonic::Code::Unimplemented as i32).into(),
+                            );
+                        headers
+                            .insert(
+                                http::header::CONTENT_TYPE,
+                                tonic::metadata::GRPC_CONTENT_TYPE,
+                            );
+                        Ok(response)
                     })
                 }
             }
         }
     }
-    impl<T: Instrument> Clone for InstrumentServer<T> {
+    impl<T> Clone for InstrumentServer<T> {
         fn clone(&self) -> Self {
             let inner = self.inner.clone();
             Self {
@@ -597,7 +600,9 @@ pub mod instrument_server {
             }
         }
     }
-    impl<T: Instrument> tonic::server::NamedService for InstrumentServer<T> {
-        const NAME: &'static str = "rs.tokio.console.instrument.Instrument";
+    /// Generated gRPC service name
+    pub const SERVICE_NAME: &str = "rs.tokio.console.instrument.Instrument";
+    impl<T> tonic::server::NamedService for InstrumentServer<T> {
+        const NAME: &'static str = SERVICE_NAME;
     }
 }

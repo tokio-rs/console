@@ -7,7 +7,9 @@ use support::{assert_task, ExpectedTask};
 
 #[test]
 fn single_poll() {
-    let expected_task = ExpectedTask::default().match_default_name().expect_polls(1);
+    // There is an extra poll because the span enters one more time upon drop (see
+    // tokio-rs/tracing#2562).
+    let expected_task = ExpectedTask::default().match_default_name().expect_polls(2);
 
     let future = futures::future::ready(());
 
@@ -16,7 +18,9 @@ fn single_poll() {
 
 #[test]
 fn two_polls() {
-    let expected_task = ExpectedTask::default().match_default_name().expect_polls(2);
+    // There is an extra poll because the span enters one more time upon drop (see
+    // tokio-rs/tracing#2562).
+    let expected_task = ExpectedTask::default().match_default_name().expect_polls(3);
 
     let future = async {
         sleep(Duration::ZERO).await;
@@ -27,9 +31,11 @@ fn two_polls() {
 
 #[test]
 fn many_polls() {
+    // There is an extra poll because the span enters one more time upon drop (see
+    // tokio-rs/tracing#2562).
     let expected_task = ExpectedTask::default()
         .match_default_name()
-        .expect_polls(11);
+        .expect_polls(12);
 
     let future = async {
         for _ in 0..10 {
