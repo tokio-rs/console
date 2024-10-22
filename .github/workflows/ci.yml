@@ -101,6 +101,40 @@ jobs:
       - name: Run cargo clippy
         run: cargo clippy --workspace --all-targets --no-deps -- -D warnings
 
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Docs.rs
+        env:
+          RUSTDOCFLAGS: >
+            -D warnings
+            --force-warn rustdoc::redundant-explicit-links
+            --force-warn renamed-and-removed-lints
+            --cfg docsrs
+            --cfg tokio_unstable
+          RUSTFLAGS: --cfg tokio_unstable
+        run: cargo doc --no-deps --all-features
+
+        run: 
+      - name: Check tokio-console README images
+        run: >
+          for filename in
+            $(grep 'https://raw.githubusercontent.com/tokio-rs/console/main/assets' tokio-console/ README.md
+            | perl -n -e '/(tokio-console-[\d\.]+\/\w+\.png)/; print "$1\n"'
+          ); do
+            ls -l assets/$filename;
+          done
+
   grpc_web:
     name: gRPC-web Example
     runs-on: ubuntu-latest

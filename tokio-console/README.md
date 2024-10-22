@@ -121,7 +121,7 @@ tokio-console --lang en_US.UTF-8
 When the console CLI is launched, it displays a list of all [asynchronous tasks]
 in the program:
 
-![tasks list](https://raw.githubusercontent.com/tokio-rs/console/main/assets/tokio-console-0.1.8/tasks_list.png)
+![tasks list](https://raw.githubusercontent.com/tokio-rs/console/main/assets/tokio-console-0.1.13/tasks_list.png)
 
 Tasks are displayed in a table.
 
@@ -154,7 +154,7 @@ task.
 
 This view shows details about a specific task:
 
-![task details](https://raw.githubusercontent.com/tokio-rs/console/main/assets/tokio-console-0.1.8/task_details.png)
+![task details](https://raw.githubusercontent.com/tokio-rs/console/main/assets/tokio-console-0.1.13/task_details.png)
 
 The task details view includes percentiles and a visual histogram of the polling (busy) times
 and scheduled times.
@@ -166,7 +166,7 @@ Pressing the <kbd>escape</kbd> key returns to the task list.
 The <kbd>r</kbd> key switches from the list of tasks to a list of [resources],
 such as synchronization primitives, I/O resources, et cetera:
 
-![resource list](https://raw.githubusercontent.com/tokio-rs/console/main/assets/tokio-console-0.1.8/resources_list.png)
+![resource list](https://raw.githubusercontent.com/tokio-rs/console/main/assets/tokio-console-0.1.13/resources_list.png)
 
 Resources are displayed in a table similar to the task list.
 
@@ -192,13 +192,13 @@ while a resource is highlighted displays details about that resource.
 
 ### Resource Details
 
-![resource details --- sleep](https://raw.githubusercontent.com/tokio-rs/console/main/assets/tokio-console-0.1.8/resource_details_sleep.png)
+![resource details --- sleep](https://raw.githubusercontent.com/tokio-rs/console/main/assets/tokio-console-0.1.13/resource_details_sleep.png)
 
 The resource details view lists the tasks currently waiting on that resource.
 This may be a single task, as in the [`tokio::time::Sleep`] above, or
 a large number of tasks, such as this private `tokio::sync::batch_semaphore::Semaphore`:
 
-![resource details --- semaphore](https://raw.githubusercontent.com/tokio-rs/console/main/assets/tokio-console-0.1.8/resource_details_semaphore.png)
+![resource details --- semaphore](https://raw.githubusercontent.com/tokio-rs/console/main/assets/tokio-console-0.1.13/resource_details_semaphore.png)
 
 The resource details view includes a table of async ops belonging to the resource.
 
