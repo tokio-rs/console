@@ -75,6 +75,6 @@ fn gen_proto() -> Result<()> {
         .emit_rerun_if_changed(false)
         .protoc_arg("--experimental_allow_proto3_optional")
         .out_dir(out_dir)
-        .compile(&proto_files[..], &[proto_dir])
+        .compile_protos(&proto_files[..], &[proto_dir])
         .context("failed to compile protobuf files")
 }

@@ -6,7 +6,6 @@
 /// - any new resources that were created since the last update
 /// - the current stats for any resource whose stats changed since the last update
 /// - any new poll ops that have been invoked on a resource
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResourceUpdate {
     /// A list of new resources that were created since the last `ResourceUpdate` was
@@ -33,7 +32,6 @@ pub struct ResourceUpdate {
     pub dropped_events: u64,
 }
 /// Static data recorded when a new resource is created.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Resource {
     /// The resources's ID.
@@ -68,7 +66,6 @@ pub struct Resource {
 /// Nested message and enum types in `Resource`.
 pub mod resource {
     /// The kind of resource (e.g. timer, mutex).
-    #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Kind {
         /// Every resource is either a known kind or an other (unknown) kind.
@@ -101,7 +98,7 @@ pub mod resource {
             /// (if the ProtoBuf definition does not change) and safe for programmatic use.
             pub fn as_str_name(&self) -> &'static str {
                 match self {
-                    Known::Timer => "TIMER",
+                    Self::Timer => "TIMER",
                 }
             }
             /// Creates an enum from field names used in the ProtoBuf definition.
@@ -113,7 +110,6 @@ pub mod resource {
             }
         }
         /// Every resource is either a known kind or an other (unknown) kind.
-        #[allow(clippy::derive_partial_eq_without_eq)]
         #[derive(Clone, PartialEq, ::prost::Oneof)]
         pub enum Kind {
             /// `known` signals that this kind of resource is known to the console API.
@@ -126,7 +122,6 @@ pub mod resource {
     }
 }
 /// Task runtime stats of a resource.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Stats {
     /// Timestamp of when the resource was created.
@@ -145,7 +140,6 @@ pub struct Stats {
 }
 /// A `PollOp` describes each poll operation that completes within the async
 /// application.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PollOp {
     /// The numeric ID of the op's `Metadata`.

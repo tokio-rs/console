@@ -14,13 +14,15 @@ use support::{assert_tasks, spawn_named, ExpectedTask};
 // As a result, the clippy warning is ignored.
 #[allow(clippy::async_yields_async)]
 fn child_polls_dont_count_towards_parent_polls() {
+    // There is an extra poll because the span enters one more time upon drop (see
+    // tokio-rs/tracing#2562).
     let expected_tasks = vec![
         ExpectedTask::default()
             .match_name("parent".into())
-            .expect_polls(1),
+            .expect_polls(2),
         ExpectedTask::default()
             .match_name("child".into())
-            .expect_polls(2),
+            .expect_polls(3),
     ];
 
     let future = async {

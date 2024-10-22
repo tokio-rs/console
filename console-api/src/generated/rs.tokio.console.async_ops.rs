@@ -3,7 +3,6 @@
 ///
 /// This includes a list of any new async ops, and updates to the associated statistics
 /// for any async ops that have changed since the last update.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AsyncOpUpdate {
     /// A list of new async operations that were created since the last `AsyncOpUpdate`
@@ -33,7 +32,6 @@ pub struct AsyncOpUpdate {
 /// An async operation is an operation that is associated with a resource
 /// This could, for example, be a read or write on a TCP stream, or a receive operation on
 /// a channel.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AsyncOp {
     /// The async op's ID.
@@ -68,7 +66,6 @@ pub struct AsyncOp {
     pub resource_id: ::core::option::Option<super::common::Id>,
 }
 /// Statistics associated with a given async operation.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Stats {
     /// Timestamp of when the async op has been created.

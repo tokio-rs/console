@@ -5,7 +5,6 @@
 /// update. This includes:
 /// - any new tasks that were spawned since the last update
 /// - the current stats for any task whose stats changed since the last update
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TaskUpdate {
     /// A list of new tasks that were spawned since the last `TaskUpdate` was
@@ -37,7 +36,6 @@ pub struct TaskUpdate {
     pub dropped_events: u64,
 }
 /// A task details update
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TaskDetails {
     /// The task's ID which the details belong to.
@@ -69,7 +67,6 @@ pub mod task_details {
     /// - the raw binary representation of a HdrHistogram.rs `Histogram`
     ///    serialized to binary in the V2 format (legacy)
     /// - a binary histogram plus details on outliers (current)
-    #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum PollTimesHistogram {
         /// HdrHistogram.rs `Histogram` serialized to binary in the V2 format
@@ -81,7 +78,6 @@ pub mod task_details {
     }
 }
 /// Data recorded when a new task is spawned.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Task {
     /// The task's ID.
@@ -153,8 +149,8 @@ pub mod task {
         /// (if the ProtoBuf definition does not change) and safe for programmatic use.
         pub fn as_str_name(&self) -> &'static str {
             match self {
-                Kind::Spawn => "SPAWN",
-                Kind::Blocking => "BLOCKING",
+                Self::Spawn => "SPAWN",
+                Self::Blocking => "BLOCKING",
             }
         }
         /// Creates an enum from field names used in the ProtoBuf definition.
@@ -168,7 +164,6 @@ pub mod task {
     }
 }
 /// Task performance statistics.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct Stats {
     /// Timestamp of when the task was spawned.
@@ -209,7 +204,6 @@ pub struct Stats {
     #[prost(message, optional, tag = "9")]
     pub scheduled_time: ::core::option::Option<::prost_types::Duration>,
 }
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DurationHistogram {
     /// HdrHistogram.rs `Histogram` serialized to binary in the V2 format
