@@ -108,14 +108,15 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v4
 
-      - name: Check tokio-console README images
-        run: >
-          for filename in
-            $(grep 'https://raw.githubusercontent.com/tokio-rs/console/main/assets' tokio-console/ README.md
-            | perl -n -e '/(tokio-console-[\d\.]+\/\w+\.png)/; print "$1\n"'
-          ); do
-            ls -l assets/$filename;
-          done
+      - name: Install ${{ matrix.rust }} toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run xtask check-docs-images
+        run: cargo run --bin xtask -- check-docs-images
 
   grpc_web:
     name: gRPC-web Example
