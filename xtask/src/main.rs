@@ -105,7 +105,7 @@ fn check_docs_rs_images() -> Result<()> {
 
     let regex_line = line!() + 1;
     let re = Regex::new(
-        r"https://raw.githubusercontent.com/tokio-rs/console-/main/(assets/tokio-console-[\d\.]+\/\w+\.png)",
+        r"https://raw.githubusercontent.com/tokio-rs/console/main/(assets/tokio-console-[\d\.]+\/\w+\.png)",
     )
     .expect("couldn't compile regex");
     let reader = BufReader::new(file);
