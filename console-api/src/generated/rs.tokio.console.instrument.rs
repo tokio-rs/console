@@ -51,11 +51,9 @@ pub struct Update {
     pub new_metadata: ::core::option::Option<super::common::RegisterMetadata>,
 }
 /// StateRequest requests the current state of the aggregator.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct StateRequest {}
 /// State carries the current state of the aggregator.
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct State {
     #[prost(enumeration = "Temporality", tag = "1")]
@@ -83,8 +81,8 @@ impl Temporality {
     /// (if the ProtoBuf definition does not change) and safe for programmatic use.
     pub fn as_str_name(&self) -> &'static str {
         match self {
-            Temporality::Live => "LIVE",
-            Temporality::Paused => "PAUSED",
+            Self::Live => "LIVE",
+            Self::Paused => "PAUSED",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -260,8 +258,7 @@ pub mod instrument_client {
                 .ready()
                 .await
                 .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
+                    tonic::Status::unknown(
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
@@ -377,7 +374,7 @@ pub mod instrument_server {
         type WatchStateStream: tonic::codegen::tokio_stream::Stream<
                 Item = std::result::Result<super::State, tonic::Status>,
             >
-            + Send
+            + std::marker::Send
             + 'static;
         /// Produces a stream of state of the aggregator.
         async fn watch_state(
