@@ -370,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "console-api"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "futures-core",
  "prost",
@@ -383,7 +383,7 @@ dependencies = [
 
 [[package]]
 name = "console-subscriber"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "console-api",
  "crossbeam-channel",
@@ -1821,7 +1821,7 @@ dependencies = [
 
 [[package]]
 name = "tokio-console"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "clap",
  "clap_complete",
@@ -2444,6 +2444,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "color-eyre",
+ "regex",
  "tonic-build",
 ]
 

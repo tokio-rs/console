@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.8.1 - (2024-10-24)
+
+_No outward facing changes_
+
 ## 0.8.0 - (2024-07-29)
 
 ### <a id = "0.8.0-breaking"></a>Breaking Changes

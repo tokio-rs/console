@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.1.13 - (2024-10-24)
+
+
+### Added
+
+- Add large future lints ([#587](https://github.com/tokio-rs/console/pull/587)) ([ae17230](https://github.com/tokio-rs/console/commit/ae1723091fcc76597e78bae39129a48d8cd515c9))
+
+### Fixed
+
+- Correct the grammar issue ([#579](https://github.com/tokio-rs/console/pull/579)) ([f8e1bee](https://github.com/tokio-rs/console/commit/f8e1bee760358f702ca8359ec3de6cb39649fe60))
+
+
 ## 0.1.12 - (2024-07-29)
 
 ### Fixed
