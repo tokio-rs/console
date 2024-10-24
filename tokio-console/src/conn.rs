@@ -1,7 +1,7 @@
 use console_api::instrument::StateRequest;
 use console_api::instrument::{
     instrument_client::InstrumentClient, InstrumentRequest, PauseRequest, ResumeRequest,
-    TaskDetailsRequest, Update,
+    State as InstrumentState, TaskDetailsRequest, Update,
 };
 use console_api::tasks::TaskDetails;
 use futures::stream::StreamExt;
@@ -32,7 +32,7 @@ enum State {
     Connected {
         client: InstrumentClient<Channel>,
         update_stream: Box<Streaming<Update>>,
-        state_stream: Box<Streaming<console_api::instrument::State>>,
+        state_stream: Box<Streaming<InstrumentState>>,
     },
     Disconnected(Duration),
 }
@@ -40,7 +40,7 @@ enum State {
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Message {
     Update(Update),
-    State(console_api::instrument::State),
+    State(InstrumentState),
 }
 
 macro_rules! with_client {
@@ -151,7 +151,7 @@ impl Connection {
                     state_stream,
                     ..
                 } => {
-                    tokio::select! {
+                    tokio::select! { biased; // Always biased to update stream.
                         update = update_stream.next() => match update {
                             Some(Ok(update)) => return Message::Update(update),
                             Some(Err(status)) => {
