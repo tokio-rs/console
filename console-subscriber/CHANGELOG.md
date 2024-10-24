@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.4.1 - (2024-10-24)
+
+
+### Added
+
+- Add large future lints ([#587](https://github.com/tokio-rs/console/pull/587)) ([ae17230](https://github.com/tokio-rs/console/commit/ae1723091fcc76597e78bae39129a48d8cd515c9))
+
+
 ## 0.4.0 - (2024-07-29)
 
 ### <a id = "0.4.0-breaking"></a>Breaking Changes
