@@ -3,7 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { InstrumentRequest, PauseRequest, PauseResponse, ResumeRequest, ResumeResponse, TaskDetailsRequest, Update } from "./instrument_pb.js";
+import { InstrumentRequest, PauseRequest, PauseResponse, ResumeRequest, ResumeResponse, State, StateRequest, TaskDetailsRequest, Update } from "./instrument_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 import { TaskDetails } from "./tasks_pb.js";
 
@@ -35,6 +35,17 @@ export const Instrument = {
       name: "WatchTaskDetails",
       I: TaskDetailsRequest,
       O: TaskDetails,
+      kind: MethodKind.ServerStreaming,
+    },
+    /**
+     * Produces a stream of state of the aggregator.
+     *
+     * @generated from rpc rs.tokio.console.instrument.Instrument.WatchState
+     */
+    watchState: {
+      name: "WatchState",
+      I: StateRequest,
+      O: State,
       kind: MethodKind.ServerStreaming,
     },
     /**

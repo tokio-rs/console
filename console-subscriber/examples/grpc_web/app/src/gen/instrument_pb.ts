@@ -11,6 +11,32 @@ import { ResourceUpdate } from "./resources_pb.js";
 import { AsyncOpUpdate } from "./async_ops_pb.js";
 
 /**
+ * The time "state" of the aggregator.
+ *
+ * @generated from enum rs.tokio.console.instrument.Temporality
+ */
+export enum Temporality {
+  /**
+   * The aggregator is currently live.
+   *
+   * @generated from enum value: LIVE = 0;
+   */
+  LIVE = 0,
+
+  /**
+   * The aggregator is currently paused.
+   *
+   * @generated from enum value: PAUSED = 1;
+   */
+  PAUSED = 1,
+}
+// Retrieve enum metadata with: proto3.getEnumType(Temporality)
+proto3.util.setEnumType(Temporality, "rs.tokio.console.instrument.Temporality", [
+  { no: 0, name: "LIVE" },
+  { no: 1, name: "PAUSED" },
+]);
+
+/**
  * InstrumentRequest requests the stream of updates
  * to observe the async runtime state over time.
  *
@@ -236,6 +262,78 @@ export class Update extends Message<Update> {
 
   static equals(a: Update | PlainMessage<Update> | undefined, b: Update | PlainMessage<Update> | undefined): boolean {
     return proto3.util.equals(Update, a, b);
+  }
+}
+
+/**
+ * StateRequest requests the current state of the aggregator.
+ *
+ * @generated from message rs.tokio.console.instrument.StateRequest
+ */
+export class StateRequest extends Message<StateRequest> {
+  constructor(data?: PartialMessage<StateRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "rs.tokio.console.instrument.StateRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): StateRequest {
+    return new StateRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): StateRequest {
+    return new StateRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): StateRequest {
+    return new StateRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: StateRequest | PlainMessage<StateRequest> | undefined, b: StateRequest | PlainMessage<StateRequest> | undefined): boolean {
+    return proto3.util.equals(StateRequest, a, b);
+  }
+}
+
+/**
+ * State carries the current state of the aggregator.
+ *
+ * @generated from message rs.tokio.console.instrument.State
+ */
+export class State extends Message<State> {
+  /**
+   * @generated from field: rs.tokio.console.instrument.Temporality temporality = 1;
+   */
+  temporality = Temporality.LIVE;
+
+  constructor(data?: PartialMessage<State>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "rs.tokio.console.instrument.State";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "temporality", kind: "enum", T: proto3.getEnumType(Temporality) },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): State {
+    return new State().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): State {
+    return new State().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): State {
+    return new State().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: State | PlainMessage<State> | undefined, b: State | PlainMessage<State> | undefined): boolean {
+    return proto3.util.equals(State, a, b);
   }
 }
 
