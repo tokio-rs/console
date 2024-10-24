@@ -101,6 +101,23 @@ jobs:
       - name: Run cargo clippy
         run: cargo clippy --workspace --all-targets --no-deps -- -D warnings
 
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install ${{ matrix.rust }} toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run xtask check-docs-images
+        run: cargo run --bin xtask -- check-docs-images
+
   grpc_web:
     name: gRPC-web Example
     runs-on: ubuntu-latest
