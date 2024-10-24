@@ -7,6 +7,7 @@ use std::{
 };
 
 use console_api as proto;
+use console_api::instrument::Temporality;
 use prost::Message;
 use proto::resources::resource;
 use tokio::sync::{mpsc, Notify};
@@ -102,11 +103,6 @@ pub(crate) struct Flush {
     triggered: AtomicBool,
 }
 
-#[derive(Debug)]
-enum Temporality {
-    Live,
-    Paused,
-}
 // Represent static data for resources
 struct Resource {
     id: Id,
@@ -293,6 +289,7 @@ impl Aggregator {
                 new_metadata: Some(proto::RegisterMetadata {
                     metadata: (*self.all_metadata).clone(),
                 }),
+                temporality: self.temporality.into(),
             };
             let message_size = update.encoded_len();
             if message_size < MAX_MESSAGE_SIZE {
@@ -417,6 +414,7 @@ impl Aggregator {
             task_update,
             resource_update,
             async_op_update,
+            temporality: self.temporality.into(),
         };
 
         self.watchers
