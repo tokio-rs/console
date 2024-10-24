@@ -37,6 +37,7 @@ enum State {
     Disconnected(Duration),
 }
 
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum Message {
     Update(Update),
     State(console_api::instrument::State),
