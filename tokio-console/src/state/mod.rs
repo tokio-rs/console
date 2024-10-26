@@ -163,10 +163,6 @@ impl State {
         }
     }
 
-    pub(crate) fn update_state(&mut self, state: proto::instrument::State) {
-        self.temporality = proto::instrument::Temporality::try_from(state.temporality).unwrap();
-    }
-
     pub(crate) fn retain_active(&mut self) {
         if self.is_paused() {
             return;
@@ -231,6 +227,12 @@ impl State {
 
     pub(crate) fn unset_task_details(&mut self) {
         *self.current_task_details.borrow_mut() = None;
+    }
+
+    // temporality methods
+
+    pub(crate) fn update_state(&mut self, state: proto::instrument::State) {
+        self.temporality = proto::instrument::Temporality::try_from(state.temporality).unwrap();
     }
 
     pub(crate) fn is_paused(&self) -> bool {
