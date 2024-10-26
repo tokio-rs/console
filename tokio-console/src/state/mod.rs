@@ -233,16 +233,6 @@ impl State {
         *self.current_task_details.borrow_mut() = None;
     }
 
-    // temporality methods
-
-    pub(crate) fn pause(&mut self) {
-        self.temporality = proto::instrument::Temporality::Paused;
-    }
-
-    pub(crate) fn resume(&mut self) {
-        self.temporality = proto::instrument::Temporality::Live;
-    }
-
     pub(crate) fn is_paused(&self) -> bool {
         matches!(self.temporality, proto::instrument::Temporality::Paused)
     }

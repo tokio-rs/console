@@ -95,10 +95,8 @@ async fn main() -> color_eyre::Result<()> {
                 if input::is_space(&input) {
                     if state.is_paused() {
                         conn.resume().await;
-                        state.resume();
                     } else {
                         conn.pause().await;
-                        state.pause();
                     }
                 }
 

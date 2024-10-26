@@ -49,6 +49,9 @@ pub struct Aggregator {
     /// buffer is approaching capacity.
     shared: Arc<Shared>,
 
+    /// Currently active RPCs streaming state events.
+    state_watchers: ShrinkVec<Watch<proto::instrument::State>>,
+
     /// Currently active RPCs streaming task events.
     watchers: ShrinkVec<Watch<proto::instrument::Update>>,
 
@@ -148,6 +151,7 @@ impl Aggregator {
             events,
             watchers: Default::default(),
             details_watchers: Default::default(),
+            state_watchers: Default::default(),
             all_metadata: Default::default(),
             new_metadata: Default::default(),
             tasks: IdData::default(),
@@ -195,11 +199,8 @@ impl Aggregator {
                             self.add_task_detail_subscription(watch_request);
                         },
                         Some(Command::WatchState(subscription)) => {
-                            let state = proto::instrument::State {
-                                temporality: self.temporality.into(),
-                            };
-                            subscription.update(&state);
-                        },
+                            self.add_state_subscription(subscription);
+                        }
                         Some(Command::Pause) => {
                             self.temporality = proto::instrument::Temporality::Paused;
                         }
@@ -214,7 +215,6 @@ impl Aggregator {
 
                     false
                 }
-
             };
 
             // drain and aggregate buffered events.
@@ -251,6 +251,10 @@ impl Aggregator {
                 total = counts.total(),
                 "event channel drain loop",
             );
+
+            if !self.state_watchers.is_empty() {
+                self.publish_state();
+            }
 
             // flush data to clients, if there are any currently subscribed
             // watchers and we should send a new update.
@@ -394,6 +398,20 @@ impl Aggregator {
             }
         }
         // If the task is not found, drop `stream_sender` which will result in a not found error
+    }
+
+    /// Add a state subscription to the watchers.
+    fn add_state_subscription(&mut self, subscription: Watch<proto::instrument::State>) {
+        self.state_watchers.push(subscription);
+    }
+
+    /// Publish the current state to all active state watchers.
+    fn publish_state(&mut self) {
+        let state = proto::instrument::State {
+            temporality: self.temporality.into(),
+        };
+        self.state_watchers
+            .retain_and_shrink(|watch| watch.update(&state));
     }
 
     /// Publish the current state to all active watchers.
