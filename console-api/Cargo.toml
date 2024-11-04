@@ -29,7 +29,7 @@ keywords = [
 transport = ["tonic/transport"]
 
 [dependencies]
-tonic = { version = "0.12", default-features = false, features = [
+tonic = { version = "0.12.3", default-features = false, features = [
     "prost",
     "codegen",
     "transport",
