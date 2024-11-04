@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## 0.4.2 - (2024-11-04)
+
+### Updated
+
+- Updated `console-api` version.
+
+
 ## 0.4.1 - (2024-10-24)
 
 
