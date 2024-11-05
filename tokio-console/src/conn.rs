@@ -1,6 +1,7 @@
+use console_api::instrument::StateRequest;
 use console_api::instrument::{
     instrument_client::InstrumentClient, InstrumentRequest, PauseRequest, ResumeRequest,
-    TaskDetailsRequest, Update,
+    State as InstrumentState, TaskDetailsRequest, Update,
 };
 use console_api::tasks::TaskDetails;
 use futures::stream::StreamExt;
@@ -30,9 +31,16 @@ pub struct Connection {
 enum State {
     Connected {
         client: InstrumentClient<Channel>,
-        stream: Box<Streaming<Update>>,
+        update_stream: Box<Streaming<Update>>,
+        state_stream: Box<Streaming<InstrumentState>>,
     },
     Disconnected(Duration),
+}
+
+#[allow(clippy::large_enum_variant)]
+pub(crate) enum Message {
+    Update(Update),
+    State(InstrumentState),
 }
 
 macro_rules! with_client {
@@ -110,9 +118,16 @@ impl Connection {
                     }
                 };
                 let mut client = InstrumentClient::new(channel);
-                let request = tonic::Request::new(InstrumentRequest {});
-                let stream = Box::new(client.watch_updates(request).await?.into_inner());
-                Ok::<State, Box<dyn Error + Send + Sync>>(State::Connected { client, stream })
+                let update_request = tonic::Request::new(InstrumentRequest {});
+                let update_stream =
+                    Box::new(client.watch_updates(update_request).await?.into_inner());
+                let state_request = tonic::Request::new(StateRequest {});
+                let state_stream = Box::new(client.watch_state(state_request).await?.into_inner());
+                Ok::<State, Box<dyn Error + Send + Sync>>(State::Connected {
+                    client,
+                    update_stream,
+                    state_stream,
+                })
             };
             self.state = match try_connect.await {
                 Ok(connected) => {
@@ -128,20 +143,39 @@ impl Connection {
         }
     }
 
-    pub async fn next_update(&mut self) -> Update {
+    pub async fn next_message(&mut self) -> Message {
         loop {
-            match self.state {
-                State::Connected { ref mut stream, .. } => match stream.next().await {
-                    Some(Ok(update)) => return update,
-                    Some(Err(status)) => {
-                        tracing::warn!(%status, "error from stream");
-                        self.state = State::Disconnected(Self::BACKOFF);
+            match &mut self.state {
+                State::Connected {
+                    update_stream,
+                    state_stream,
+                    ..
+                } => {
+                    tokio::select! { biased; // Always biased to update stream.
+                        update = update_stream.next() => match update {
+                            Some(Ok(update)) => return Message::Update(update),
+                            Some(Err(status)) => {
+                                tracing::warn!(%status, "error from update stream");
+                                self.state = State::Disconnected(Self::BACKOFF);
+                            }
+                            None => {
+                                tracing::error!("update stream closed by server");
+                                self.state = State::Disconnected(Self::BACKOFF);
+                            }
+                        },
+                        state = state_stream.next() => match state {
+                            Some(Ok(state)) => return Message::State(state),
+                            Some(Err(status)) => {
+                                tracing::warn!(%status, "error from state stream");
+                                self.state = State::Disconnected(Self::BACKOFF);
+                            }
+                            None => {
+                                tracing::error!("state stream closed by server");
+                                self.state = State::Disconnected(Self::BACKOFF);
+                            }
+                        },
                     }
-                    None => {
-                        tracing::error!("stream closed by server");
-                        self.state = State::Disconnected(Self::BACKOFF);
-                    }
-                },
+                }
                 State::Disconnected(_) => self.connect().await,
             }
         }

@@ -49,6 +49,9 @@ pub struct Aggregator {
     /// buffer is approaching capacity.
     shared: Arc<Shared>,
 
+    /// Currently active RPCs streaming state events.
+    state_watchers: ShrinkVec<Watch<proto::instrument::State>>,
+
     /// Currently active RPCs streaming task events.
     watchers: ShrinkVec<Watch<proto::instrument::Update>>,
 
@@ -89,7 +92,7 @@ pub struct Aggregator {
     poll_ops: Vec<proto::resources::PollOp>,
 
     /// The time "state" of the aggregator, such as paused or live.
-    temporality: Temporality,
+    temporality: proto::instrument::Temporality,
 
     /// Used to anchor monotonic timestamps to a base `SystemTime`, to produce a
     /// timestamp that can be sent over the wire.
@@ -102,11 +105,6 @@ pub(crate) struct Flush {
     triggered: AtomicBool,
 }
 
-#[derive(Debug)]
-enum Temporality {
-    Live,
-    Paused,
-}
 // Represent static data for resources
 struct Resource {
     id: Id,
@@ -153,6 +151,7 @@ impl Aggregator {
             events,
             watchers: Default::default(),
             details_watchers: Default::default(),
+            state_watchers: Default::default(),
             all_metadata: Default::default(),
             new_metadata: Default::default(),
             tasks: IdData::default(),
@@ -162,7 +161,7 @@ impl Aggregator {
             async_ops: IdData::default(),
             async_op_stats: IdData::default(),
             poll_ops: Default::default(),
-            temporality: Temporality::Live,
+            temporality: proto::instrument::Temporality::Live,
             base_time,
         }
     }
@@ -179,8 +178,8 @@ impl Aggregator {
                 // if the flush interval elapses, flush data to the client
                 _ = publish.tick() => {
                     match self.temporality {
-                        Temporality::Live => true,
-                        Temporality::Paused => false,
+                        proto::instrument::Temporality::Live => true,
+                        proto::instrument::Temporality::Paused => false,
                     }
                 }
 
@@ -199,11 +198,14 @@ impl Aggregator {
                         Some(Command::WatchTaskDetail(watch_request)) => {
                             self.add_task_detail_subscription(watch_request);
                         },
+                        Some(Command::WatchState(subscription)) => {
+                            self.add_state_subscription(subscription);
+                        }
                         Some(Command::Pause) => {
-                            self.temporality = Temporality::Paused;
+                            self.temporality = proto::instrument::Temporality::Paused;
                         }
                         Some(Command::Resume) => {
-                            self.temporality = Temporality::Live;
+                            self.temporality = proto::instrument::Temporality::Live;
                         }
                         None => {
                             tracing::debug!("rpc channel closed, terminating");
@@ -213,7 +215,6 @@ impl Aggregator {
 
                     false
                 }
-
             };
 
             // drain and aggregate buffered events.
@@ -250,6 +251,10 @@ impl Aggregator {
                 total = counts.total(),
                 "event channel drain loop",
             );
+
+            if !self.state_watchers.is_empty() {
+                self.publish_state();
+            }
 
             // flush data to clients, if there are any currently subscribed
             // watchers and we should send a new update.
@@ -393,6 +398,20 @@ impl Aggregator {
             }
         }
         // If the task is not found, drop `stream_sender` which will result in a not found error
+    }
+
+    /// Add a state subscription to the watchers.
+    fn add_state_subscription(&mut self, subscription: Watch<proto::instrument::State>) {
+        self.state_watchers.push(subscription);
+    }
+
+    /// Publish the current state to all active state watchers.
+    fn publish_state(&mut self) {
+        let state = proto::instrument::State {
+            temporality: self.temporality.into(),
+        };
+        self.state_watchers
+            .retain_and_shrink(|watch| watch.update(&state));
     }
 
     /// Publish the current state to all active watchers.

@@ -14,6 +14,8 @@ service Instrument {
     rpc WatchUpdates(InstrumentRequest) returns (stream Update) {}
     // Produces a stream of updates describing the activity of a specific task.
     rpc WatchTaskDetails(TaskDetailsRequest) returns (stream tasks.TaskDetails) {}
+    // Produces a stream of state of the aggregator.
+    rpc WatchState(StateRequest) returns (stream State) {}
     // Registers that the console observer wants to pause the stream.
     rpc Pause(PauseRequest) returns (PauseResponse) {}
     // Registers that the console observer wants to resume the stream.
@@ -70,6 +72,23 @@ message Update {
 
     // Any new span metadata that was registered since the last update.
     common.RegisterMetadata new_metadata = 5;
+}
+
+// StateRequest requests the current state of the aggregator.
+message StateRequest {
+}
+
+// State carries the current state of the aggregator.
+message State {
+    Temporality temporality = 1;
+}
+
+// The time "state" of the aggregator.
+enum Temporality {
+    // The aggregator is currently live.
+    LIVE = 0;
+    // The aggregator is currently paused.
+    PAUSED = 1;
 }
 
 // `PauseResponse` is the value returned after a pause request.

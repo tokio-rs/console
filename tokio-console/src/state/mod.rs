@@ -72,9 +72,26 @@ pub(crate) enum FieldValue {
 }
 
 #[derive(Debug)]
-enum Temporality {
+pub(crate) enum Temporality {
+    Unpausing,
     Live,
+    Pausing,
     Paused,
+}
+
+impl Default for Temporality {
+    fn default() -> Self {
+        Self::Live
+    }
+}
+
+impl From<proto::instrument::Temporality> for Temporality {
+    fn from(pb: proto::instrument::Temporality) -> Self {
+        match pb {
+            proto::instrument::Temporality::Live => Self::Live,
+            proto::instrument::Temporality::Paused => Self::Paused,
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -236,23 +253,26 @@ impl State {
     }
 
     // temporality methods
-
-    pub(crate) fn pause(&mut self) {
-        self.temporality = Temporality::Paused;
+    pub(crate) fn temporality(&self) -> &Temporality {
+        &self.temporality
     }
 
-    pub(crate) fn resume(&mut self) {
-        self.temporality = Temporality::Live;
+    pub(crate) fn start_unpausing(&mut self) {
+        self.temporality = Temporality::Unpausing;
+    }
+
+    pub(crate) fn start_pausing(&mut self) {
+        self.temporality = Temporality::Pausing;
+    }
+
+    pub(crate) fn update_state(&mut self, state: proto::instrument::State) {
+        self.temporality = proto::instrument::Temporality::try_from(state.temporality)
+            .expect("invalid temporality")
+            .into();
     }
 
     pub(crate) fn is_paused(&self) -> bool {
-        matches!(self.temporality, Temporality::Paused)
-    }
-}
-
-impl Default for Temporality {
-    fn default() -> Self {
-        Self::Live
+        matches!(self.temporality, Temporality::Paused | Temporality::Pausing)
     }
 }
 

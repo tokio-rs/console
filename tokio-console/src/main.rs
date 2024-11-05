@@ -1,6 +1,6 @@
 use color_eyre::{eyre::eyre, Help, SectionExt};
 use console_api::tasks::TaskDetails;
-use state::State;
+use state::{State, Temporality};
 
 use futures::stream::StreamExt;
 use ratatui::{
@@ -95,10 +95,10 @@ async fn main() -> color_eyre::Result<()> {
                 if input::is_space(&input) {
                     if state.is_paused() {
                         conn.resume().await;
-                        state.resume();
+                        state.start_unpausing();
                     } else {
                         conn.pause().await;
-                        state.pause();
+                        state.start_pausing();
                     }
                 }
 
@@ -124,8 +124,15 @@ async fn main() -> color_eyre::Result<()> {
                     _ => {}
                 }
             },
-            instrument_update = conn.next_update() => {
-                state.update(&view.styles, view.current_view(), instrument_update);
+            instrument_message = conn.next_message() => {
+                match instrument_message {
+                    conn::Message::Update(update) => {
+                        state.update(&view.styles, view.current_view(), update);
+                    },
+                    conn::Message::State(state_update) => {
+                        state.update_state(state_update);
+                    }
+                }
             }
             details_update = details_rx.recv() => {
                 if let Some(details_update) = details_update {
@@ -148,8 +155,17 @@ async fn main() -> color_eyre::Result<()> {
                 .split(f.size());
 
             let mut header_text = conn.render(&view.styles);
-            if state.is_paused() {
-                header_text.push_span(Span::styled(" PAUSED", view.styles.fg(Color::Red)));
+            match state.temporality() {
+                Temporality::Paused => {
+                    header_text.push_span(Span::styled(" PAUSED", view.styles.fg(Color::Red)));
+                }
+                Temporality::Pausing => {
+                    header_text.push_span(Span::styled(" PAUSING", view.styles.fg(Color::Yellow)));
+                }
+                Temporality::Unpausing => {
+                    header_text.push_span(Span::styled(" UNPAUSING", view.styles.fg(Color::Green)));
+                }
+                Temporality::Live => {}
             }
             let dropped_async_ops_state = state.async_ops_state().dropped_events();
             let dropped_tasks_state = state.tasks_state().dropped_events();
