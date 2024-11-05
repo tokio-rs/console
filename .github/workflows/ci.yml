@@ -25,6 +25,8 @@ env:
   RUSTUP_MAX_RETRIES: 10
   # Don't emit giant backtraces in the CI logs.
   RUST_BACKTRACE: short
+  # Pin a nightly version for minimal versions
+  rust_nightly: nightly-2024-05-05
 
 jobs:
   check:
@@ -41,6 +43,27 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Run cargo check
         run: cargo check
+
+  minimal-versions:
+    name: minimal-versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust ${{ env.rust_nightly }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_nightly }}
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@cargo-hack
+      - uses: Swatinem/rust-cache@v2
+      - name: "check -Z direct-minimal-versions"
+        run: |
+          # Remove dev-dependencies from Cargo.toml to prevent the next `cargo update`
+          # from determining minimal versions based on dev-dependencies.
+          cargo hack --remove-dev-deps --workspace
+          # Update Cargo.lock to minimal version dependencies.
+          cargo +${{ env.rust_nightly }} update -Z direct-minimal-versions
+          cargo check
 
   test_os:
     name: Tests on ${{ matrix.os }} with Rust ${{ matrix.rust }}
