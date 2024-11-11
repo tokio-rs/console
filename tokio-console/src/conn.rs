@@ -122,7 +122,18 @@ impl Connection {
                 let update_stream =
                     Box::new(client.watch_updates(update_request).await?.into_inner());
                 let state_request = tonic::Request::new(StateRequest {});
-                let state_stream = Box::new(client.watch_state(state_request).await?.into_inner());
+                let state_stream = match client.watch_state(state_request).await {
+                    Ok(stream) => Box::new(stream.into_inner()),
+                    Err(e) => {
+                        if e.code() == tonic::Code::Unimplemented {
+                            tracing::error!(
+                                "The server at {} does not support state streaming. Please update the console-subscriber to v0.5.0 or later version.",
+                                self.target
+                            );
+                        }
+                        return Err(e.into());
+                    }
+                };
                 Ok::<State, Box<dyn Error + Send + Sync>>(State::Connected {
                     client,
                     update_stream,
