@@ -34,13 +34,13 @@ tonic = { version = "0.12.3", default-features = false, features = [
     "codegen",
     "transport",
 ] }
-prost = "0.13.1"
-prost-types = "0.13.1"
-tracing-core = "0.1.17"
-futures-core = "0.3"
+prost = "0.13.3"
+prost-types = "0.13.3"
+tracing-core = "0.1.30"
+futures-core = "0.3.31"
 
 [dev-dependencies]
-tonic-build = { version = "0.12", default-features = false, features = [
+tonic-build = { version = "0.12.3", default-features = false, features = [
     "prost", "transport"
 ] }
 # explicit dep so we can get the version with fixed whitespace.
