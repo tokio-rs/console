@@ -44,7 +44,7 @@ pub(crate) struct HistogramMetadata {
     pub(crate) highest_outlier: Option<Duration>,
 }
 
-impl<'a> Default for MiniHistogram<'a> {
+impl Default for MiniHistogram<'_> {
     fn default() -> Self {
         MiniHistogram {
             block: None,
@@ -57,7 +57,7 @@ impl<'a> Default for MiniHistogram<'a> {
     }
 }
 
-impl<'a> Widget for MiniHistogram<'a> {
+impl Widget for MiniHistogram<'_> {
     fn render(mut self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
         let inner_area = match self.block.take() {
             Some(b) => {

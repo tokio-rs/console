@@ -40,7 +40,7 @@ pub(crate) struct Durations<'a> {
     percentiles_width: u16,
 }
 
-impl<'a> Widget for Durations<'a> {
+impl Widget for Durations<'_> {
     fn render(self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
         // Only split the durations area in half if we're also drawing a
         // sparkline. We require UTF-8 to draw the sparkline and also enough width.
