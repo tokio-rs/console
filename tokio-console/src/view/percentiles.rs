@@ -21,7 +21,7 @@ pub(crate) struct Percentiles<'a> {
     title: &'a str,
 }
 
-impl<'a> Widget for Percentiles<'a> {
+impl Widget for Percentiles<'_> {
     fn render(self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
         let inner = Paragraph::new(self.make_percentiles_inner())
             .block(self.styles.border_block().title(self.title));
