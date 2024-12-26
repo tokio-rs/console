@@ -659,7 +659,7 @@ impl<'a> From<&'a Path> for ServerAddr {
 ///
 /// If the "env-filter" crate feature flag is enabled, the `RUST_LOG`
 /// environment variable will be parsed using the [`EnvFilter`] type from
-/// `tracing-subscriber. If the "env-filter" feature is **not** enabled, the
+/// `tracing-subscriber`. If the "env-filter" feature is **not** enabled, the
 /// [`Targets`] filter is used instead. The `EnvFilter` type accepts all the
 /// same syntax as `Targets`, but with the added ability to filter dynamically
 /// on span field values. See the documentation for those types for details.
