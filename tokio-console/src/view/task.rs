@@ -127,7 +127,7 @@ impl TaskView {
             )
         };
 
-        let stats_area = Layout::default()
+        let stats_area_check = Layout::default()
             .direction(layout::Direction::Horizontal)
             .constraints(
                 [
@@ -137,6 +137,51 @@ impl TaskView {
                 .as_ref(),
             )
             .split(stats_area);
+
+        let mut location_lines_vector: Vec<String> = vec![];
+        let title = "Location: ";
+        let location_max_width = stats_area_check[0].width as usize - 2 - title.len(); // NOTE: -2 for the border
+        let stats_area = if task.location().len() > location_max_width {
+            let max_width_stats_area = area.width - 45;
+            if max_width_stats_area < task.location().len() as u16 {
+                location_lines_vector = task
+                    .location()
+                    .to_string()
+                    .chars()
+                    .collect::<Vec<char>>()
+                    .chunks(max_width_stats_area as usize)
+                    .map(|chunk| chunk.iter().collect())
+                    .collect();
+
+                let area_needed_to_render_location = task.location().len() as u16;
+                Layout::default()
+                    .direction(layout::Direction::Horizontal)
+                    .constraints(
+                        [
+                            layout::Constraint::Min(area_needed_to_render_location + 15), //Note: 15 is the length of "| Location:     |"
+                            layout::Constraint::Min(32),
+                        ]
+                        .as_ref(),
+                    )
+                    .split(stats_area)
+            } else {
+                let area_needed_to_render_location = task.location().len() as u16;
+                location_lines_vector.push(task.location().to_string());
+                Layout::default()
+                    .direction(layout::Direction::Horizontal)
+                    .constraints(
+                        [
+                            layout::Constraint::Min(area_needed_to_render_location + 15), //Note: 15 is the length of "| Location:     |"
+                            layout::Constraint::Min(32),
+                        ]
+                        .as_ref(),
+                    )
+                    .split(stats_area)
+            }
+        } else {
+            location_lines_vector.push(task.location().to_string());
+            stats_area_check
+        };
 
         // Just preallocate capacity for ID, name, target, total, busy, and idle.
         let mut overview = Vec::with_capacity(8);
@@ -152,17 +197,13 @@ impl TaskView {
 
         overview.push(Line::from(vec![bold("Target: "), Span::raw(task.target())]));
 
-        let title = "Location: ";
-        let location_max_width = stats_area[0].width as usize - 2 - title.len(); // NOTE: -2 for the border
-        let location = if task.location().len() > location_max_width {
-            let ellipsis = styles.if_utf8("\u{2026}", "...");
-            let start = task.location().len() - location_max_width + ellipsis.chars().count();
-            format!("{}{}", ellipsis, &task.location()[start..])
-        } else {
-            task.location().to_string()
-        };
-
-        overview.push(Line::from(vec![bold(title), Span::raw(location)]));
+        let first_line = location_lines_vector[0].clone();
+        location_lines_vector.remove(0);
+        let location_vector = vec![bold(title), Span::raw(first_line)];
+        overview.push(Line::from(location_vector));
+        for line in location_lines_vector {
+            overview.push(Line::from(Span::raw(format!("    {}", line))));
+        }
 
         let total = task.total(now);
 
@@ -185,28 +226,37 @@ impl TaskView {
 
         let mut waker_stats = vec![Line::from(vec![
             bold("Current wakers: "),
-            Span::from(format!("{} (", task.waker_count())),
-            bold("clones: "),
-            Span::from(format!("{}, ", task.waker_clones())),
-            bold("drops: "),
-            Span::from(format!("{})", task.waker_drops())),
+            Span::from(format!("{} ", task.waker_count())),
         ])];
+        let waker_stats_clones = vec![
+            bold("  Clones: "),
+            Span::from(format!("{}, ", task.waker_clones())),
+        ];
 
-        let mut wakeups = vec![
+        let waker_stats_drops = vec![
+            bold("  Drops: "),
+            Span::from(format!("{}", task.waker_drops())),
+        ];
+
+        let wakeups = vec![
             bold("Woken: "),
             Span::from(format!("{} times", task.wakes())),
         ];
 
+        let mut last_woken_line = vec![];
+
         // If the task has been woken, add the time since wake to its stats as well.
         if let Some(since) = task.since_wake(now) {
-            wakeups.reserve(3);
-            wakeups.push(Span::raw(", "));
-            wakeups.push(bold("last woken: "));
-            wakeups.push(styles.time_units(since, view::DUR_LIST_PRECISION, None));
-            wakeups.push(Span::raw(" ago"));
+            last_woken_line.reserve(3);
+            last_woken_line.push(bold("Last woken: "));
+            last_woken_line.push(styles.time_units(since, view::DUR_LIST_PRECISION, None));
+            last_woken_line.push(Span::raw(" ago"));
         }
 
+        waker_stats.push(Line::from(waker_stats_clones));
+        waker_stats.push(Line::from(waker_stats_drops));
         waker_stats.push(Line::from(wakeups));
+        waker_stats.push(Line::from(last_woken_line));
 
         if task.self_wakes() > 0 {
             waker_stats.push(Line::from(vec![
