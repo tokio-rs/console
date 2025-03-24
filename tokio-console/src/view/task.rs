@@ -34,6 +34,7 @@ impl TaskView {
     pub(crate) fn update_input(&mut self, _event: input::Event) {
         // TODO :D
     }
+
     pub(crate) fn render(
         &mut self,
         styles: &view::Styles,
@@ -67,21 +68,9 @@ impl TaskView {
             })
             .collect();
 
-        let stats_area_check = Layout::default()
-            .direction(layout::Direction::Horizontal)
-            .constraints(
-                [
-                    layout::Constraint::Percentage(50),
-                    layout::Constraint::Percentage(50),
-                ]
-                .as_ref(),
-            )
-            .split(area);
-
         let location_heading = "Location: ";
-        let location_max_width = stats_area_check[0].width as usize - 2 - location_heading.len(); // NOTE: -2 for the border
-        let max_width_stats_area = area.width - 45;
-        let mut location_lines_vector: Vec<String> = task
+        let max_width_stats_area = area.width - 45; //NOTE: 45 is min width needed, this is a calculated number according to the string: 'Last woken: 75.831727ms ago' but with some more extra pixels.
+        let location_lines_vector: Vec<String> = task
             .location()
             .to_string()
             .chars()
@@ -89,7 +78,8 @@ impl TaskView {
             .chunks(max_width_stats_area as usize)
             .map(|chunk| chunk.iter().collect())
             .collect();
-        let no_of_lines_extra_required_to_accomadate_location = location_lines_vector.len() - 1;
+        let task_stats_height = 9 + location_lines_vector.len() as u16;
+        // Id, Name, Target, Location (multiple), total, busy, scheduled, and idle times + top/bottom borders
         let (
             controls_area,
             stats_area,
@@ -97,141 +87,75 @@ impl TaskView {
             scheduled_dur_area,
             fields_area,
             warnings_area,
-        ) = if task.location().len() > location_max_width {
-            if warnings.is_empty() {
-                let chunks = Layout::default()
-                    .direction(layout::Direction::Vertical)
-                    .constraints(
-                        [
-                            // controls
-                            layout::Constraint::Length(controls.height()),
-                            // task stats
-                            layout::Constraint::Length(
-                                10 + no_of_lines_extra_required_to_accomadate_location as u16,
-                            ),
-                            // poll duration
-                            layout::Constraint::Length(9),
-                            // scheduled duration
-                            layout::Constraint::Length(9),
-                            // fields
-                            layout::Constraint::Percentage(60),
-                        ]
-                        .as_ref(),
-                    )
-                    .split(area);
-                (chunks[0], chunks[1], chunks[2], chunks[3], chunks[4], None)
-            } else {
-                let chunks = Layout::default()
-                    .direction(layout::Direction::Vertical)
-                    .constraints(
-                        [
-                            // controls
-                            layout::Constraint::Length(controls.height()),
-                            // warnings (add 2 for top and bottom borders)
-                            layout::Constraint::Length(warnings.len() as u16 + 2),
-                            // task stats
-                            layout::Constraint::Length(
-                                10 + no_of_lines_extra_required_to_accomadate_location as u16,
-                            ),
-                            // poll duration
-                            layout::Constraint::Length(9),
-                            // scheduled duration
-                            layout::Constraint::Length(9),
-                            // fields
-                            layout::Constraint::Percentage(60),
-                        ]
-                        .as_ref(),
-                    )
-                    .split(area);
-
-                (
-                    chunks[0],
-                    chunks[2],
-                    chunks[3],
-                    chunks[4],
-                    chunks[5],
-                    Some(chunks[1]),
+        ) = if warnings.is_empty() {
+            let chunks = Layout::default()
+                .direction(layout::Direction::Vertical)
+                .constraints(
+                    [
+                        // controls
+                        layout::Constraint::Length(controls.height()),
+                        // task stats
+                        layout::Constraint::Length(task_stats_height),
+                        // poll duration
+                        layout::Constraint::Length(9),
+                        // scheduled duration
+                        layout::Constraint::Length(9),
+                        // fields
+                        layout::Constraint::Percentage(60),
+                    ]
+                    .as_ref(),
                 )
-            }
+                .split(area);
+            (chunks[0], chunks[1], chunks[2], chunks[3], chunks[4], None)
         } else {
-            if warnings.is_empty() {
-                let chunks = Layout::default()
-                    .direction(layout::Direction::Vertical)
-                    .constraints(
-                        [
-                            // controls
-                            layout::Constraint::Length(controls.height()),
-                            // task stats
-                            layout::Constraint::Length(10),
-                            // poll duration
-                            layout::Constraint::Length(9),
-                            // scheduled duration
-                            layout::Constraint::Length(9),
-                            // fields
-                            layout::Constraint::Percentage(60),
-                        ]
-                        .as_ref(),
-                    )
-                    .split(area);
-                (chunks[0], chunks[1], chunks[2], chunks[3], chunks[4], None)
-            } else {
-                let chunks = Layout::default()
-                    .direction(layout::Direction::Vertical)
-                    .constraints(
-                        [
-                            // controls
-                            layout::Constraint::Length(controls.height()),
-                            // warnings (add 2 for top and bottom borders)
-                            layout::Constraint::Length(warnings.len() as u16 + 2),
-                            // task stats
-                            layout::Constraint::Length(10),
-                            // poll duration
-                            layout::Constraint::Length(9),
-                            // scheduled duration
-                            layout::Constraint::Length(9),
-                            // fields
-                            layout::Constraint::Percentage(60),
-                        ]
-                        .as_ref(),
-                    )
-                    .split(area);
-
-                (
-                    chunks[0],
-                    chunks[2],
-                    chunks[3],
-                    chunks[4],
-                    chunks[5],
-                    Some(chunks[1]),
+            let chunks = Layout::default()
+                .direction(layout::Direction::Vertical)
+                .constraints(
+                    [
+                        // controls
+                        layout::Constraint::Length(controls.height()),
+                        // warnings (add 2 for top and bottom borders)
+                        layout::Constraint::Length(warnings.len() as u16 + 2),
+                        // task stats
+                        layout::Constraint::Length(task_stats_height),
+                        // poll duration
+                        layout::Constraint::Length(9),
+                        // scheduled duration
+                        layout::Constraint::Length(9),
+                        // fields
+                        layout::Constraint::Percentage(60),
+                    ]
+                    .as_ref(),
                 )
-            }
+                .split(area);
+
+            (
+                chunks[0],
+                chunks[2],
+                chunks[3],
+                chunks[4],
+                chunks[5],
+                Some(chunks[1]),
+            )
         };
 
-        let stats_area = if location_lines_vector.len() != 1 {
+        let stats_constraints = if location_lines_vector.len() > 1 {
             let area_needed_to_render_location = task.location().len() as u16;
-            Layout::default()
-                .direction(layout::Direction::Horizontal)
-                .constraints(
-                    [
-                        layout::Constraint::Min(area_needed_to_render_location + 15), //Note: 15 is the length of "| Location:     |"
-                        layout::Constraint::Min(32),
-                    ]
-                    .as_ref(),
-                )
-                .split(stats_area)
+            [
+                // 15 is the length of "| Location:     |"
+                layout::Constraint::Min(area_needed_to_render_location + 15),
+                layout::Constraint::Min(32),
+            ]
         } else {
-            Layout::default()
-                .direction(layout::Direction::Horizontal)
-                .constraints(
-                    [
-                        layout::Constraint::Percentage(50),
-                        layout::Constraint::Percentage(50),
-                    ]
-                    .as_ref(),
-                )
-                .split(stats_area)
-            // stats_area_check
+            [
+                layout::Constraint::Percentage(50),
+                layout::Constraint::Percentage(50),
+            ]
         };
+        let stats_area = Layout::default()
+            .direction(layout::Direction::Horizontal)
+            .constraints(stats_constraints.as_ref())
+            .split(stats_area);
 
         // Just preallocate capacity for ID, name, target, total, busy, and idle.
         let mut overview = Vec::with_capacity(8);
@@ -247,12 +171,11 @@ impl TaskView {
 
         overview.push(Line::from(vec![bold("Target: "), Span::raw(task.target())]));
 
-        let first_line = location_lines_vector[0].clone();
-        location_lines_vector.remove(0);
-        let location_vector = vec![bold(location_heading), Span::raw(first_line)];
+        let location_vector = vec![bold(location_heading), Span::raw(&location_lines_vector[0])];
         overview.push(Line::from(location_vector));
-        for line in location_lines_vector {
-            overview.push(Line::from(Span::raw(format!("    {}", line))));
+        for line in &location_lines_vector[1..] {
+            overview.push(Line::from(Span::raw(format!("          {}", line))));
+            //10 spaces to be precise due to the Length of  "Location: "
         }
 
         let total = task.total(now);
