@@ -140,10 +140,10 @@ impl TaskView {
         };
 
         let stats_constraints = if location_lines_vector.len() > 1 {
-            let area_needed_to_render_location = task.location().len() as u16;
+            let location_len = task.location().len() as u16;
             [
                 // 15 is the length of "| Location:     |"
-                layout::Constraint::Min(area_needed_to_render_location + 15),
+                layout::Constraint::Min(location_len + 15),
                 layout::Constraint::Min(32),
             ]
         } else {
