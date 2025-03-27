@@ -139,19 +139,12 @@ impl TaskView {
             )
         };
 
-        let stats_constraints = if location_lines_vector.len() > 1 {
-            let location_len = task.location().len() as u16;
-            [
-                // 15 is the length of "| Location:     |"
-                layout::Constraint::Min(location_len + 15),
-                layout::Constraint::Min(32),
-            ]
-        } else {
-            [
-                layout::Constraint::Percentage(50),
-                layout::Constraint::Percentage(50),
-            ]
-        };
+        let stats_constraints = [
+            // 15 is the length of "| Location:     |"
+            layout::Constraint::Min(task.location().len() as u16 + 15),
+            layout::Constraint::Min(32),
+        ];
+
         let stats_area = Layout::default()
             .direction(layout::Direction::Horizontal)
             .constraints(stats_constraints.as_ref())
