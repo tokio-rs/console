@@ -350,7 +350,9 @@ pub mod trace_server {
                 }
                 _ => {
                     Box::pin(async move {
-                        let mut response = http::Response::new(tonic::body::Body::empty());
+                        let mut response = http::Response::new(
+                            tonic::body::Body::default(),
+                        );
                         let headers = response.headers_mut();
                         headers
                             .insert(
