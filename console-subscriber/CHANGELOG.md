@@ -3,6 +3,27 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.5.0 - (2025-04-01)
+
+### <a id = "0.5.0-breaking"></a>Breaking Changes
+- **Upgrade tonic to 0.13 ([#615](https://github.com/tokio-rs/console/issues/615))** ([2bd1afd](https://github.com/tokio-rs/console/commit/2bd1afda7987dea0505d231d9ce8bf109e5f7a96))<br />This is a breaking change for users of `console-api` and
+`console-subscriber`, as it changes the public `tonic` dependency
+to a semver-incompatible version. This breaks compatibility with
+`tonic` 0.12.x.
+
+### Added
+
+- Add the WatchState API ([#582](https://github.com/tokio-rs/console/issues/582)) ([7c1f9f2](https://github.com/tokio-rs/console/commit/7c1f9f216f499a0309ecf597c721252186e72c82))
+
+### Documented
+
+- Fix typo in doc comment ([3dbca7a](https://github.com/tokio-rs/console/commit/3dbca7a76e581d15ac598adc82e0c465d530de36))
+
+### Updated
+
+- [**breaking**](#0.5.0-breaking) Upgrade tonic to 0.13 ([#615](https://github.com/tokio-rs/console/issues/615)) ([2bd1afd](https://github.com/tokio-rs/console/commit/2bd1afda7987dea0505d231d9ce8bf109e5f7a96))
+
+
 ## 0.4.1 - (2024-10-24)
 
 
