@@ -16,9 +16,12 @@ use std::{
     convert::{TryFrom, TryInto},
     fmt,
     rc::Rc,
+    sync::atomic::{AtomicU64, Ordering},
     time::{Duration, SystemTime},
+    vec::Vec,
 };
 use tasks::{Details, Task, TasksState};
+use tokio::sync::watch;
 
 pub mod async_ops;
 pub mod histogram;
@@ -30,7 +33,9 @@ pub(crate) use self::store::Id;
 
 pub(crate) type DetailsRef = Rc<RefCell<Option<Details>>>;
 
-#[derive(Default, Debug)]
+const UPDATE_BUFFER_SIZE: usize = 1000;
+const UPDATE_BATCH_INTERVAL: Duration = Duration::from_millis(16); // ~60fps
+
 pub(crate) struct State {
     metas: HashMap<u64, Metadata>,
     last_updated_at: Option<SystemTime>,
@@ -41,6 +46,10 @@ pub(crate) struct State {
     current_task_details: DetailsRef,
     retain_for: Option<Duration>,
     strings: intern::Strings,
+    last_update: watch::Sender<Option<SystemTime>>,
+    update_buffer: Vec<UpdateEvent>,
+    last_batch_time: SystemTime,
+    update_counter: AtomicU64,
 }
 
 pub(crate) enum Visibility {
@@ -100,7 +109,70 @@ pub(crate) struct Attribute {
     unit: Option<String>,
 }
 
+#[derive(Debug)]
+pub(crate) enum UpdateEvent {
+    TaskUpdate(Task),
+    ResourceUpdate(Resource),
+    AsyncOpUpdate(AsyncOp),
+}
+
 impl State {
+    pub(crate) fn new() -> (Self, watch::Receiver<Option<SystemTime>>) {
+        let (tx, rx) = watch::channel(None);
+        (
+            Self {
+                metas: HashMap::new(),
+                last_updated_at: None,
+                temporality: Temporality::Live,
+                tasks_state: TasksState::default(),
+                resources_state: ResourcesState::default(),
+                async_ops_state: AsyncOpsState::default(),
+                current_task_details: Rc::new(RefCell::new(None)),
+                retain_for: None,
+                strings: intern::Strings::new(),
+                last_update: tx,
+                update_buffer: Vec::with_capacity(UPDATE_BUFFER_SIZE),
+                last_batch_time: SystemTime::now(),
+                update_counter: AtomicU64::new(0),
+            },
+            rx,
+        )
+    }
+
+    pub(crate) fn buffer_update(&mut self, event: UpdateEvent) {
+        self.update_buffer.push(event);
+        self.update_counter.fetch_add(1, Ordering::SeqCst);
+
+        let now = SystemTime::now();
+        if now.duration_since(self.last_batch_time).unwrap_or(Duration::ZERO) >= UPDATE_BATCH_INTERVAL
+            || self.update_buffer.len() >= UPDATE_BUFFER_SIZE
+        {
+            self.flush_updates();
+        }
+    }
+
+    pub(crate) fn flush_updates(&mut self) {
+        if self.update_buffer.is_empty() {
+            return;
+        }
+
+        for event in self.update_buffer.drain(..) {
+            match event {
+                UpdateEvent::TaskUpdate(task) => self.tasks_state.update_task(task),
+                UpdateEvent::ResourceUpdate(resource) => self.resources_state.update_resource(resource),
+                UpdateEvent::AsyncOpUpdate(async_op) => self.async_ops_state.update_async_op(async_op),
+            }
+        }
+
+        let now = SystemTime::now();
+        self.last_batch_time = now;
+        let _ = self.last_update.send(Some(now));
+    }
+
+    pub(crate) fn last_updated_at(&self) -> Option<SystemTime> {
+        *self.last_update.borrow()
+    }
+
     pub(crate) fn with_retain_for(mut self, retain_for: Option<Duration>) -> Self {
         self.retain_for = retain_for;
         self
@@ -112,10 +184,6 @@ impl State {
     ) -> Self {
         self.tasks_state.linters.extend(linters);
         self
-    }
-
-    pub(crate) fn last_updated_at(&self) -> Option<SystemTime> {
-        self.last_updated_at
     }
 
     pub(crate) fn update(
