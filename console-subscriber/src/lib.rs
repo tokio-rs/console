@@ -2,6 +2,9 @@
 use console_api as proto;
 use proto::{instrument::instrument_server::InstrumentServer, resources::resource};
 use serde::Serialize;
+#[cfg(feature = "vsock")]
+use tokio_vsock::VsockListener;
+
 use std::{
     cell::RefCell,
     fmt,
@@ -955,6 +958,12 @@ impl Server {
                 let serve = router.serve_with_incoming(UnixListenerStream::new(incoming));
                 spawn_named(serve, "console::serve").await
             }
+            #[cfg(feature = "vsock")]
+            ServerAddr::Vsock(addr) => {
+                let incoming = VsockListener::bind(addr)?.incoming();
+                let serve = router.serve_with_incoming(incoming);
+                spawn_named(serve, "console::serve").await
+            }
         };
         aggregate.abort();
         res?.map_err(Into::into)
@@ -1080,6 +1089,12 @@ impl Server {
             ServerAddr::Unix(path) => {
                 let incoming = UnixListener::bind(path)?;
                 let serve = router.serve_with_incoming(UnixListenerStream::new(incoming));
+                spawn_named(serve, "console::serve").await
+            }
+            #[cfg(feature = "vsock")]
+            ServerAddr::Vsock(addr) => {
+                let incoming = VsockListener::bind(addr)?.incoming();
+                let serve = router.serve_with_incoming(incoming);
                 spawn_named(serve, "console::serve").await
             }
         };
