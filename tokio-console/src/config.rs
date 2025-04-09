@@ -1,6 +1,7 @@
 use crate::state::tasks::Task;
 use crate::view::Palette;
 use crate::warnings;
+use cfg_if::cfg_if;
 use clap::builder::{PossibleValuesParser, TypedValueParser};
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser as Clap, Subcommand, ValueHint};
 use clap_complete::Shell;
@@ -34,6 +35,9 @@ pub struct Config {
     /// On Unix platforms, this may also be a URI with the `file` scheme that
     /// specifies the path to a Unix domain socket, as in
     /// `file://localhost/path/to/socket`.
+    ///
+    /// When the `vsock` feature is enabled, this may also be a URI with the `vsock` scheme that
+    /// specifies a vsock connection, as in `vsock://2:6669` to connect to CID 2 port 6669.
     ///
     /// [default: http://127.0.0.1:6669]
     #[clap(value_hint = ValueHint::Url)]
@@ -528,11 +532,30 @@ impl Config {
             .clone();
         match target_addr.scheme_str() {
             Some("file" | "http" | "https") => {}
-            _ => {
+            #[cfg(feature = "vsock")]
+            Some("vsock") => {}
+            #[cfg(not(feature = "vsock"))]
+            Some("vsock") => {
                 return Err(color_eyre::eyre::eyre!(
-                "invalid scheme for target address {:?}, must be one of 'file', 'http', or 'https'",
-                target_addr
-            ))
+                    "vsock scheme detected in target address {:?}, but tokio-console was not compiled with the 'vsock' feature. \
+                    Please recompile with '--features vsock' to enable vsock support",
+                    target_addr
+                ));
+            }
+            _ => {
+                // List of supported protocols is defined in the cfg_if block below
+                cfg_if! {
+                    if #[cfg(feature = "vsock")] {
+                        let protocols_display = "file, http, https, or vsock";
+                    } else {
+                        let protocols_display = "file, http, or https";
+                    }
+                }
+                return Err(color_eyre::eyre::eyre!(
+                    "invalid scheme for target address {:?}, must be one of {}",
+                    target_addr,
+                    protocols_display
+                ));
             }
         }
         Ok(target_addr)

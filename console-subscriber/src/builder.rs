@@ -152,10 +152,11 @@ impl Builder {
     /// before falling back on constructing a socket address from those
     /// defaults.
     ///
-    /// The socket address can be either a TCP socket address or a
-    /// [Unix domain socket] (UDS) address. Unix domain sockets are only
-    /// supported on Unix-compatible operating systems, such as Linux, BSDs,
-    /// and macOS.
+    /// The socket address can be either a TCP socket address, a
+    /// [Unix domain socket] (UDS) address, or a [Vsock] address.
+    /// Unix domain sockets are only supported on Unix-compatible operating systems,
+    /// such as Linux, BSDs, and macOS. Vsock addresses are only available when the
+    /// "vsock" feature is enabled and are supported on platforms with vsock capability.
     ///
     /// Each call to this method will overwrite the previously set value.
     ///
@@ -181,8 +182,17 @@ impl Builder {
     /// let builder = Builder::default().server_addr(Path::new("/tmp/tokio-console"));
     /// ```
     ///
+    /// Connect using a vsock connection (requires the "vsock" feature):
+    ///
+    /// ```
+    /// # use console_subscriber::Builder;
+    /// # #[cfg(feature = "vsock")]
+    /// let builder = Builder::default().server_addr((tokio_vsock::VMADDR_CID_ANY, 6669));
+    /// ```
+    ///
     /// [environment variable]: `Builder::with_default_env`
     /// [Unix domain socket]: https://en.wikipedia.org/wiki/Unix_domain_socket
+    /// [Vsock]: https://docs.rs/tokio-vsock/latest/tokio_vsock/
     pub fn server_addr(self, server_addr: impl Into<ServerAddr>) -> Self {
         Self {
             server_addr: server_addr.into(),
@@ -574,6 +584,9 @@ pub enum ServerAddr {
     /// A Unix socket address.
     #[cfg(unix)]
     Unix(PathBuf),
+    /// A vsock address.
+    #[cfg(feature = "vsock")]
+    Vsock(tokio_vsock::VsockAddr),
 }
 
 impl From<SocketAddr> for ServerAddr {
@@ -614,6 +627,13 @@ impl From<PathBuf> for ServerAddr {
 impl<'a> From<&'a Path> for ServerAddr {
     fn from(path: &'a Path) -> ServerAddr {
         ServerAddr::Unix(path.to_path_buf())
+    }
+}
+
+#[cfg(feature = "vsock")]
+impl From<tokio_vsock::VsockAddr> for ServerAddr {
+    fn from(addr: tokio_vsock::VsockAddr) -> ServerAddr {
+        ServerAddr::Vsock(addr)
     }
 }
 

@@ -10,6 +10,8 @@ use hyper_util::rt::TokioIo;
 use std::{error::Error, time::Duration};
 #[cfg(unix)]
 use tokio::net::UnixStream;
+#[cfg(feature = "vsock")]
+use tokio_vsock::VsockStream;
 use tonic::{
     transport::{Channel, Endpoint, Uri},
     Streaming,
@@ -111,6 +113,45 @@ impl Connection {
                     #[cfg(not(unix))]
                     Some("file") => {
                         return Err("unix domain sockets are not supported on this platform".into());
+                    }
+                    #[cfg(feature = "vsock")]
+                    Some("vsock") => {
+                        if !matches!(self.target.host(), None | Some("localhost") | Some("any")) {
+                            return Err("cannot connect to non-localhost vsock".into());
+                        }
+
+                        // Parse URI path in the format vsock://<cid>:<port>
+                        let uri_path = self.target.path();
+                        let parts: Vec<&str> =
+                            uri_path.trim_start_matches('/').split(':').collect();
+                        if parts.len() != 2 {
+                            return Err(format!(
+                                "invalid vsock URI format, expected vsock://<cid>:<port>, got {}",
+                                self.target
+                            )
+                            .into());
+                        }
+
+                        let cid = parts[0]
+                            .parse::<u32>()
+                            .map_err(|_| format!("invalid CID: {}", parts[0]))?;
+                        let port = parts[1]
+                            .parse::<u32>()
+                            .map_err(|_| format!("invalid port: {}", parts[1]))?;
+
+                        let vsock_addr = tokio_vsock::VsockAddr::new(cid, port);
+
+                        // Dummy endpoint is ignored by the connector
+                        let endpoint = Endpoint::from_static("http://localhost");
+                        endpoint
+                            .connect_with_connector(tower::service_fn(move |_| {
+                                VsockStream::connect(vsock_addr).map_ok(TokioIo::new)
+                            }))
+                            .await?
+                    }
+                    #[cfg(not(feature = "vsock"))]
+                    Some("vsock") => {
+                        return Err("vsock feature is not enabled".into());
                     }
                     _ => {
                         let endpoint = Endpoint::from(self.target.clone());

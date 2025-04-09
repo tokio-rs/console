@@ -191,6 +191,10 @@ Arguments:
           scheme that specifies the path to a Unix domain socket, as in
           `file://localhost/path/to/socket`.
           
+          When the `vsock` feature is enabled, this may also be a URI
+          with the `vsock` scheme that specifies a vsock connection, as
+          in `vsock://2:6669` to connect to CID 2 port 6669.
+          
           [default: http://127.0.0.1:6669]
 
 Options:
