@@ -58,17 +58,17 @@ pub struct Config {
     /// Each warning is specified by its name, which is one of:
     ///
     /// * `self-wakes` -- Warns when a task wakes itself more than a certain percentage of its total wakeups.
-    ///                   Default percentage is 50%.
+    ///   Default percentage is 50%.
     ///
     /// * `lost-waker` -- Warns when a task is dropped without being woken.
     ///
     /// * `never-yielded` -- Warns when a task has never yielded.
     ///
     /// * `auto-boxed-future` -- Warnings when the future driving a task was automatically boxed by
-    ///                          the runtime because it was large.
+    ///   the runtime because it was large.
     ///
     /// * `large-future` -- Warnings when the future driving a task occupies a large amount of
-    ///                     stack space.
+    ///   stack space.
     #[clap(long = "warn", short = 'W', value_delimiter = ',', num_args = 1..)]
     #[clap(default_values_t = KnownWarnings::default_enabled_warnings())]
     pub(crate) warnings: Vec<KnownWarnings>,
@@ -80,17 +80,17 @@ pub struct Config {
     /// Each warning is specified by its name, which is one of:
     ///
     /// * `self-wakes` -- Warns when a task wakes itself more than a certain percentage of its total wakeups.
-    ///                  Default percentage is 50%.
+    ///   Default percentage is 50%.
     ///
     /// * `lost-waker` -- Warns when a task is dropped without being woken.
     ///
     /// * `never-yielded` -- Warns when a task has never yielded.
     ///
     /// * `auto-boxed-future` -- Warnings when the future driving a task was automatically boxed by
-    ///                          the runtime because it was large.
+    ///   the runtime because it was large.
     ///
     /// * `large-future` -- Warnings when the future driving a task occupies a large amount of
-    ///                     stack space.
+    ///   stack space.
     ///
     /// If this is set to `all`, all warnings are allowed.
     ///
