@@ -3,6 +3,29 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.0 - (2025-04-14)
+
+### <a id = "0.2.0-breaking"></a>Breaking Changes
+- **Upgrade tonic to 0.13 ([#615](https://github.com/tokio-rs/console/issues/615))** ([2bd1afd](https://github.com/tokio-rs/console/commit/2bd1afda7987dea0505d231d9ce8bf109e5f7a96))<br />This is a breaking change for users of `console-api` and
+`console-subscriber`, as it changes the public `tonic` dependency
+to a semver-incompatible version. This breaks compatibility with
+`tonic` 0.12.x.
+
+### Added
+
+- Add the WatchState API ([#582](https://github.com/tokio-rs/console/issues/582)) ([7c1f9f2](https://github.com/tokio-rs/console/commit/7c1f9f216f499a0309ecf597c721252186e72c82))
+- Improve error msg when state streaming API is unimplemented ([#598](https://github.com/tokio-rs/console/issues/598)) ([6ef148a](https://github.com/tokio-rs/console/commit/6ef148a33fe71a682338bd65dd9271fd043086f2))
+- Add support for vsock connections ([#623](https://github.com/tokio-rs/console/issues/623)) ([63c70ee](https://github.com/tokio-rs/console/commit/63c70eeb1ecb5249d46629296d2712ce83290db2))
+
+### Fixed
+
+- Add dynamic constraints layout in task details screen ([#614](https://github.com/tokio-rs/console/issues/614)) ([ada7dab](https://github.com/tokio-rs/console/commit/ada7dab753b96ebcc6dbc63600bfb97a726c217e), fixes [#523](https://github.com/tokio-rs/console/issues/523), fixes [#523](https://github.com/tokio-rs/console/issues/523))
+
+### Updated
+
+- [**breaking**](#0.2.0-breaking) Upgrade tonic to 0.13 ([#615](https://github.com/tokio-rs/console/issues/615)) ([2bd1afd](https://github.com/tokio-rs/console/commit/2bd1afda7987dea0505d231d9ce8bf109e5f7a96))
+
+
 ## 0.1.13 - (2024-10-24)
 
 
