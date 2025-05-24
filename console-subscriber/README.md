@@ -62,7 +62,7 @@ runtime][Tokio] is considered *experimental*. In order to use
   ```toml
   [dependencies]
   # ...
-  tokio = { version = "1.15", features = ["full", "tracing"] }
+  tokio = { version = "1.38.2", features = ["full", "tracing"] }
   ```
 
 * The `tokio_unstable` cfg flag, which enables experimental APIs in Tokio, must
@@ -130,7 +130,7 @@ Other instrumentation is added in later Tokio releases:
 
 * [Tokio v1.21.0] or later is required to use newest `task::Builder::spawn*` APIs.
 
-* [Tokio v1.41.0] (as yet unreleased) or later is required for task future sizes and the related
+* [Tokio v1.41.0] or later is required for task future sizes and the related
   tokio-console lints `auto-boxed-future` and `large-future`.
 
 [Tokio v1.0.0]: https://github.com/tokio-rs/tokio/releases/tag/tokio-1.0.0
