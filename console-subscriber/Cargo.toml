@@ -40,7 +40,7 @@ console-api = { version = "0.8.0", path = "../console-api", features = ["transpo
 tonic = { version = "0.13.0", features = ["transport"] }
 tracing-core = "0.1.30"
 tracing = "0.1.35"
-tracing-subscriber = { version = "0.3.17", default-features = false, features = ["fmt", "registry"] }
+tracing-subscriber = { version = "0.3.20", default-features = false, features = ["fmt", "registry"] }
 futures-task = { version = "0.3.31", default-features = false }
 hdrhistogram = { version = "7.4.0", default-features = false, features = ["serialization"] }
 parking_lot = { version = "0.12.1", optional = true }

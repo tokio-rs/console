@@ -42,7 +42,7 @@ futures = "0.3"
 ratatui = { version = "0.26.2", default-features = false, features = ["crossterm"] }
 tower = { version = "0.4.12", features = ["util"] }
 tracing = "0.1.35"
-tracing-subscriber = { version = "0.3.17" }
+tracing-subscriber = { version = "0.3.20" }
 tracing-journald = { version = "0.2", optional = true }
 prost-types = "0.13.3"
 crossterm = { version = "0.27.0", features = ["event-stream"] }
