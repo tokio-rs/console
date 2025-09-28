@@ -43,7 +43,7 @@ ratatui = { version = "0.29.0", default-features = false, features = ["crossterm
 tower = { version = "0.5.2", features = ["util"] }
 tracing = "0.1.35"
 tracing-subscriber = { version = "0.3.17" }
-tracing-journald = { version = "0.2", optional = true }
+tracing-journald = { version = "0.3", optional = true }
 prost-types = "0.14.1"
 crossterm = { version = "0.29.0", features = ["event-stream"] }
 color-eyre = { version = "0.6", features = ["issue-url"] }
