@@ -207,8 +207,7 @@ async fn console_client(client_stream: DuplexStream, mut test_state: TestState) 
                 // We need to return a Result from this async block, which is
                 // why we don't unwrap the `client` here.
                 client.map(TokioIo::new).ok_or_else(|| {
-                    std::io::Error::new(
-                        std::io::ErrorKind::Other,
+                    std::io::Error::other(
                         "console-test error: client already taken. This shouldn't happen.",
                     )
                 })
