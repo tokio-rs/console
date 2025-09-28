@@ -32,7 +32,7 @@ pub struct AsyncOpUpdate {
 /// An async operation is an operation that is associated with a resource
 /// This could, for example, be a read or write on a TCP stream, or a receive operation on
 /// a channel.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct AsyncOp {
     /// The async op's ID.
     ///

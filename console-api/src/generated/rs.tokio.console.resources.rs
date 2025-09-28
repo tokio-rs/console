@@ -32,7 +32,7 @@ pub struct ResourceUpdate {
     pub dropped_events: u64,
 }
 /// Static data recorded when a new resource is created.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct Resource {
     /// The resources's ID.
     ///
@@ -66,7 +66,7 @@ pub struct Resource {
 /// Nested message and enum types in `Resource`.
 pub mod resource {
     /// The kind of resource (e.g. timer, mutex).
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
     pub struct Kind {
         /// Every resource is either a known kind or an other (unknown) kind.
         #[prost(oneof = "kind::Kind", tags = "1, 2")]
@@ -110,7 +110,7 @@ pub mod resource {
             }
         }
         /// Every resource is either a known kind or an other (unknown) kind.
-        #[derive(Clone, PartialEq, ::prost::Oneof)]
+        #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
         pub enum Kind {
             /// `known` signals that this kind of resource is known to the console API.
             #[prost(enumeration = "Known", tag = "1")]
@@ -140,7 +140,7 @@ pub struct Stats {
 }
 /// A `PollOp` describes each poll operation that completes within the async
 /// application.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PollOp {
     /// The numeric ID of the op's `Metadata`.
     ///

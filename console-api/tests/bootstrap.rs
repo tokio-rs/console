@@ -31,7 +31,7 @@ fn bootstrap() {
 
     let out_dir = root_dir.join("src").join("generated");
 
-    if let Err(error) = tonic_build::configure()
+    if let Err(error) = tonic_prost_build::configure()
         .build_client(true)
         .build_server(true)
         .emit_rerun_if_changed(false)

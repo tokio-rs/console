@@ -36,7 +36,7 @@ pub struct TaskUpdate {
     pub dropped_events: u64,
 }
 /// A task details update
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct TaskDetails {
     /// The task's ID which the details belong to.
     #[prost(message, optional, tag = "1")]
@@ -67,7 +67,7 @@ pub mod task_details {
     /// - the raw binary representation of a HdrHistogram.rs `Histogram`
     ///    serialized to binary in the V2 format (legacy)
     /// - a binary histogram plus details on outliers (current)
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum PollTimesHistogram {
         /// HdrHistogram.rs `Histogram` serialized to binary in the V2 format
         #[prost(bytes, tag = "3")]
@@ -164,7 +164,7 @@ pub mod task {
     }
 }
 /// Task performance statistics.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct Stats {
     /// Timestamp of when the task was spawned.
     #[prost(message, optional, tag = "1")]
@@ -204,7 +204,7 @@ pub struct Stats {
     #[prost(message, optional, tag = "9")]
     pub scheduled_time: ::core::option::Option<::prost_types::Duration>,
 }
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct DurationHistogram {
     /// HdrHistogram.rs `Histogram` serialized to binary in the V2 format
     #[prost(bytes = "vec", tag = "1")]

@@ -29,22 +29,20 @@ keywords = [
 transport = ["tonic/transport"]
 
 [dependencies]
-tonic = { version = "0.13.0", default-features = false, features = [
-    "prost",
+tonic = { version = "0.14.2", default-features = false, features = [
     "codegen",
     "transport",
 ] }
-prost = "0.13.3"
-prost-types = "0.13.3"
+tonic-prost = "0.14.2"
+prost = "0.14.1"
+prost-types = "0.14.1"
 tracing-core = "0.1.30"
 futures-core = "0.3.31"
 
 [dev-dependencies]
-tonic-build = { version = "0.13.0", default-features = false, features = [
-    "prost", "transport"
+tonic-prost-build = { version = "0.14.2", default-features = false, features = [
+    "transport"
 ] }
-# explicit dep so we can get the version with fixed whitespace.
-prost-build = "0.13.1"
 
 [package.metadata.docs.rs]
 all-features = true
