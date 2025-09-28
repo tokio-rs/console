@@ -59,7 +59,7 @@ impl TableList<9> for AsyncOpsTable {
     fn render(
         table_list_state: &mut TableListState<Self, 9>,
         styles: &view::Styles,
-        frame: &mut ratatui::terminal::Frame,
+        frame: &mut ratatui::Frame,
         area: layout::Rect,
         state: &mut State,
         ctx: Self::Context,
@@ -212,7 +212,7 @@ impl TableList<9> for AsyncOpsTable {
             .block(block)
             .widths(widths)
             .highlight_symbol(view::TABLE_HIGHLIGHT_SYMBOL)
-            .highlight_style(Style::default().add_modifier(style::Modifier::BOLD));
+            .row_highlight_style(Style::default().add_modifier(style::Modifier::BOLD));
 
         frame.render_stateful_widget(table, area, &mut table_list_state.table_state);
 

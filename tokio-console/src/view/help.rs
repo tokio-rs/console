@@ -24,11 +24,11 @@ impl<'a> HelpView<'a> {
     pub(crate) fn render(
         &mut self,
         styles: &view::Styles,
-        frame: &mut ratatui::terminal::Frame,
+        frame: &mut ratatui::Frame,
         _area: layout::Rect,
         _state: &mut State,
     ) {
-        let r = frame.size();
+        let r = frame.area();
         let content = self
             .help_text
             .take()

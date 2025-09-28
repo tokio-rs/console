@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use ratatui::{
-    layout::Rect,
+    layout::{Position, Rect},
     style::Style,
     symbols,
     widgets::{Block, Widget},
@@ -165,9 +165,13 @@ impl<'a> MiniHistogram<'a> {
                     7 => self.bar_set.seven_eighths,
                     _ => self.bar_set.full,
                 };
-                buf.get_mut(area.left() + i as u16, area.top() + j)
-                    .set_symbol(symbol)
-                    .set_style(self.style);
+
+                if let Some(cell) = buf.cell_mut(Position {
+                    x: area.left() + i as u16,
+                    y: area.top() + j,
+                }) {
+                    cell.set_symbol(symbol).set_style(self.style);
+                }
 
                 if *d > 8 {
                     *d -= 8;

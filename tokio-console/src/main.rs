@@ -152,7 +152,7 @@ async fn main() -> color_eyre::Result<()> {
                     ]
                     .as_ref(),
                 )
-                .split(f.size());
+                .split(f.area());
 
             let mut header_text = conn.render(&view.styles);
             match state.temporality() {

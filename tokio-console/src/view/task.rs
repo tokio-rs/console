@@ -38,7 +38,7 @@ impl TaskView {
     pub(crate) fn render(
         &mut self,
         styles: &view::Styles,
-        frame: &mut ratatui::terminal::Frame,
+        frame: &mut ratatui::Frame,
         area: layout::Rect,
         now: SystemTime,
     ) {
