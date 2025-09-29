@@ -974,16 +974,6 @@ impl Server {
     ///
     /// # Examples
     ///
-    /// To serve the instrument server with gRPC-Web support with the default
-    /// settings:
-    ///
-    /// ```rust
-    /// # async fn docs() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-    /// # let (_, server) = console_subscriber::ConsoleLayer::new();
-    /// server.serve_with_grpc_web(tonic::transport::Server::default()).await
-    /// # }
-    /// ```
-    ///
     /// To serve the instrument server with gRPC-Web support and a custom CORS configuration, use the
     /// following code:
     ///
@@ -1076,9 +1066,7 @@ impl Server {
             instrument_server,
             aggregator,
         } = self.into_parts();
-        let router = builder
-            .accept_http1(true)
-            .add_service(tonic_web::enable(instrument_server));
+        let router = builder.accept_http1(true).add_service(instrument_server);
         let aggregate = spawn_named(aggregator.run(), "console::aggregate");
         let res = match addr {
             ServerAddr::Tcp(addr) => {

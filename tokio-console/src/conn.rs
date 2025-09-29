@@ -271,7 +271,7 @@ impl Connection {
         }
     }
 
-    pub fn render(&self, styles: &crate::view::Styles) -> ratatui::text::Line {
+    pub fn render(&self, styles: &crate::view::Styles) -> ratatui::text::Line<'_> {
         use ratatui::{
             style::{Color, Modifier},
             text::{Line, Span},

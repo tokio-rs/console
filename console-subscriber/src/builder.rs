@@ -187,7 +187,7 @@ impl Builder {
     /// ```
     /// # use console_subscriber::Builder;
     /// # #[cfg(feature = "vsock")]
-    /// let builder = Builder::default().server_addr((tokio_vsock::VMADDR_CID_ANY, 6669));
+    /// let builder = Builder::default().server_addr(tokio_vsock::VsockAddr::new(tokio_vsock::VMADDR_CID_ANY, 6669));
     /// ```
     ///
     /// [environment variable]: `Builder::with_default_env`
