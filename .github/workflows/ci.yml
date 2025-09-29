@@ -122,7 +122,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run cargo clippy
-        run: cargo clippy --workspace --all-targets --no-deps -- -D warnings
+        run: cargo clippy --workspace --all-features --all-targets --no-deps -- -D warnings
 
   docs:
     name: Docs
