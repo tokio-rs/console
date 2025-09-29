@@ -8,7 +8,6 @@
       url = "github:oxalica/rust-overlay";
       inputs = {
         nixpkgs.follows = "nixpkgs";
-        flake-utils.follows = "flake-utils";
       };
     };
   };
@@ -66,11 +65,31 @@
               pname = cargoTOML.package.name;
               version = cargoTOML.package.version;
 
-              nativeBuildInputs = [ protobuf ];
+              nativeBuildInputs = [
+                installShellFiles
+                protobuf
+              ];
+
+              RUSTFLAGS = "--cfg tokio_unstable";
 
               inherit src;
 
               cargoLock = { lockFile = "${src}/Cargo.lock"; };
+
+              checkFlags = [
+                # tests depend upon git repository at test execution time
+                "--skip bootstrap"
+                "--skip config::tests::args_example_changed"
+                "--skip config::tests::toml_example_changed"
+                "--skip cli_tests"
+              ];
+
+              postInstall = lib.optionalString (stdenv.buildPlatform.canExecute stdenv.hostPlatform) ''
+                installShellCompletion --cmd tokio-console \
+                  --bash <($out/bin/tokio-console --log-dir $(mktemp -d) gen-completion bash) \
+                  --fish <($out/bin/tokio-console --log-dir $(mktemp -d) gen-completion fish) \
+                  --zsh <($out/bin/tokio-console --log-dir $(mktemp -d) gen-completion zsh)
+              '';
 
               meta = {
                 inherit (cargoTOML.package) description homepage license;
@@ -84,8 +103,7 @@
           devShell = with pkgs;
             mkShell {
               name = "tokio-console-env";
-              buildInputs = tokio-console.buildInputs ++ lib.optional stdenv.isDarwin libiconv;
-              nativeBuildInputs = tokio-console.nativeBuildInputs;
+              inputsFrom = [ tokio-console ];
               RUST_SRC_PATH = "${rustPlatform.rustLibSrc}";
               CARGO_TERM_COLOR = "always";
               RUST_BACKTRACE = "full";
@@ -104,6 +122,9 @@
           packages = {
             inherit tokio-console;
             default = self.packages.${system}.tokio-console;
+          };
+          checks = {
+            inherit tokio-console;
           };
         });
 }
