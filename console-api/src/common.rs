@@ -1,5 +1,4 @@
 use std::fmt;
-use std::hash::{Hash, Hasher};
 
 pub use generated::*;
 
@@ -205,22 +204,6 @@ impl From<&dyn std::fmt::Debug> for field::Value {
         field::Value::DebugVal(format!("{:?}", val))
     }
 }
-
-// Clippy warns when a type derives `PartialEq` but has a manual `Hash` impl,
-// or vice versa. However, this is unavoidable here, because `prost` generates
-// a struct with `#[derive(PartialEq)]`, but we cannot add`#[derive(Hash)]` to the
-// generated code.
-#[allow(clippy::derived_hash_with_manual_eq)]
-impl Hash for field::Name {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        match self {
-            field::Name::NameIdx(idx) => idx.hash(state),
-            field::Name::StrName(s) => s.hash(state),
-        }
-    }
-}
-
-impl Eq for field::Name {}
 
 // === IDs ===
 

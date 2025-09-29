@@ -80,7 +80,7 @@ fn gen_proto() -> Result<()> {
 
     let out_dir = api_dir.join("src").join("generated");
 
-    tonic_build::configure()
+    tonic_prost_build::configure()
         .build_client(true)
         .build_server(true)
         .emit_rerun_if_changed(false)

@@ -5,21 +5,21 @@
 /// TODO: In the future allow for the request to specify
 /// only the data that the caller cares about (i.e. only
 /// tasks but no resources)
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct InstrumentRequest {}
 /// TaskDetailsRequest requests the stream of updates about
 /// the specific task identified in the request.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct TaskDetailsRequest {
     /// Identifies the task for which details were requested.
     #[prost(message, optional, tag = "1")]
     pub id: ::core::option::Option<super::common::Id>,
 }
 /// PauseRequest requests the stream of updates to pause.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PauseRequest {}
 /// ResumeRequest requests the stream of updates to resume after a pause.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ResumeRequest {}
 /// Update carries all information regarding tasks, resources, async operations
 /// and resource operations in one message. There are a couple of reasons to combine all
@@ -51,19 +51,19 @@ pub struct Update {
     pub new_metadata: ::core::option::Option<super::common::RegisterMetadata>,
 }
 /// StateRequest requests the current state of the aggregator.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct StateRequest {}
 /// State carries the current state of the aggregator.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct State {
     #[prost(enumeration = "Temporality", tag = "1")]
     pub temporality: i32,
 }
 /// `PauseResponse` is the value returned after a pause request.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PauseResponse {}
 /// `ResumeResponse` is the value returned after a resume request.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ResumeResponse {}
 /// The time "state" of the aggregator.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -202,7 +202,7 @@ pub mod instrument_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/rs.tokio.console.instrument.Instrument/WatchUpdates",
             );
@@ -232,7 +232,7 @@ pub mod instrument_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/rs.tokio.console.instrument.Instrument/WatchTaskDetails",
             );
@@ -262,7 +262,7 @@ pub mod instrument_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/rs.tokio.console.instrument.Instrument/WatchState",
             );
@@ -289,7 +289,7 @@ pub mod instrument_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/rs.tokio.console.instrument.Instrument/Pause",
             );
@@ -313,7 +313,7 @@ pub mod instrument_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/rs.tokio.console.instrument.Instrument/Resume",
             );
@@ -500,7 +500,7 @@ pub mod instrument_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = WatchUpdatesSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -546,7 +546,7 @@ pub mod instrument_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = WatchTaskDetailsSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -592,7 +592,7 @@ pub mod instrument_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = WatchStateSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -635,7 +635,7 @@ pub mod instrument_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = PauseSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -678,7 +678,7 @@ pub mod instrument_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = ResumeSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
