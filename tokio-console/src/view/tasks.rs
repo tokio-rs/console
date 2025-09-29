@@ -48,7 +48,7 @@ impl TableList<12> for TasksTable {
     fn render(
         table_list_state: &mut TableListState<Self, 12>,
         styles: &view::Styles,
-        frame: &mut ratatui::terminal::Frame,
+        frame: &mut ratatui::Frame,
         area: layout::Rect,
         state: &mut State,
         _: Self::Context,
@@ -267,7 +267,7 @@ impl TableList<12> for TasksTable {
             .block(block)
             .widths(widths)
             .highlight_symbol(view::TABLE_HIGHLIGHT_SYMBOL)
-            .highlight_style(Style::default().add_modifier(style::Modifier::BOLD));
+            .row_highlight_style(Style::default().add_modifier(style::Modifier::BOLD));
 
         frame.render_stateful_widget(table, tasks_area, &mut table_list_state.table_state);
         frame.render_widget(controls.into_widget(), controls_area);

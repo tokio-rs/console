@@ -26,7 +26,7 @@ pub(crate) trait TableList<const N: usize> {
     fn render(
         state: &mut TableListState<Self, N>,
         styles: &view::Styles,
-        frame: &mut ratatui::terminal::Frame,
+        frame: &mut ratatui::Frame,
         area: layout::Rect,
         state: &mut state::State,
         cx: Self::Context,
@@ -175,7 +175,7 @@ impl<T: TableList<N>, const N: usize> TableListState<T, N> {
     pub(in crate::view) fn render(
         &mut self,
         styles: &view::Styles,
-        frame: &mut ratatui::terminal::Frame,
+        frame: &mut ratatui::Frame,
         area: layout::Rect,
         state: &mut state::State,
         ctx: T::Context,

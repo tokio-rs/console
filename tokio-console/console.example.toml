@@ -1,23 +1,23 @@
-default_target_addr = 'http://127.0.0.1:6669/'
-log = 'off'
+default_target_addr = "http://127.0.0.1:6669/"
+log = "off"
 warnings = [
-    'self-wakes',
-    'lost-waker',
-    'never-yielded',
-    'auto-boxed-future',
-    'large-future',
+    "self-wakes",
+    "lost-waker",
+    "never-yielded",
+    "auto-boxed-future",
+    "large-future",
 ]
-log_directory = '/tmp/tokio-console/logs'
-retention = '6s'
+log_directory = "/tmp/tokio-console/logs"
+retention = "6s"
 
 [charset]
-lang = 'en_US.UTF-8'
+lang = "en_US.UTF-8"
 ascii_only = false
 
 [colors]
 enabled = true
 truecolor = true
-palette = 'all'
+palette = "all"
 
 [colors.enable]
 durations = true
