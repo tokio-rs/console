@@ -116,69 +116,67 @@ impl View {
             return update_kind;
         }
 
-        if matches!(event, key!(Char('t'))) {
-            self.state = TasksList;
-            return update_kind;
-        }
-
-        if matches!(event, key!(Char('r'))) {
-            self.state = ResourcesList;
-            return update_kind;
-        }
-
-        match self.state {
-            TasksList => {
-                // The enter key changes views, so handle here since we can
-                // mutate the currently selected view.
-                match event {
-                    key!(Enter) => {
-                        if let Some(task) = self.tasks_list.selected_item() {
-                            update_kind = UpdateKind::SelectTask(task.borrow().span_id());
-                            self.state = TaskInstance(self::task::TaskView::new(
-                                task,
-                                state.task_details_ref(),
-                            ));
+        match event {
+            input::Event::Mouse(mouse_event) => {
+                match mouse_event.kind {
+                    MouseEventKind::Down(_) => {
+                        match self.state {
+                            TasksList => {
+                                if self.tasks_list.handle_resize(mouse_event.column, &area) {
+                                    return update_kind;
+                                }
+                            }
+                            ResourcesList => {
+                                if self.resources_list.handle_resize(mouse_event.column, &area) {
+                                    return update_kind;
+                                }
+                            }
+                            _ => {}
                         }
                     }
-                    _ => {
-                        // otherwise pass on to view
-                        self.tasks_list.update_input(event);
-                    }
-                }
-            }
-            ResourcesList => {
-                match event {
-                    key!(Enter) => {
-                        if let Some(res) = self.resources_list.selected_item() {
-                            update_kind = UpdateKind::SelectResource(res.borrow().span_id());
-                            self.state = ResourceInstance(self::resource::ResourceView::new(res));
+                    MouseEventKind::Up(_) => {
+                        match self.state {
+                            TasksList => self.tasks_list.end_resize(),
+                            ResourcesList => self.resources_list.end_resize(),
+                            _ => {}
                         }
                     }
-                    _ => {
-                        // otherwise pass on to view
-                        self.resources_list.update_input(event);
+                    MouseEventKind::Moved => {
+                        match self.state {
+                            TasksList => {
+                                if self.tasks_list.handle_resize(mouse_event.column, &area) {
+                                    return update_kind;
+                                }
+                            }
+                            ResourcesList => {
+                                if self.resources_list.handle_resize(mouse_event.column, &area) {
+                                    return update_kind;
+                                }
+                            }
+                            _ => {}
+                        }
                     }
+                    _ => {}
                 }
             }
-            ResourceInstance(ref mut view) => {
-                // The escape key changes views, so handle here since we can
-                // mutate the currently selected view.
-                match event {
-                    key!(Esc) => {
-                        self.state = ResourcesList;
-                        update_kind = UpdateKind::Other;
-                    }
-                    key!(Enter) => {
-                        if let Some(op) = view.async_ops_table.selected_item() {
-                            if let Some(task_id) = op.borrow().task_id() {
-                                let task = self
-                                    .tasks_list
-                                    .sorted_items
-                                    .iter()
-                                    .filter_map(|i| i.upgrade())
-                                    .find(|t| task_id == t.borrow().id());
+            input::Event::Key(key_event) => {
+                if matches!(key_event, key!(Char('t'))) {
+                    self.state = TasksList;
+                    return update_kind;
+                }
 
-                                if let Some(task) = task {
+                if matches!(key_event, key!(Char('r'))) {
+                    self.state = ResourcesList;
+                    return update_kind;
+                }
+
+                match self.state {
+                    TasksList => {
+                        // The enter key changes views, so handle here since we can
+                        // mutate the currently selected view.
+                        match key_event {
+                            key!(Enter) => {
+                                if let Some(task) = self.tasks_list.selected_item() {
                                     update_kind = UpdateKind::SelectTask(task.borrow().span_id());
                                     self.state = TaskInstance(self::task::TaskView::new(
                                         task,
@@ -186,28 +184,77 @@ impl View {
                                     ));
                                 }
                             }
+                            _ => {
+                                // otherwise pass on to view
+                                self.tasks_list.update_input(key_event);
+                            }
                         }
                     }
-                    _ => {
-                        // otherwise pass on to view
-                        view.update_input(event);
+                    ResourcesList => {
+                        match key_event {
+                            key!(Enter) => {
+                                if let Some(res) = self.resources_list.selected_item() {
+                                    update_kind = UpdateKind::SelectResource(res.borrow().span_id());
+                                    self.state = ResourceInstance(self::resource::ResourceView::new(res));
+                                }
+                            }
+                            _ => {
+                                // otherwise pass on to view
+                                self.resources_list.update_input(key_event);
+                            }
+                        }
+                    }
+                    ResourceInstance(ref mut view) => {
+                        // The escape key changes views, so handle here since we can
+                        // mutate the currently selected view.
+                        match key_event {
+                            key!(Esc) => {
+                                self.state = ResourcesList;
+                                update_kind = UpdateKind::Other;
+                            }
+                            key!(Enter) => {
+                                if let Some(op) = view.async_ops_table.selected_item() {
+                                    if let Some(task_id) = op.borrow().task_id() {
+                                        let task = self
+                                            .tasks_list
+                                            .sorted_items
+                                            .iter()
+                                            .filter_map(|i| i.upgrade())
+                                            .find(|t| task_id == t.borrow().id());
+
+                                        if let Some(task) = task {
+                                            update_kind = UpdateKind::SelectTask(task.borrow().span_id());
+                                            self.state = TaskInstance(self::task::TaskView::new(
+                                                task,
+                                                state.task_details_ref(),
+                                            ));
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {
+                                // otherwise pass on to view
+                                view.update_input(key_event);
+                            }
+                        }
+                    }
+                    TaskInstance(ref mut view) => {
+                        // The escape key changes views, so handle here since we can
+                        // mutate the currently selected view.
+                        match key_event {
+                            key!(Esc) => {
+                                self.state = TasksList;
+                                update_kind = UpdateKind::ExitTaskView;
+                            }
+                            _ => {
+                                // otherwise pass on to view
+                                view.update_input(key_event);
+                            }
+                        }
                     }
                 }
             }
-            TaskInstance(ref mut view) => {
-                // The escape key changes views, so handle here since we can
-                // mutate the currently selected view.
-                match event {
-                    key!(Esc) => {
-                        self.state = TasksList;
-                        update_kind = UpdateKind::ExitTaskView;
-                    }
-                    _ => {
-                        // otherwise pass on to view
-                        view.update_input(event);
-                    }
-                }
-            }
+            _ => {}
         }
         update_kind
     }
