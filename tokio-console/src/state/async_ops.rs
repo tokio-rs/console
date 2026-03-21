@@ -25,9 +25,10 @@ pub(crate) struct AsyncOpsState {
     dropped_events: u64,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 #[repr(usize)]
 pub(crate) enum SortBy {
+    #[default]
     Aid = 0,
     Task = 1,
     Source = 2,
@@ -63,12 +64,6 @@ struct AsyncOpStats {
     task_id: Option<Id<Task>>,
     task_id_str: InternedStr,
     formatted_attributes: Vec<Vec<Span<'static>>>,
-}
-
-impl Default for SortBy {
-    fn default() -> Self {
-        Self::Aid
-    }
 }
 
 impl SortBy {
