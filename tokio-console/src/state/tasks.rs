@@ -36,13 +36,14 @@ pub(crate) struct Details {
     pub(crate) scheduled_times_histogram: Option<DurationHistogram>,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 #[repr(usize)]
 pub(crate) enum SortBy {
     Warns = 0,
     Tid = 1,
     State = 2,
     Name = 3,
+    #[default]
     Total = 4,
     Busy = 5,
     Scheduled = 6,
@@ -581,11 +582,6 @@ impl From<proto::tasks::Stats> for TaskStats {
     }
 }
 
-impl Default for SortBy {
-    fn default() -> Self {
-        Self::Total
-    }
-}
 
 impl SortBy {
     pub fn sort(&self, now: SystemTime, tasks: &mut [Weak<RefCell<Task>>]) {

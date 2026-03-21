@@ -71,18 +71,13 @@ pub(crate) enum FieldValue {
     Debug(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) enum Temporality {
     Unpausing,
+    #[default]
     Live,
     Pausing,
     Paused,
-}
-
-impl Default for Temporality {
-    fn default() -> Self {
-        Self::Live
-    }
 }
 
 impl From<proto::instrument::Temporality> for Temporality {
