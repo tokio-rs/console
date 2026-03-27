@@ -13,10 +13,11 @@ pub struct Styles {
     pub(crate) utf8: bool,
 }
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Default, Deserialize, Serialize)]
 #[repr(u8)]
 pub enum Palette {
     #[serde(rename = "off")]
+    #[default]
     NoColors,
     /// Use ANSI 8 color palette only.
     #[serde(rename = "8")]
@@ -359,11 +360,5 @@ impl FromStr for Palette {
             s if s.eq_ignore_ascii_case("off") => Ok(Palette::NoColors),
             _ => Err("invalid color palette"),
         }
-    }
-}
-
-impl Default for Palette {
-    fn default() -> Self {
-        Self::NoColors
     }
 }

@@ -26,9 +26,10 @@ pub(crate) enum TypeVisibility {
     Internal,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 #[repr(usize)]
 pub(crate) enum SortBy {
+    #[default]
     Id = 0,
     ParentId = 1,
     Kind = 2,
@@ -71,12 +72,6 @@ struct ResourceStats {
     dropped_at: Option<SystemTime>,
     total: Option<Duration>,
     formatted_attributes: Vec<Vec<Span<'static>>>,
-}
-
-impl Default for SortBy {
-    fn default() -> Self {
-        Self::Id
-    }
 }
 
 impl SortBy {
