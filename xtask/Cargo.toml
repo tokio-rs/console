@@ -10,6 +10,6 @@ publish = false
 tonic-prost-build = { version = "0.14.2", default-features = false, features = [
     "transport"
 ] }
-clap = { version = "~4.5.4", features = ["derive"] }
+clap = { version = "4.5.4", features = ["derive"] }
 color-eyre = "0.6"
 regex = "1.11"
