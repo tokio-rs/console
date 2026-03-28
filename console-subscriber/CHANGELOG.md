@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.5.1 - (2026-03-28)
+
+
+
+
 ## 0.5.0 - (2025-10-30)
 
 ### <a id = "0.5.0-breaking"></a>Breaking Changes
