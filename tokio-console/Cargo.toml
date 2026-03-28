@@ -4,7 +4,7 @@ version = "0.1.14"
 license = "MIT"
 repository = "https://github.com/tokio-rs/console"
 edition = "2021"
-rust-version = "1.74.0"
+rust-version = "1.84.0"
 authors = ["Eliza Weisman <eliza@buoyant.io>", "Tokio Contributors <team@tokio.rs>",]
 readme = "README.md"
 default-run = "tokio-console"
@@ -34,8 +34,8 @@ eula = false
 
 [dependencies]
 console-api = { version = "0.9.0", path = "../console-api", features = ["transport"] }
-clap = { version = "~4.5.4", features = ["wrap_help", "cargo", "derive", "env"] }
-clap_complete = "~4.5.2"
+clap = { version = "4.5.4", features = ["wrap_help", "cargo", "derive", "env"] }
+clap_complete = "4.5.2"
 tokio = { version = "1.47.1", features = ["full", "rt-multi-thread"] }
 tonic = { version = "0.14.2", features = ["transport"] }
 futures = "0.3"

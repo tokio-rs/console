@@ -78,7 +78,7 @@ jobs:
           - rust: stable
             os: windows-latest
             extraFeatures: ""
-          - rust: 1.74.0
+          - rust: 1.84.0
             os: ubuntu-latest
             extraFeatures: vsock
           # Try to build on the latest nightly. This job is allowed to fail, but

@@ -3,13 +3,13 @@ name = "xtask"
 version = "0.1.0"
 license = "MIT"
 edition = "2021"
-rust-version = "1.74.0"
+rust-version = "1.84.0"
 publish = false
 
 [dependencies]
 tonic-prost-build = { version = "0.14.2", default-features = false, features = [
     "transport"
 ] }
-clap = { version = "~4.5.4", features = ["derive"] }
+clap = { version = "4.5.4", features = ["derive"] }
 color-eyre = "0.6"
 regex = "1.11"
