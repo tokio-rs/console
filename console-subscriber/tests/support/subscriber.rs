@@ -305,6 +305,7 @@ async fn record_actual_tasks(
 /// expected task is validated against the actual task.
 ///
 /// Any validation errors result in failure. If no matches
+#[allow(clippy::result_large_err)]
 fn validate_expected_tasks(
     expected_tasks: Vec<ExpectedTask>,
     actual_tasks: Vec<ActualTask>,
