@@ -1,4 +1,5 @@
 default_target_addr = "http://127.0.0.1:6669/"
+max_decoding_message_size = 4194304
 log = "off"
 warnings = [
     "self-wakes",

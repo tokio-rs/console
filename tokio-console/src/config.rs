@@ -43,6 +43,19 @@ pub struct Config {
     #[clap(value_hint = ValueHint::Url)]
     pub(crate) target_addr: Option<Uri>,
 
+    /// The maximum size of a decoded gRPC message, in bytes.
+    ///
+    /// Raise this if the console fails to connect with an error like
+    /// "decoded message length too large", which can happen when the
+    /// instrumented process has a very large number of tasks or resources.
+    ///
+    /// [default: 4194304]
+    #[clap(
+        long = "max-decoding-message-size",
+        env = "TOKIO_CONSOLE_MAX_DECODING_MESSAGE_SIZE"
+    )]
+    pub(crate) max_decoding_message_size: Option<usize>,
+
     /// Log level filter for the console's internal diagnostics.
     ///
     /// Logs are written to a new file at the path given by the `--log-dir`
@@ -398,6 +411,7 @@ impl FromStr for LogFilter {
 #[serde(deny_unknown_fields)]
 struct ConfigFile {
     default_target_addr: Option<String>,
+    max_decoding_message_size: Option<usize>,
     log: Option<String>,
     warnings: Vec<KnownWarnings>,
     allow_warnings: Option<AllowedWarnings>,
@@ -520,6 +534,11 @@ impl Config {
         Ok(())
     }
 
+    pub(crate) fn max_decoding_message_size(&self) -> usize {
+        self.max_decoding_message_size
+            .unwrap_or(DEFAULT_MAX_DECODING_MESSAGE_SIZE)
+    }
+
     pub(crate) fn retain_for(&self) -> Option<Duration> {
         self.retain_for.unwrap_or_default().0
     }
@@ -621,6 +640,9 @@ impl Config {
                     (a, b) => a.or(b),
                 }
             },
+            max_decoding_message_size: other
+                .max_decoding_message_size
+                .or(self.max_decoding_message_size),
             retain_for: other.retain_for.or(self.retain_for),
             view_options: self.view_options.merge_with(other.view_options),
             subcmd: other.subcmd.or(self.subcmd),
@@ -632,6 +654,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             target_addr: Some(default_target_addr()),
+            max_decoding_message_size: Some(DEFAULT_MAX_DECODING_MESSAGE_SIZE),
             log_filter: Some(LogFilter(
                 filter::Targets::new().with_default(filter::LevelFilter::OFF),
             )),
@@ -644,6 +667,9 @@ impl Default for Config {
         }
     }
 }
+
+// Should match tonic's (private) codec::DEFAULT_MAX_RECV_MESSAGE_SIZE
+const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 4 * 1024 * 1024;
 
 fn default_target_addr() -> Uri {
     "http://127.0.0.1:6669"
@@ -870,6 +896,7 @@ impl From<Config> for ConfigFile {
     fn from(config: Config) -> Self {
         Self {
             default_target_addr: config.target_addr.map(|addr| addr.to_string()),
+            max_decoding_message_size: config.max_decoding_message_size,
             log: config.log_filter.map(|filter| filter.to_string()),
             log_directory: config.log_directory,
             warnings: config.warnings,
@@ -895,6 +922,7 @@ impl TryFrom<ConfigFile> for Config {
     fn try_from(mut value: ConfigFile) -> Result<Self, Self::Error> {
         Ok(Config {
             target_addr: value.target_addr()?,
+            max_decoding_message_size: value.max_decoding_message_size,
             log_filter: value.log_filter()?,
             warnings: value.warnings.clone(),
             allow_warnings: value.allow_warnings.clone(),
@@ -1004,6 +1032,25 @@ mod tests {
                 diff
             );
         }
+    }
+
+    #[test]
+    fn max_decoding_message_size() {
+        clobber_env_vars();
+
+        // Unset: falls back to tonic's default limit, not 0.
+        let config = Config::try_parse_from(std::iter::empty::<std::ffi::OsString>())
+            .expect("should parse empty config");
+        assert_eq!(
+            config.max_decoding_message_size(),
+            DEFAULT_MAX_DECODING_MESSAGE_SIZE
+        );
+
+        // Set via CLI flag.
+        let config =
+            Config::try_parse_from(["tokio-console", "--max-decoding-message-size", "8388608"])
+                .expect("should parse config with --max-decoding-message-size");
+        assert_eq!(config.max_decoding_message_size(), 8_388_608);
     }
 
     fn git_diff(path: impl AsRef<Path>) -> Result<(), String> {

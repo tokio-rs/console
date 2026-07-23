@@ -21,6 +21,7 @@ use tonic::{
 pub struct Connection {
     target: Uri,
     state: State,
+    max_decoding_message_size: usize,
 }
 
 // clippy doesn't like that the "connected" case is much larger than the
@@ -77,10 +78,11 @@ macro_rules! with_client {
 
 impl Connection {
     const BACKOFF: Duration = Duration::from_millis(500);
-    pub fn new(target: Uri) -> Self {
+    pub fn new(target: Uri, max_decoding_message_size: usize) -> Self {
         Self {
             target,
             state: State::Disconnected(Duration::from_secs(0)),
+            max_decoding_message_size,
         }
     }
 
@@ -158,7 +160,8 @@ impl Connection {
                         endpoint.connect().await?
                     }
                 };
-                let mut client = InstrumentClient::new(channel);
+                let mut client = InstrumentClient::new(channel)
+                    .max_decoding_message_size(self.max_decoding_message_size);
                 let update_request = tonic::Request::new(InstrumentRequest {});
                 let update_stream =
                     Box::new(client.watch_updates(update_request).await?.into_inner());

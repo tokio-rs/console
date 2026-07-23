@@ -56,7 +56,7 @@ async fn main() -> color_eyre::Result<()> {
     let retain_for = args.retain_for();
     let (mut terminal, _cleanup) = term::init_crossterm()?;
     terminal.clear()?;
-    let mut conn = conn::Connection::new(target);
+    let mut conn = conn::Connection::new(target, args.max_decoding_message_size());
     // A channel to send the outcome of `View::update_input` to the watch_details_stream task.
     let (update_tx, update_rx) = watch::channel(UpdateKind::Other);
     // A channel to send the task details update stream (no need to keep outdated details in the memory)
