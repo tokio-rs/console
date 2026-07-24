@@ -27,6 +27,18 @@ Arguments:
           [default: http://127.0.0.1:6669]
 
 Options:
+      --max-decoding-message-size <MAX_DECODING_MESSAGE_SIZE>
+          The maximum size of a decoded gRPC message, in bytes.
+          
+          Raise this if the console fails to connect with an error like
+          "decoded message length too large", which can happen when the
+          instrumented process has a very large number of tasks or
+          resources.
+          
+          [default: 4194304]
+          
+          [env: TOKIO_CONSOLE_MAX_DECODING_MESSAGE_SIZE=]
+
       --log <LOG_FILTER>
           Log level filter for the console's internal diagnostics.
           
