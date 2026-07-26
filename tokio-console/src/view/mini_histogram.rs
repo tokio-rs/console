@@ -136,19 +136,17 @@ impl<'a> MiniHistogram<'a> {
             .iter()
             .take(max_index)
             .map(|e| {
-                if max != 0 {
-                    let r = e * u64::from(area.height) * 8 / max;
-                    // This is the only difference in the bar rendering logic
-                    // between MiniHistogram and Sparkline. At least render a
-                    // ONE_EIGHT, if the value is greater than 0, even if it's
-                    // relatively very small.
-                    if *e > 0 && r == 0 {
-                        1
-                    } else {
-                        r
-                    }
+                let r = (*e * u64::from(area.height) * 8)
+                    .checked_div(max)
+                    .unwrap_or(0);
+                // This is the only difference in the bar rendering logic
+                // between MiniHistogram and Sparkline. At least render a
+                // ONE_EIGHT, if the value is greater than 0, even if it's
+                // relatively very small.
+                if *e > 0 && r == 0 {
+                    1
                 } else {
-                    0
+                    r
                 }
             })
             .collect::<Vec<u64>>();
