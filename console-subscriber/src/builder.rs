@@ -431,7 +431,7 @@ impl Builder {
                 Err(e) => {
                     eprintln!(
                         "failed to parse filter environment variable `{}={:?}`: {}",
-                        &self.filter_env_var, log_filter, e
+                        self.filter_env_var, log_filter, e
                     );
                     None
                 }
