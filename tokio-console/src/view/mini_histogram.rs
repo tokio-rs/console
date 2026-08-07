@@ -26,7 +26,7 @@ pub(crate) struct MiniHistogram<'a> {
     /// widget uses the max of the dataset)
     max: Option<u64>,
     /// A set of bar symbols used to represent the give data
-    bar_set: symbols::bar::Set,
+    bar_set: symbols::bar::Set<'a>,
     /// Duration precision for the labels
     duration_precision: usize,
 }
@@ -215,7 +215,7 @@ impl<'a> MiniHistogram<'a> {
     }
 
     #[allow(dead_code)]
-    pub fn bar_set(mut self, bar_set: symbols::bar::Set) -> MiniHistogram<'a> {
+    pub fn bar_set(mut self, bar_set: symbols::bar::Set<'a>) -> MiniHistogram<'a> {
         self.bar_set = bar_set;
         self
     }
