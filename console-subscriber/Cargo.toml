@@ -3,7 +3,7 @@ name = "console-subscriber"
 version = "0.5.0"
 license = "MIT"
 edition = "2021"
-rust-version = "1.84.0"
+rust-version = "1.88.0"
 authors = ["Eliza Weisman <eliza@buoyant.io>", "Tokio Contributors <team@tokio.rs>",]
 readme = "README.md"
 repository = "https://github.com/tokio-rs/console/"
@@ -50,7 +50,7 @@ prost-types = "0.14.1"
 hyper-util = { version = "0.1.6", features = ["tokio"] }
 
 # Required for recording:
-serde = { version = "1.0.145", features = ["derive"] }
+serde = { version = "1.0.220", features = ["derive"] }
 serde_json = "1"
 crossbeam-channel = "0.5"
 
