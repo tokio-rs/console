@@ -17,27 +17,37 @@ impl<const MAX_CALLSITES: usize> Callsites<MAX_CALLSITES> {
     pub(crate) fn insert(&self, callsite: &'static Metadata<'static>) {
         // The callsite may already have been inserted, if the callsite cache
         // was invalidated and is being rebuilt. In that case, don't insert it
-        // again.'
+        // again.
         if self.contains(callsite) {
             return;
         }
 
-        let idx = self.len.fetch_add(1, Ordering::AcqRel);
-        if idx < MAX_CALLSITES {
-            // If there's still room in the callsites array, stick the address
-            // in there.
-            self.ptrs[idx]
-                .compare_exchange(
-                    ptr::null_mut(),
-                    callsite as *const _ as *mut _,
-                    Ordering::AcqRel,
-                    Ordering::Acquire,
-                )
-                .expect("a callsite would have been clobbered by `insert` (this is a bug)");
-        } else {
-            // Otherwise, we've filled the callsite array (sad!). Spill over
-            // into a hash set.
-            self.spill.write().insert(callsite.callsite());
+        match self
+            .len
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current_len| {
+                if current_len < MAX_CALLSITES {
+                    Some(current_len + 1)
+                } else {
+                    None
+                }
+            }) {
+            Ok(idx) => {
+                // If there's still room in the callsites array, stick the address
+                // in there.
+                self.ptrs[idx]
+                    .compare_exchange(
+                        ptr::null_mut(),
+                        callsite as *const _ as *mut _,
+                        Ordering::AcqRel,
+                        Ordering::Acquire,
+                    )
+                    .expect("a callsite would have been clobbered by `insert` (this is a bug)");
+            }
+            Err(_) => {
+                // Otherwise, we've filled the callsite array (sad!). Spill over
+                // into a hash set.
+                self.spill.write().insert(callsite.callsite());
+            }
         }
     }
 
