@@ -38,14 +38,90 @@ pub(crate) trait SortBy {
     fn as_column(&self) -> usize;
 }
 
+pub(crate) struct ColumnResizeState {
+    pub resizing: bool,
+    pub column_index: usize,
+    pub initial_width: u16,
+    pub initial_x: u16,
+}
+
+impl Default for ColumnResizeState {
+    fn default() -> Self {
+        Self {
+            resizing: false,
+            column_index: 0,
+            initial_width: 0,
+            initial_x: 0,
+        }
+    }
+}
+
 pub(crate) struct TableListState<T: TableList<N>, const N: usize> {
     pub(crate) sorted_items: Vec<Weak<RefCell<T::Row>>>,
     pub(crate) sort_by: T::Sort,
     pub(crate) selected_column: usize,
     pub(crate) sort_descending: bool,
     pub(crate) table_state: TableState,
-
+    pub(crate) resize_state: ColumnResizeState,
+    pub(crate) column_widths: Vec<u16>,
     last_key_event: Option<input::KeyEvent>,
+}
+
+impl<T, const N: usize> Default for TableListState<T, N>
+where
+    T: TableList<N>,
+    T::Sort: Default,
+{
+    fn default() -> Self {
+        let sort_by = T::Sort::default();
+        let selected_column = sort_by.as_column();
+        Self {
+            sorted_items: Default::default(),
+            sort_by,
+            table_state: Default::default(),
+            selected_column,
+            sort_descending: false,
+            last_key_event: None,
+            resize_state: Default::default(),
+            column_widths: vec![0; N],
+        }
+    }
+}
+
+impl<T, const N: usize> TableListState<T, N>
+where
+    T: TableList<N>,
+{
+    pub(crate) fn handle_resize(&mut self, x: u16, area: &layout::Rect) -> bool {
+        if self.resize_state.resizing {
+            let delta = x.saturating_sub(self.resize_state.initial_x) as i32;
+            let new_width = (self.resize_state.initial_width as i32 + delta).max(5) as u16;
+            self.column_widths[self.resize_state.column_index] = new_width;
+            true
+        } else {
+            // Check if mouse is over column border
+            let mut current_x = area.x;
+            for (idx, &width) in self.column_widths.iter().enumerate() {
+                if x == current_x + width {
+                    self.resize_state.resizing = true;
+                    self.resize_state.column_index = idx;
+                    self.resize_state.initial_width = width;
+                    self.resize_state.initial_x = x;
+                    return true;
+                }
+                current_x += width;
+            }
+            false
+        }
+    }
+
+    pub(crate) fn end_resize(&mut self) {
+        self.resize_state.resizing = false;
+    }
+
+    pub(crate) fn get_column_width(&self, idx: usize) -> u16 {
+        self.column_widths.get(idx).copied().unwrap_or(10)
+    }
 }
 
 impl<T: TableList<N>, const N: usize> TableListState<T, N> {
@@ -181,25 +257,6 @@ impl<T: TableList<N>, const N: usize> TableListState<T, N> {
         ctx: T::Context,
     ) {
         T::render(self, styles, frame, area, state, ctx)
-    }
-}
-
-impl<T, const N: usize> Default for TableListState<T, N>
-where
-    T: TableList<N>,
-    T::Sort: Default,
-{
-    fn default() -> Self {
-        let sort_by = T::Sort::default();
-        let selected_column = sort_by.as_column();
-        Self {
-            sorted_items: Default::default(),
-            sort_by,
-            table_state: Default::default(),
-            selected_column,
-            sort_descending: false,
-            last_key_event: None,
-        }
     }
 }
 

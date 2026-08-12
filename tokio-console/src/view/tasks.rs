@@ -20,17 +20,17 @@ use ratatui::{
 #[derive(Debug, Default)]
 pub(crate) struct TasksTable {}
 
-impl TableList<12> for TasksTable {
+impl TableList<13> for TasksTable {
     type Row = Task;
     type Sort = SortBy;
     type Context = ();
 
-    const HEADER: &'static [&'static str; 12] = &[
+    const HEADER: &'static [&'static str; 13] = &[
         "Warn", "ID", "State", "Name", "Total", "Busy", "Sched", "Idle", "Polls", "Kind",
-        "Location", "Fields",
+        "Location", "Fields", "Last Update",
     ];
 
-    const WIDTHS: &'static [usize; 12] = &[
+    const WIDTHS: &'static [usize; 13] = &[
         Self::HEADER[0].len() + 1,
         Self::HEADER[1].len() + 1,
         Self::HEADER[2].len() + 1,
@@ -43,10 +43,11 @@ impl TableList<12> for TasksTable {
         Self::HEADER[9].len() + 1,
         Self::HEADER[10].len() + 1,
         Self::HEADER[11].len() + 1,
+        Self::HEADER[12].len() + 1,
     ];
 
     fn render(
-        table_list_state: &mut TableListState<Self, 12>,
+        table_list_state: &mut TableListState<Self, 13>,
         styles: &view::Styles,
         frame: &mut ratatui::Frame,
         area: layout::Rect,
@@ -260,6 +261,7 @@ impl TableList<12> for TasksTable {
             kind_width.constraint(),
             location_width.constraint(),
             fields_width,
+            layout::Constraint::Length(15), // Width for Last Update column
         ];
 
         let table = table
