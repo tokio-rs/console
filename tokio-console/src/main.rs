@@ -78,6 +78,78 @@ async fn main() -> color_eyre::Result<()> {
     let mut view = view::View::new(styles);
 
     loop {
+        terminal.draw(|f| {
+            let error_line = conn.render_error(&view.styles);
+            let error_height = error_line
+                .as_ref()
+                .map_or(0, |line| wrapped_height(line.width(), f.area().width));
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .margin(0)
+                .constraints(
+                    [
+                        Constraint::Length(1),
+                        Constraint::Length(1),
+                        Constraint::Length(error_height),
+                        Constraint::Percentage(95),
+                    ]
+                    .as_ref(),
+                )
+                .split(f.area());
+
+            let mut header_text = conn.render(&view.styles);
+            match state.temporality() {
+                Temporality::Paused => {
+                    header_text.push_span(Span::styled(" PAUSED", view.styles.fg(Color::Red)));
+                }
+                Temporality::Pausing => {
+                    header_text.push_span(Span::styled(" PAUSING", view.styles.fg(Color::Yellow)));
+                }
+                Temporality::Unpausing => {
+                    header_text.push_span(Span::styled(" UNPAUSING", view.styles.fg(Color::Green)));
+                }
+                Temporality::Live => {}
+            }
+            let dropped_async_ops_state = state.async_ops_state().dropped_events();
+            let dropped_tasks_state = state.tasks_state().dropped_events();
+            let dropped_resources_state = state.resources_state().dropped_events();
+            if (dropped_async_ops_state + dropped_tasks_state + dropped_resources_state) > 0 {
+                let mut dropped_texts = vec![];
+                if dropped_async_ops_state > 0 {
+                    dropped_texts.push(format!("{} async_ops", dropped_async_ops_state))
+                }
+                if dropped_tasks_state > 0 {
+                    dropped_texts.push(format!("{} tasks", dropped_tasks_state))
+                }
+                if dropped_resources_state > 0 {
+                    dropped_texts.push(format!("{} resources", dropped_resources_state))
+                }
+                header_text.push_span(Span::styled(
+                    format!(" dropped: {}", dropped_texts.join(", ")),
+                    view.styles.fg(Color::Red),
+                ));
+            }
+            let header = Paragraph::new(header_text).wrap(Wrap { trim: true });
+            let view_controls = Paragraph::new(Line::from(vec![
+                Span::raw("views: "),
+                bold("t"),
+                Span::raw(" = tasks, "),
+                bold("r"),
+                Span::raw(" = resources"),
+            ]))
+            .wrap(Wrap { trim: true });
+
+            f.render_widget(header, chunks[0]);
+            f.render_widget(view_controls, chunks[1]);
+            if let Some(error_line) = error_line {
+                f.render_widget(
+                    Paragraph::new(error_line).wrap(Wrap { trim: true }),
+                    chunks[2],
+                );
+            }
+            view.render(f, chunks[3], &mut state);
+        })?;
+
         tokio::select! { biased;
             input = input.next() => {
                 let input = input
@@ -132,6 +204,9 @@ async fn main() -> color_eyre::Result<()> {
                     conn::Message::State(state_update) => {
                         state.update_state(state_update);
                     }
+                    // Nothing to apply, the header is redrawn on the next
+                    // iteration of the loop.
+                    conn::Message::Connected | conn::Message::Disconnected => {}
                 }
             }
             details_update = details_rx.recv() => {
@@ -140,67 +215,16 @@ async fn main() -> color_eyre::Result<()> {
                 }
             },
         }
-        terminal.draw(|f| {
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .margin(0)
-                .constraints(
-                    [
-                        Constraint::Length(1),
-                        Constraint::Length(1),
-                        Constraint::Percentage(95),
-                    ]
-                    .as_ref(),
-                )
-                .split(f.area());
-
-            let mut header_text = conn.render(&view.styles);
-            match state.temporality() {
-                Temporality::Paused => {
-                    header_text.push_span(Span::styled(" PAUSED", view.styles.fg(Color::Red)));
-                }
-                Temporality::Pausing => {
-                    header_text.push_span(Span::styled(" PAUSING", view.styles.fg(Color::Yellow)));
-                }
-                Temporality::Unpausing => {
-                    header_text.push_span(Span::styled(" UNPAUSING", view.styles.fg(Color::Green)));
-                }
-                Temporality::Live => {}
-            }
-            let dropped_async_ops_state = state.async_ops_state().dropped_events();
-            let dropped_tasks_state = state.tasks_state().dropped_events();
-            let dropped_resources_state = state.resources_state().dropped_events();
-            if (dropped_async_ops_state + dropped_tasks_state + dropped_resources_state) > 0 {
-                let mut dropped_texts = vec![];
-                if dropped_async_ops_state > 0 {
-                    dropped_texts.push(format!("{} async_ops", dropped_async_ops_state))
-                }
-                if dropped_tasks_state > 0 {
-                    dropped_texts.push(format!("{} tasks", dropped_tasks_state))
-                }
-                if dropped_resources_state > 0 {
-                    dropped_texts.push(format!("{} resources", dropped_resources_state))
-                }
-                header_text.push_span(Span::styled(
-                    format!(" dropped: {}", dropped_texts.join(", ")),
-                    view.styles.fg(Color::Red),
-                ));
-            }
-            let header = Paragraph::new(header_text).wrap(Wrap { trim: true });
-            let view_controls = Paragraph::new(Line::from(vec![
-                Span::raw("views: "),
-                bold("t"),
-                Span::raw(" = tasks, "),
-                bold("r"),
-                Span::raw(" = resources"),
-            ]))
-            .wrap(Wrap { trim: true });
-
-            f.render_widget(header, chunks[0]);
-            f.render_widget(view_controls, chunks[1]);
-            view.render(f, chunks[2], &mut state);
-        })?;
     }
+}
+
+/// The number of rows needed to show `text_width` columns of text wrapped to
+/// `area_width` columns, capped so that a long error can't take over the screen.
+fn wrapped_height(text_width: usize, area_width: u16) -> u16 {
+    const MAX_ROWS: u16 = 3;
+    let area_width = usize::from(area_width.max(1));
+    let rows = text_width.div_ceil(area_width).max(1);
+    u16::try_from(rows).unwrap_or(MAX_ROWS).min(MAX_ROWS)
 }
 
 /// Given the task details stream for the given task id, sends the updates
@@ -245,5 +269,29 @@ async fn watch_details_stream(
                 }
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::wrapped_height;
+
+    #[test]
+    fn short_text_takes_one_row() {
+        assert_eq!(wrapped_height(0, 80), 1);
+        assert_eq!(wrapped_height(80, 80), 1);
+    }
+
+    #[test]
+    fn long_text_wraps_up_to_the_cap() {
+        assert_eq!(wrapped_height(81, 80), 2);
+        assert_eq!(wrapped_height(160, 80), 2);
+        assert_eq!(wrapped_height(161, 80), 3);
+        assert_eq!(wrapped_height(10_000, 80), 3);
+    }
+
+    #[test]
+    fn zero_width_area_does_not_divide_by_zero() {
+        assert_eq!(wrapped_height(10, 0), 3);
     }
 }
